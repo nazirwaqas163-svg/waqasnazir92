@@ -192,7 +192,8 @@
           healthStatus.textContent = healthData.ok ? 'OK' : 'Unhealthy'
         }
         if (cbStatus) {
-          cbStatus.textContent = cbData.circuit_breaker?.state || 'unknown'
+          const state = cbData.state ?? cbData.circuit_breaker?.state
+          cbStatus.textContent = state ? String(state) : 'unknown'
         }
         renderError('')
       } catch (err) {

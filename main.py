@@ -2,6 +2,7 @@
 import re
 import time
 import uuid
+from dataclasses import asdict
 from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional
 
@@ -16,6 +17,7 @@ from baseline import baseline_reply, extract_text
 from bdi import BDIState
 from circuit_breaker import CircuitBreakerMiddleware
 from embeddings import embed_texts, novelty_score
+from policy_engine import PolicyEvaluation, evaluate_tool_call
 from pulse_feed import PulseEvent, PulseFeed
 from refusal import detect_refusal
 
@@ -106,6 +108,15 @@ class ChatProxyRequest(BaseModel):
     messages: List[Dict[str, Any]] = Field(default_factory=list)
     temperature: Optional[float] = None
     stream: bool = False
+
+    class Config:
+        extra = "allow"
+
+
+class PulseToolCallRequest(BaseModel):
+    operation: str
+    agent_id: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
 
     class Config:
         extra = "allow"
@@ -279,19 +290,47 @@ def _agent_id(payload: ChatProxyRequest, request: Request) -> Optional[str]:
 
 
 def _bdi_score(payload: ChatProxyRequest, pulse: Dict[str, Any]) -> float:
+    return _effective_bdi_score(payload, pulse)
+
+
+def _effective_bdi_score(payload: ChatProxyRequest, pulse: Dict[str, Any]) -> float:
     extra_fields = _extra_payload_fields(payload)
     if extra_fields.get("bdi_score") is not None:
         try:
             return float(extra_fields["bdi_score"])
         except (TypeError, ValueError):
             pass
+    return float(pulse.get("bdi_score") or 0.0)
 
-    bdi = pulse.get("bdi") or {}
-    beliefs = bdi.get("beliefs") or {}
-    desires = bdi.get("desires") or []
-    intentions = bdi.get("intentions") or []
-    turns = bdi.get("turns") or 0
-    return float(len(beliefs) + len(desires) + len(intentions) + turns)
+
+def _effective_entropy(payload: ChatProxyRequest, prompt_text: str) -> float:
+    extra_fields = _extra_payload_fields(payload)
+    if extra_fields.get("entropy") is not None:
+        try:
+            return float(extra_fields["entropy"])
+        except (TypeError, ValueError):
+            pass
+    return _calculate_shannon_entropy(prompt_text)
+
+
+def _enforce_policy(operation: str | None) -> PolicyEvaluation:
+    evaluation = evaluate_tool_call(operation)
+    feed.add(
+        PulseEvent(
+            kind="policy",
+            text=operation or "",
+            data=evaluation.to_dict(),
+        )
+    )
+    if not evaluation.allowed:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "Policy evaluation denied request",
+                "policy": evaluation.to_dict(),
+            },
+        )
+    return evaluation
 
 
 async def _insert_audit_log(
@@ -354,6 +393,22 @@ def pulse(limit: int = 50) -> Dict[str, Any]:
     return {"events": feed.list(limit=limit)}
 
 
+@app.post("/pulse")
+def pulse_tool_call(payload: PulseToolCallRequest) -> Dict[str, Any]:
+    evaluation = _enforce_policy(payload.operation)
+    event = PulseEvent(
+        kind="tool_call",
+        text=payload.operation,
+        data={
+            "agent_id": payload.agent_id,
+            "metadata": payload.metadata or {},
+            "policy": evaluation.to_dict(),
+        },
+    )
+    feed.add(event)
+    return {"ok": True, "policy": evaluation.to_dict(), "event": asdict(event)}
+
+
 @app.get("/events")
 def events() -> Dict[str, Any]:
     return {"events": feed.list(limit=50)}
@@ -366,12 +421,19 @@ def pulse_bdi() -> Dict[str, Any]:
 
 @app.post("/v1/chat/completions")
 async def chat_completions(payload: ChatProxyRequest, request: Request):
+    extra_fields = _extra_payload_fields(payload)
+    if extra_fields.get("operation") is not None:
+        _enforce_policy(str(extra_fields["operation"]))
+
     _enforce_financial_circuit_breaker(payload)
     pulse = _record_input(payload)
-    entropy = _calculate_shannon_entropy(_messages_text(payload.messages))
+    prompt_text = _messages_text(payload.messages)
+    entropy = _effective_entropy(payload, prompt_text)
     pulse["entropy"] = entropy
 
-    evaluation = circuit_breaker.evaluate(bdi_score=pulse["bdi_score"], entropy=entropy)
+    bdi_score = _effective_bdi_score(payload, pulse)
+    pulse["bdi_score"] = bdi_score
+    evaluation = circuit_breaker.evaluate(bdi_score=bdi_score, entropy=entropy)
     if evaluation["action"] != "proceed":
         response_payload = {
             "status_code": 423 if evaluation["action"] == "kill" else 409,
