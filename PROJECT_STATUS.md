@@ -1,33 +1,133 @@
 # Pulse Governance Ledger — Project Status
 
-## Last Updated: May 22, 2026
+## Last Updated: May 23, 2026
+
+## Local Path
+`C:\Users\Lenovo\pulse-proxy`
+
+## GitHub
+https://github.com/nazirwaqas163-svg/waqasnazir92 (push when ready)
 
 ## What Works ✅
-- Backend deployed on Render: https://pulse-proxy-je0p.onrender.com
-- Health endpoint: /health → returns OK
-- Circuit breaker endpoint: /circuit-breaker/status → deployed
-- Frontend: frontend/index.html served via frontend/server.py on localhost:8080
-- Git repo: https://github.com/Waqasnazir92/pulse-proxy
+
+### Backend (FastAPI, port 8000)
+- `GET /health` — service health + circuit breaker snapshot
+- `GET /events` — recent governance feed events
+- `GET /circuit-breaker/status` — breaker state
+- `POST /circuit-breaker/open` — manual kill switch (force OPEN)
+- `POST /circuit-breaker/close` — reset to CLOSED
+- `POST /v1/chat/completions` — agent proxy with BDI + entropy governance
+- `POST /pulse` — tool-call endpoint with policy engine
+- `policy_engine.py` — deny-by-default; blocks DELETE, EXPORT, WRITE_EXTERNAL, QUERY_ALL
+
+### Circuit Breaker (`circuit_breaker.py`)
+- **CLOSED only** allows requests through
+- **OPEN** (or any non-CLOSED state) blocks **all** requests with **HTTP 409**
+- High BDI (>0.65) or high entropy (>0.85) trips breaker to OPEN
+- **No half-open auto-recovery** — reset only via `POST /circuit-breaker/close` or dashboard
+- Optional overrides in request body: `bdi_score`, `entropy` (used by test agent)
+
+### Frontend (`frontend/index.html`, port 8080)
+- Dark governance dashboard
+- Health + circuit breaker status cards
+- **TRIP KILL SWITCH** → `POST /circuit-breaker/open` (confirmation alert)
+- **RESET BREAKER** → `POST /circuit-breaker/close`
+- Events table: Status (200/409), Decision badges, green/red row coloring
+- Auto-polls Render when not on localhost; uses `http://127.0.0.1:8000` locally
+
+### Test Agent (`test_agent.py`)
+- Sends 10 requests with BDI 0.1→0.9; requests 8–10 blocked (409) when threshold exceeded
+- Set `PULSE_BASE_URL` for remote testing
+
+### Deployed (Render)
+https://pulse-proxy-je0p.onrender.com — push to GitHub to update
+
+---
 
 ## How to Resume
-1. Open VS Code → open folder: C:\Users\User\pulse-proxy
-2. Open terminal → cd C:\Users\User\pulse-proxy\frontend
-3. Run: python server.py
-4. Open browser: http://localhost:8080
-5. Backend is on Render (auto-runs, no action needed)
 
-## Current Issue
-- Circuit breaker shows "unknown" — frontend needs to map state field
+### 1. Open project
+```
+C:\Users\Lenovo\pulse-proxy
+```
 
-## Next Steps
-1. Fix circuit breaker state display in index.html
-2. Connect real agents to send events to the proxy
-3. Upgrade UI to dark professional dashboard
-4. Add kill switch trigger button to UI
+### 2. Start backend (terminal 1)
+```powershell
+cd C:\Users\Lenovo\pulse-proxy
+python -m uvicorn main:app --host 127.0.0.1 --port 8000
+```
+
+### 3. Start frontend (terminal 2)
+```powershell
+cd C:\Users\Lenovo\pulse-proxy\frontend
+python server.py
+```
+
+### 4. Open dashboard
+http://localhost:8080
+
+### 5. Optional — run test agent (terminal 3)
+```powershell
+cd C:\Users\Lenovo\pulse-proxy
+python test_agent.py
+```
+
+### Dependencies (if fresh machine)
+```powershell
+cd C:\Users\Lenovo\pulse-proxy
+python -m pip install -r requirements.txt
+```
+
+---
+
+## Key Files
+
+| File | Purpose |
+|------|---------|
+| `main.py` | FastAPI app, routes, governance hooks |
+| `circuit_breaker.py` | Kill switch state machine |
+| `policy_engine.py` | Tool-call allow/deny policy |
+| `bdi.py` | BDI state tracking |
+| `pulse_feed.py` | In-memory event feed |
+| `frontend/index.html` | Dashboard UI |
+| `frontend/server.py` | Static file server :8080 |
+| `test_agent.py` | Simulated agent load test |
+
+---
+
+## API Quick Reference
+
+| Endpoint | Method | Notes |
+|----------|--------|-------|
+| `/health` | GET | OK + breaker state |
+| `/events` | GET | Last 50 events |
+| `/circuit-breaker/status` | GET | `state`, `allows_requests` |
+| `/circuit-breaker/open` | POST | Manual trip → OPEN |
+| `/circuit-breaker/close` | POST | Reset → CLOSED |
+| `/v1/chat/completions` | POST | Agent requests; 409 when blocked |
+| `/pulse` | POST | Tool calls; body: `{ "operation": "READ" }` |
+
+---
+
+## Completed (this session)
+- [x] Circuit breaker state in frontend
+- [x] Policy engine + POST /pulse
+- [x] test_agent.py
+- [x] Dark dashboard + kill switch + reset buttons
+- [x] Blocked/allowed event coloring (200 green, 409 red)
+- [x] OPEN blocks all traffic with 409 until manual close
+
+## Suggested Next Steps
+1. Push to GitHub → Render auto-deploy
+2. Wire Supabase audit (`audit.py`) if credentials available
+3. Add auth on kill-switch / reset endpoints for production
+4. Connect real agent swarm to `/v1/chat/completions`
 
 ## Architecture
-- Backend: Python FastAPI (pulse-proxy/main.py)
-- Circuit Breaker: pulse-proxy/circuit_breaker.py  
-- Audit Log: pulse-proxy/audit.py
-- Frontend: pulse-proxy/frontend/index.html (vanilla HTML/JS)
-- Deployed: Render (auto-deploy from GitHub on push)
+```
+Agents → POST /v1/chat/completions
+           ├─ policy_engine (tool operations)
+           ├─ circuit_breaker (BDI + entropy, OPEN = 409)
+           └─ upstream LLM or baseline fallback
+Events → pulse_feed → GET /events → frontend dashboard
+```

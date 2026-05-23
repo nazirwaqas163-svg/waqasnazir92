@@ -62,9 +62,11 @@ class CircuitBreakerMiddleware:
         for listener in list(self._listeners):
             listener(event)
 
+    def allows_requests(self) -> bool:
+        return self.state == CircuitState.CLOSED
+
     def open(self, reason: str, bdi_score: float, entropy: float) -> None:
         if self.state != CircuitState.OPEN:
-            # Transitioning to OPEN because a kill condition was detected.
             self.state = CircuitState.OPEN
             self.failure_count += 1
             self.last_failure = {
@@ -77,15 +79,12 @@ class CircuitBreakerMiddleware:
 
     def close(self, reason: str, bdi_score: float, entropy: float) -> None:
         if self.state != CircuitState.CLOSED:
-            # Transitioning to CLOSED once governance conditions are within safe bounds.
             self.state = CircuitState.CLOSED
             self._emit(KillSwitchEvent(state=self.state, reason=reason, bdi_score=bdi_score, entropy=entropy))
 
     def half_open(self, reason: str, bdi_score: float, entropy: float) -> None:
-        if self.state != CircuitState.HALF_OPEN:
-            # Transitioning to HALF_OPEN when a hold condition has been reached.
-            self.state = CircuitState.HALF_OPEN
-            self._emit(KillSwitchEvent(state=self.state, reason=reason, bdi_score=bdi_score, entropy=entropy))
+        """Deprecated: half-open auto-recovery is disabled; use close() to reset."""
+        self.open(reason=reason or "half-open state treated as open", bdi_score=bdi_score, entropy=entropy)
 
     def is_open(self) -> bool:
         return self.state == CircuitState.OPEN
@@ -96,45 +95,45 @@ class CircuitBreakerMiddleware:
     def is_closed(self) -> bool:
         return self.state == CircuitState.CLOSED
 
+    def _blocked(self, reason: str) -> Dict[str, object]:
+        return {
+            "action": "block",
+            "reason": reason,
+            "state": self.state.value,
+        }
+
     def evaluate(self, bdi_score: float, entropy: float) -> Dict[str, object]:
+        if not self.allows_requests():
+            return self._blocked(
+                f"Circuit breaker is {self.state.value}; all requests are blocked until explicitly reset to closed."
+            )
+
         if entropy > self.entropy_threshold:
             self.open(
                 reason="Shannon entropy exceeded kill threshold",
                 bdi_score=bdi_score,
                 entropy=entropy,
             )
-            return {
-                "action": "kill",
-                "reason": "Governance kill switch engaged due to high entropy.",
-                "state": self.state.value,
-            }
+            return self._blocked("Governance kill switch engaged due to high entropy.")
 
         if bdi_score > self.bdi_threshold:
-            self.half_open(
-                reason="BDI exceeded hold threshold",
+            self.open(
+                reason="BDI exceeded governance threshold",
                 bdi_score=bdi_score,
                 entropy=entropy,
             )
-            return {
-                "action": "hold",
-                "reason": "Governance hold engaged due to elevated BDI.",
-                "state": self.state.value,
-            }
+            return self._blocked("Governance kill switch engaged due to elevated BDI.")
 
-        self.close(
-            reason="Governance conditions returned to safe bounds",
-            bdi_score=bdi_score,
-            entropy=entropy,
-        )
         return {
             "action": "proceed",
-            "reason": "Governance conditions are within safe bounds.",
+            "reason": "Circuit breaker is closed; request permitted.",
             "state": self.state.value,
         }
 
     def status(self) -> Dict[str, object]:
         return {
             "state": self.state.value,
+            "allows_requests": self.allows_requests(),
             "failure_count": self.failure_count,
             "last_failure": self.last_failure,
         }

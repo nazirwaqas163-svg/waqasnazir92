@@ -85,12 +85,19 @@ def _emit_circuit_breaker_event(event: object) -> None:
     if not hasattr(event, "state"):
         return
 
+    state = getattr(event, "state", None)
+    state_value = state.value if hasattr(state, "value") else str(state or "unknown")
+    decision = "blocked" if state_value in {"open", "half-open"} else "allowed"
+    status_code = 200 if decision == "allowed" else 409
+
     feed.add(
         PulseEvent(
             kind="governance",
             text="kill-switch",
             data={
-                "state": getattr(event, "state", "unknown"),
+                "decision": decision,
+                "status_code": status_code,
+                "state": state_value,
                 "reason": getattr(event, "reason", "unknown"),
                 "bdi_score": getattr(event, "bdi_score", 0.0),
                 "entropy": getattr(event, "entropy", 0.0),
@@ -120,6 +127,18 @@ class PulseToolCallRequest(BaseModel):
 
     class Config:
         extra = "allow"
+
+
+class CircuitBreakerOpenRequest(BaseModel):
+    reason: str = Field(default="Manual kill switch activated from dashboard")
+    bdi_score: float = Field(default=1.0, ge=0.0, le=1.0)
+    entropy: float = Field(default=0.0, ge=0.0, le=1.0)
+
+
+class CircuitBreakerCloseRequest(BaseModel):
+    reason: str = Field(default="Manual reset from dashboard")
+    bdi_score: float = Field(default=0.0, ge=0.0, le=1.0)
+    entropy: float = Field(default=0.0, ge=0.0, le=1.0)
 
 
 def _auth_headers(request: Request) -> Dict[str, str]:
@@ -258,6 +277,8 @@ def _record_input(payload: ChatProxyRequest) -> Dict[str, Any]:
         "novelty": novelty,
         "bdi": bdi,
         "bdi_score": bdi_score,
+        "decision": "allowed",
+        "status_code": 200,
     }
     feed.add(PulseEvent(kind="input", text=prompt_text, data=pulse))
     return pulse
@@ -274,7 +295,13 @@ def _record_output(request_id: str, response_json: Dict[str, Any]) -> None:
         PulseEvent(
             kind="output",
             text=text,
-            data={"request_id": request_id, "refusal": refusal, "response_chars": len(text)},
+            data={
+                "request_id": request_id,
+                "refusal": refusal,
+                "response_chars": len(text),
+                "decision": "allowed",
+                "status_code": 200,
+            },
         )
     )
 
@@ -315,11 +342,14 @@ def _effective_entropy(payload: ChatProxyRequest, prompt_text: str) -> float:
 
 def _enforce_policy(operation: str | None) -> PolicyEvaluation:
     evaluation = evaluate_tool_call(operation)
+    policy_data = evaluation.to_dict()
+    policy_data["decision"] = "allowed" if evaluation.allowed else "blocked"
+    policy_data["status_code"] = 200 if evaluation.allowed else 403
     feed.add(
         PulseEvent(
             kind="policy",
             text=operation or "",
-            data=evaluation.to_dict(),
+            data=policy_data,
         )
     )
     if not evaluation.allowed:
@@ -388,6 +418,38 @@ def circuit_breaker_status() -> dict[str, object]:
     return circuit_breaker.status()
 
 
+@app.post("/circuit-breaker/open")
+def circuit_breaker_open(payload: CircuitBreakerOpenRequest) -> dict[str, object]:
+    circuit_breaker.open(
+        reason=payload.reason,
+        bdi_score=payload.bdi_score,
+        entropy=payload.entropy,
+    )
+    if circuit_breaker.last_failure is not None:
+        circuit_breaker.last_failure["manual"] = True
+    return {
+        "ok": True,
+        "message": "Circuit breaker manually opened",
+        "status_code": 409,
+        **circuit_breaker.status(),
+    }
+
+
+@app.post("/circuit-breaker/close")
+def circuit_breaker_close(payload: CircuitBreakerCloseRequest) -> dict[str, object]:
+    circuit_breaker.close(
+        reason=payload.reason,
+        bdi_score=payload.bdi_score,
+        entropy=payload.entropy,
+    )
+    return {
+        "ok": True,
+        "message": "Circuit breaker reset to closed",
+        "status_code": 200,
+        **circuit_breaker.status(),
+    }
+
+
 @app.get("/pulse")
 def pulse(limit: int = 50) -> Dict[str, Any]:
     return {"events": feed.list(limit=limit)}
@@ -400,6 +462,8 @@ def pulse_tool_call(payload: PulseToolCallRequest) -> Dict[str, Any]:
         kind="tool_call",
         text=payload.operation,
         data={
+            "decision": "allowed",
+            "status_code": 200,
             "agent_id": payload.agent_id,
             "metadata": payload.metadata or {},
             "policy": evaluation.to_dict(),
@@ -426,22 +490,40 @@ async def chat_completions(payload: ChatProxyRequest, request: Request):
         _enforce_policy(str(extra_fields["operation"]))
 
     _enforce_financial_circuit_breaker(payload)
-    pulse = _record_input(payload)
+
     prompt_text = _messages_text(payload.messages)
     entropy = _effective_entropy(payload, prompt_text)
-    pulse["entropy"] = entropy
+    provisional_pulse: Dict[str, Any] = {"entropy": entropy, "bdi_score": 0.0}
+    bdi_score = _effective_bdi_score(payload, provisional_pulse)
 
-    bdi_score = _effective_bdi_score(payload, pulse)
-    pulse["bdi_score"] = bdi_score
     evaluation = circuit_breaker.evaluate(bdi_score=bdi_score, entropy=entropy)
     if evaluation["action"] != "proceed":
+        feed.add(
+            PulseEvent(
+                kind="governance",
+                text="request-blocked",
+                data={
+                    "decision": "blocked",
+                    "status_code": 409,
+                    "action": evaluation["action"],
+                    "reason": evaluation["reason"],
+                    "state": evaluation["state"],
+                    "bdi_score": bdi_score,
+                    "entropy": entropy,
+                },
+            )
+        )
         response_payload = {
-            "status_code": 423 if evaluation["action"] == "kill" else 409,
+            "status_code": 409,
             "error": evaluation["reason"],
-            "pulse": {**pulse, "governance": evaluation},
+            "governance": evaluation,
         }
-        await _insert_audit_log(payload, request, pulse, response_payload)
-        raise HTTPException(status_code=response_payload["status_code"], detail=evaluation["reason"])
+        await _insert_audit_log(payload, request, provisional_pulse, response_payload)
+        raise HTTPException(status_code=409, detail=evaluation["reason"])
+
+    pulse = _record_input(payload)
+    pulse["entropy"] = entropy
+    pulse["bdi_score"] = _effective_bdi_score(payload, pulse)
 
     if not UPSTREAM_API_KEY and not request.headers.get("authorization"):
         response_json = _fallback_completion(payload, pulse)
