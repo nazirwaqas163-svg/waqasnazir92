@@ -117,11 +117,32 @@ python -m pip install -r requirements.txt
 - [x] Blocked/allowed event coloring (200 green, 409 red)
 - [x] OPEN blocks all traffic with 409 until manual close
 
+## Phase 2 — Synthesis Engine ✅
+- `synthesis_engine.py` — `ForensicAuditor` (last 50 audit entries), `generate_pattern_report()`
+- Background daemon thread via `SynthesisEngineRunner` (does not block proxy)
+- `GET /synthesis/report` | `POST /synthesis/run`
+- Standalone: `python synthesis_engine.py`
+
+## Phase 3 — Compliance & Reporting ✅
+- `policy_engine.py` — blocked events tagged with **EU AI Act**, **GDPR**, **SOC2**, **ISO 42001**
+- `compliance_report.py` — `ComplianceEventStore`, export JSON/markdown
+- `GET /compliance/export?format=json|markdown` | `GET /compliance/events`
+
+## Phase 4 — Stress Testing ✅
+- `red_agent.py` — rapid concurrent BDI escalation probes
+- **Shadow mode:** `PULSE_SHADOW_MODE=true` — evaluates governance, logs `would-block`, does **not** drop traffic or trip breaker
+
+```powershell
+$env:PULSE_SHADOW_MODE="true"
+python -m uvicorn main:app --host 127.0.0.1 --port 8000
+python red_agent.py
+```
+
 ## Suggested Next Steps
 1. Push to GitHub → Render auto-deploy
 2. Wire Supabase audit (`audit.py`) if credentials available
 3. Add auth on kill-switch / reset endpoints for production
-4. Connect real agent swarm to `/v1/chat/completions`
+4. Tune BDI/entropy thresholds using shadow mode + red agent
 
 ## Architecture
 ```

@@ -2,29 +2,35 @@
 import re
 import time
 import uuid
+from contextlib import asynccontextmanager
 from dataclasses import asdict
 from decimal import Decimal, InvalidOperation
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from audit import supabase_audit_client
 from baseline import baseline_reply, extract_text
 from bdi import BDIState
-from circuit_breaker import CircuitBreakerMiddleware
+from circuit_breaker import CircuitBreakerMiddleware, RequestAction
 from embeddings import embed_texts, novelty_score
+from compliance_report import compliance_store
 from policy_engine import PolicyEvaluation, evaluate_tool_call
 from pulse_feed import PulseEvent, PulseFeed
 from refusal import detect_refusal
+from synthesis_engine import forensic_auditor, synthesis_runner
 
 APP_NAME = "pulse-proxy"
+SYNTHESIS_ENABLED = os.getenv("PULSE_SYNTHESIS_ENABLED", "true").lower() in {"1", "true", "yes"}
+SHADOW_MODE = os.getenv("PULSE_SHADOW_MODE", "false").lower() in {"1", "true", "yes"}
 UPSTREAM_CHAT_URL = os.getenv("PULSE_UPSTREAM_CHAT_URL", "https://api.openai.com/v1/chat/completions")
 UPSTREAM_API_KEY = os.getenv("OPENAI_API_KEY") or os.getenv("PULSE_UPSTREAM_API_KEY")
 UPSTREAM_TIMEOUT = float(os.getenv("PULSE_UPSTREAM_TIMEOUT", "120"))
+AGENT_COOLDOWN_SECONDS = float(os.getenv("PULSE_AGENT_COOLDOWN_SECONDS", "30"))
 FINANCIAL_TRANSACTION_LIMIT = Decimal("5000")
 FINANCIAL_KEYWORDS = {
     "budget",
@@ -67,7 +73,16 @@ AMOUNT_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
-app = FastAPI(title=APP_NAME, version="0.1.0")
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    if SYNTHESIS_ENABLED:
+        synthesis_runner.start()
+    yield
+    if SYNTHESIS_ENABLED:
+        synthesis_runner.stop()
+
+
+app = FastAPI(title=APP_NAME, version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -78,7 +93,7 @@ app.add_middleware(
 
 feed = PulseFeed(max_events=int(os.getenv("PULSE_FEED_LIMIT", "500")))
 bdi_state = BDIState()
-circuit_breaker = CircuitBreakerMiddleware()
+circuit_breaker = CircuitBreakerMiddleware(agent_cooldown_seconds=AGENT_COOLDOWN_SECONDS)
 
 
 def _emit_circuit_breaker_event(event: object) -> None:
@@ -88,7 +103,7 @@ def _emit_circuit_breaker_event(event: object) -> None:
     state = getattr(event, "state", None)
     state_value = state.value if hasattr(state, "value") else str(state or "unknown")
     decision = "blocked" if state_value in {"open", "half-open"} else "allowed"
-    status_code = 200 if decision == "allowed" else 409
+    status_code = 200 if decision == "allowed" else 503
 
     feed.add(
         PulseEvent(
@@ -139,6 +154,74 @@ class CircuitBreakerCloseRequest(BaseModel):
     reason: str = Field(default="Manual reset from dashboard")
     bdi_score: float = Field(default=0.0, ge=0.0, le=1.0)
     entropy: float = Field(default=0.0, ge=0.0, le=1.0)
+
+
+def _dropped_response(disposition: Dict[str, Any]) -> Response:
+    """
+    Explicitly drop the request without a retryable 409 Conflict.
+
+    Empty 503 + Connection: close signals the proxy rejected the call;
+    agents should not treat this as a conflict/retry loop trigger.
+    """
+    retry_after = str(int(max(1, disposition.get("cooldown_seconds_remaining", 30))))
+    return Response(
+        status_code=503,
+        content=b"",
+        media_type=None,
+        headers={
+            "Connection": "close",
+            "X-Request-Dropped": "1",
+            "X-Circuit-Breaker": str(disposition.get("state", "open")),
+            "X-Request-Action": str(disposition.get("action", RequestAction.DROP.value)),
+            "Retry-After": retry_after,
+        },
+    )
+
+
+def _record_shadow_event(
+    disposition: Dict[str, Any],
+    *,
+    agent_id: Optional[str],
+    bdi_score: float,
+    entropy: float,
+) -> None:
+    feed.add(
+        PulseEvent(
+            kind="shadow",
+            text="would-block",
+            data={
+                "decision": "shadow_allowed",
+                "status_code": 200,
+                "shadow_mode": True,
+                "would_have_action": disposition.get("would_have_action"),
+                "would_have_reason": disposition.get("would_have_reason"),
+                "agent_id": agent_id,
+                "bdi_score": bdi_score,
+                "entropy": entropy,
+            },
+        )
+    )
+
+
+def _record_drop_event(disposition: Dict[str, Any], *, agent_id: Optional[str], bdi_score: float, entropy: float) -> None:
+    feed.add(
+        PulseEvent(
+            kind="governance",
+            text="request-dropped",
+            data={
+                "decision": "dropped",
+                "status_code": 503,
+                "action": disposition.get("action"),
+                "reason": disposition.get("reason"),
+                "state": disposition.get("state"),
+                "agent_id": agent_id,
+                "bdi_score": bdi_score,
+                "entropy": entropy,
+                "cooldown_active": disposition.get("cooldown_active", False),
+                "cooldown_seconds_remaining": disposition.get("cooldown_seconds_remaining", 0),
+            },
+        )
+    )
 
 
 def _auth_headers(request: Request) -> Dict[str, str]:
@@ -316,10 +399,6 @@ def _agent_id(payload: ChatProxyRequest, request: Request) -> Optional[str]:
     return str(value) if value is not None else None
 
 
-def _bdi_score(payload: ChatProxyRequest, pulse: Dict[str, Any]) -> float:
-    return _effective_bdi_score(payload, pulse)
-
-
 def _effective_bdi_score(payload: ChatProxyRequest, pulse: Dict[str, Any]) -> float:
     extra_fields = _extra_payload_fields(payload)
     if extra_fields.get("bdi_score") is not None:
@@ -340,11 +419,14 @@ def _effective_entropy(payload: ChatProxyRequest, prompt_text: str) -> float:
     return _calculate_shannon_entropy(prompt_text)
 
 
-def _enforce_policy(operation: str | None) -> PolicyEvaluation:
+def _enforce_policy(operation: str | None, agent_id: Optional[str] = None) -> PolicyEvaluation:
     evaluation = evaluate_tool_call(operation)
     policy_data = evaluation.to_dict()
     policy_data["decision"] = "allowed" if evaluation.allowed else "blocked"
     policy_data["status_code"] = 200 if evaluation.allowed else 403
+    if not evaluation.allowed:
+        policy_data["shadow_mode"] = SHADOW_MODE
+        compliance_store.record_blocked(policy_data, agent_id=agent_id)
     feed.add(
         PulseEvent(
             kind="policy",
@@ -353,6 +435,8 @@ def _enforce_policy(operation: str | None) -> PolicyEvaluation:
         )
     )
     if not evaluation.allowed:
+        if SHADOW_MODE:
+            return evaluation
         raise HTTPException(
             status_code=403,
             detail={
@@ -373,7 +457,7 @@ async def _insert_audit_log(
         agent_id=_agent_id(payload, request),
         request_payload=payload.model_dump(exclude_none=True),
         response_payload=response_payload,
-        bdi_score=_bdi_score(payload, pulse),
+        bdi_score=_effective_bdi_score(payload, pulse),
     )
 
 
@@ -399,15 +483,46 @@ def _fallback_completion(payload: ChatProxyRequest, pulse: Dict[str, Any]) -> Di
     return response
 
 
+def _gate_or_drop(
+    payload: ChatProxyRequest,
+    request: Request,
+    *,
+    bdi_score: float,
+    entropy: float,
+) -> Optional[Response]:
+    agent_id = _agent_id(payload, request)
+    disposition = circuit_breaker.gate_request(
+        agent_id=agent_id,
+        bdi_score=bdi_score,
+        entropy=entropy,
+        shadow_mode=SHADOW_MODE,
+    )
+    action = disposition.get("action")
+
+    if disposition.get("shadow_mode") and disposition.get("would_have_action"):
+        _record_shadow_event(disposition, agent_id=agent_id, bdi_score=bdi_score, entropy=entropy)
+        return None
+
+    if action in {RequestAction.DROP.value, RequestAction.TRIP_DROP.value}:
+        _record_drop_event(disposition, agent_id=agent_id, bdi_score=bdi_score, entropy=entropy)
+        return _dropped_response(disposition)
+
+    return None
+
+
 @app.get("/health")
 def health() -> Dict[str, Any]:
+    cb_snapshot = circuit_breaker.status()
     return {
         "ok": True,
         "service": APP_NAME,
+        "shadow_mode": SHADOW_MODE,
+        "synthesis_enabled": SYNTHESIS_ENABLED,
         "upstream_configured": bool(UPSTREAM_API_KEY),
         "events": feed.count,
         "circuit_breaker": {
-            "state": circuit_breaker.state.value,
+            "state": cb_snapshot["state"],
+            "allows_requests": cb_snapshot["allows_requests"],
             "last_event": circuit_breaker.last_event.to_dict() if circuit_breaker.last_event is not None else None,
         },
     }
@@ -430,7 +545,7 @@ def circuit_breaker_open(payload: CircuitBreakerOpenRequest) -> dict[str, object
     return {
         "ok": True,
         "message": "Circuit breaker manually opened",
-        "status_code": 409,
+        "status_code": 503,
         **circuit_breaker.status(),
     }
 
@@ -456,8 +571,25 @@ def pulse(limit: int = 50) -> Dict[str, Any]:
 
 
 @app.post("/pulse")
-def pulse_tool_call(payload: PulseToolCallRequest) -> Dict[str, Any]:
-    evaluation = _enforce_policy(payload.operation)
+def pulse_tool_call(payload: PulseToolCallRequest, request: Request):
+    disposition = circuit_breaker.gate_request(
+        agent_id=payload.agent_id or request.headers.get("x-agent-id"),
+        bdi_score=0.0,
+        entropy=0.0,
+        shadow_mode=SHADOW_MODE,
+    )
+    if disposition.get("shadow_mode") and disposition.get("would_have_action"):
+        _record_shadow_event(disposition, agent_id=payload.agent_id, bdi_score=0.0, entropy=0.0)
+    elif disposition.get("action") != RequestAction.PROCEED.value:
+        _record_drop_event(
+            disposition,
+            agent_id=payload.agent_id,
+            bdi_score=0.0,
+            entropy=0.0,
+        )
+        return _dropped_response(disposition)
+
+    evaluation = _enforce_policy(payload.operation, agent_id=payload.agent_id)
     event = PulseEvent(
         kind="tool_call",
         text=payload.operation,
@@ -487,7 +619,7 @@ def pulse_bdi() -> Dict[str, Any]:
 async def chat_completions(payload: ChatProxyRequest, request: Request):
     extra_fields = _extra_payload_fields(payload)
     if extra_fields.get("operation") is not None:
-        _enforce_policy(str(extra_fields["operation"]))
+        _enforce_policy(str(extra_fields["operation"]), agent_id=_agent_id(payload, request))
 
     _enforce_financial_circuit_breaker(payload)
 
@@ -496,30 +628,15 @@ async def chat_completions(payload: ChatProxyRequest, request: Request):
     provisional_pulse: Dict[str, Any] = {"entropy": entropy, "bdi_score": 0.0}
     bdi_score = _effective_bdi_score(payload, provisional_pulse)
 
-    evaluation = circuit_breaker.evaluate(bdi_score=bdi_score, entropy=entropy)
-    if evaluation["action"] != "proceed":
-        feed.add(
-            PulseEvent(
-                kind="governance",
-                text="request-blocked",
-                data={
-                    "decision": "blocked",
-                    "status_code": 409,
-                    "action": evaluation["action"],
-                    "reason": evaluation["reason"],
-                    "state": evaluation["state"],
-                    "bdi_score": bdi_score,
-                    "entropy": entropy,
-                },
-            )
+    dropped = _gate_or_drop(payload, request, bdi_score=bdi_score, entropy=entropy)
+    if dropped is not None:
+        await _insert_audit_log(
+            payload,
+            request,
+            provisional_pulse,
+            {"status_code": 503, "dropped": True},
         )
-        response_payload = {
-            "status_code": 409,
-            "error": evaluation["reason"],
-            "governance": evaluation,
-        }
-        await _insert_audit_log(payload, request, provisional_pulse, response_payload)
-        raise HTTPException(status_code=409, detail=evaluation["reason"])
+        return dropped
 
     pulse = _record_input(payload)
     pulse["entropy"] = entropy
@@ -591,3 +708,37 @@ def reset() -> Dict[str, Any]:
     feed.clear()
     bdi_state.reset()
     return {"ok": True}
+
+
+@app.get("/synthesis/report")
+def synthesis_report() -> Dict[str, Any]:
+    """Latest pattern report from the background synthesis engine."""
+    report = synthesis_runner.last_report
+    if report is None:
+        report = forensic_auditor.generate_pattern_report()
+    return {"ok": True, "report": report}
+
+
+@app.post("/synthesis/run")
+def synthesis_run_now() -> Dict[str, Any]:
+    """Trigger an on-demand synthesis pass (runs off the request thread)."""
+    report = synthesis_runner.run_once()
+    return {"ok": True, "report": report}
+
+
+@app.get("/compliance/export")
+def compliance_export(format: str = "json") -> Union[Dict[str, Any], Response]:
+    """Export tagged compliance events (JSON or markdown)."""
+    if format.lower() in {"md", "markdown"}:
+        from fastapi.responses import PlainTextResponse
+
+        return PlainTextResponse(
+            compliance_store.export_markdown(),
+            media_type="text/markdown",
+        )
+    return {"ok": True, "report": compliance_store.export_report()}
+
+
+@app.get("/compliance/events")
+def compliance_events(limit: int = 100) -> Dict[str, Any]:
+    return {"ok": True, "events": compliance_store.list_blocked(limit=limit)}
