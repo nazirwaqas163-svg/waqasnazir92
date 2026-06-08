@@ -726,7 +726,7 @@ def synthesis_run_now() -> Dict[str, Any]:
     return {"ok": True, "report": report}
 
 
-@app.get("/compliance/export")
+@app.get("/compliance/export", response_model=None)
 def compliance_export(format: str = "json") -> Union[Dict[str, Any], Response]:
     """Export tagged compliance events (JSON or markdown)."""
     if format.lower() in {"md", "markdown"}:
