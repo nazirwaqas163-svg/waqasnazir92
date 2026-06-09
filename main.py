@@ -130,6 +130,8 @@ class ChatProxyRequest(BaseModel):
     messages: List[Dict[str, Any]] = Field(default_factory=list)
     temperature: Optional[float] = None
     stream: bool = False
+    bdi_score: Optional[float] = None
+    entropy: Optional[float] = None
 
     class Config:
         extra = "allow"
@@ -399,23 +401,34 @@ def _agent_id(payload: ChatProxyRequest, request: Request) -> Optional[str]:
     return str(value) if value is not None else None
 
 
+def _payload_override(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _effective_bdi_score(payload: ChatProxyRequest, pulse: Dict[str, Any]) -> float:
+    override = _payload_override(payload.bdi_score)
+    if override is not None:
+        return override
     extra_fields = _extra_payload_fields(payload)
-    if extra_fields.get("bdi_score") is not None:
-        try:
-            return float(extra_fields["bdi_score"])
-        except (TypeError, ValueError):
-            pass
+    override = _payload_override(extra_fields.get("bdi_score"))
+    if override is not None:
+        return override
     return float(pulse.get("bdi_score") or 0.0)
 
 
 def _effective_entropy(payload: ChatProxyRequest, prompt_text: str) -> float:
+    override = _payload_override(payload.entropy)
+    if override is not None:
+        return override
     extra_fields = _extra_payload_fields(payload)
-    if extra_fields.get("entropy") is not None:
-        try:
-            return float(extra_fields["entropy"])
-        except (TypeError, ValueError):
-            pass
+    override = _payload_override(extra_fields.get("entropy"))
+    if override is not None:
+        return override
     return _calculate_shannon_entropy(prompt_text)
 
 
