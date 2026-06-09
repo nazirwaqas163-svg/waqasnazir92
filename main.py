@@ -720,6 +720,7 @@ async def chat_completions(payload: ChatProxyRequest, request: Request):
 def reset() -> Dict[str, Any]:
     feed.clear()
     bdi_state.reset()
+    circuit_breaker.close(reason="manual reset", bdi_score=0.0, entropy=0.0)
     return {"ok": True}
 
 
