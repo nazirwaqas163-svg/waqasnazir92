@@ -106,6 +106,30 @@ class SupabaseAuditClient:
     def configured(self) -> bool:
         return bool(self.url and self.key)
 
+    def _headers(self) -> Dict[str, str]:
+        return {
+            "apikey": self.key or "",
+            "authorization": f"Bearer {self.key}",
+            "content-type": "application/json",
+            "prefer": "return=minimal",
+        }
+
+    async def _post_row(self, table: str, row: Dict[str, Any]) -> bool:
+        if not self.configured:
+            return False
+        try:
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.post(
+                    f"{self.url}/rest/v1/{table}",
+                    headers=self._headers(),
+                    json=row,
+                )
+                response.raise_for_status()
+            return True
+        except httpx.HTTPError:
+            logger.exception("Failed to insert into %s", table)
+            return False
+
     async def insert_audit_log(
         self,
         *,
@@ -113,10 +137,13 @@ class SupabaseAuditClient:
         request_payload: Dict[str, Any],
         response_payload: Dict[str, Any],
         bdi_score: Optional[float],
-    ) -> bool:
+        event_id: Optional[str] = None,
+    ) -> str:
+        event_id = event_id or str(uuid.uuid4())
+        created_at = datetime.now(timezone.utc).isoformat()
         event_data = {
-            "id": str(uuid.uuid4()),
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "id": event_id,
+            "created_at": created_at,
             "agent_id": agent_id,
             "request_payload": request_payload,
             "response_payload": response_payload,
@@ -126,32 +153,45 @@ class SupabaseAuditClient:
 
         if not self.configured:
             logger.warning("Skipping audit log insert because Supabase is not configured")
-            return False
+            return event_id
 
         row = {
             **event_data,
             "chain_hash": chain_entry["hash"],
             "chain_previous_hash": chain_entry["previous_hash"],
         }
-        headers = {
-            "apikey": self.key or "",
-            "authorization": f"Bearer {self.key}",
-            "content-type": "application/json",
-            "prefer": "return=minimal",
-        }
+        await self._post_row("audit_logs", row)
+        return event_id
 
-        try:
-            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
-                response = await client.post(
-                    f"{self.url}/rest/v1/audit_logs",
-                    headers=headers,
-                    json=row,
-                )
-                response.raise_for_status()
-            return True
-        except httpx.HTTPError:
-            logger.exception("Failed to insert audit log")
+    async def insert_ai_event(
+        self,
+        *,
+        event_id: str,
+        timestamp: str,
+        agent_id: Optional[str],
+        action: str,
+        input_text: str,
+        output_text: str,
+        bdi_score: Optional[float],
+        policy_result: str,
+        session_id: Optional[str] = None,
+    ) -> bool:
+        if not self.configured:
+            logger.warning("Skipping ai_events insert because Supabase is not configured")
             return False
+
+        row = {
+            "event_id": event_id,
+            "timestamp": timestamp,
+            "agent_id": agent_id,
+            "action": action,
+            "input_text": input_text,
+            "output_text": output_text,
+            "bdi_score": bdi_score,
+            "policy_result": policy_result,
+            "session_id": session_id,
+        }
+        return await self._post_row("ai_events", row)
 
 
 supabase_audit_client = SupabaseAuditClient(SUPABASE_URL, SUPABASE_KEY)

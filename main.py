@@ -3,6 +3,7 @@ import re
 import time
 import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from dataclasses import asdict
 from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional, Union
@@ -156,6 +157,16 @@ class CircuitBreakerCloseRequest(BaseModel):
     reason: str = Field(default="Manual reset from dashboard")
     bdi_score: float = Field(default=0.0, ge=0.0, le=1.0)
     entropy: float = Field(default=0.0, ge=0.0, le=1.0)
+
+
+class InterceptRequest(BaseModel):
+    agent_id: str
+    session_id: Optional[str] = None
+    input_text: str = ""
+    output_text: str = ""
+    metadata: Optional[Dict[str, Any]] = None
+    bdi_score: Optional[float] = None
+    entropy: Optional[float] = None
 
 
 def _dropped_response(disposition: Dict[str, Any]) -> Response:
@@ -460,17 +471,118 @@ def _enforce_policy(operation: str | None, agent_id: Optional[str] = None) -> Po
     return evaluation
 
 
+def _session_id_from_payload(payload: ChatProxyRequest) -> Optional[str]:
+    extra_fields = _extra_payload_fields(payload)
+    value = extra_fields.get("session_id")
+    return str(value) if value is not None else None
+
+
+def _request_action(payload: ChatProxyRequest, request: Request) -> str:
+    extra_fields = _extra_payload_fields(payload)
+    if extra_fields.get("operation") is not None:
+        return str(extra_fields["operation"])
+    return request.url.path
+
+
+def _extract_output_text(response_payload: Dict[str, Any]) -> str:
+    if response_payload.get("dropped"):
+        return ""
+    choices = response_payload.get("choices") or []
+    if choices:
+        message = choices[0].get("message") or {}
+        return extract_text(message.get("content", ""))
+    if response_payload.get("error") is not None:
+        return str(response_payload["error"])
+    if response_payload.get("detail") is not None:
+        return str(response_payload["detail"])
+    return ""
+
+
+def _policy_result(response_payload: Dict[str, Any]) -> str:
+    status_code = response_payload.get("status_code", 200)
+    if response_payload.get("dropped") or status_code >= 400:
+        return "blocked"
+    return "allowed"
+
+
+async def _insert_ai_event_log(
+    *,
+    event_id: str,
+    agent_id: Optional[str],
+    action: str,
+    input_text: str,
+    output_text: str,
+    bdi_score: Optional[float],
+    policy_result: str,
+    session_id: Optional[str] = None,
+) -> None:
+    await supabase_audit_client.insert_ai_event(
+        event_id=event_id,
+        timestamp=datetime.now(timezone.utc).isoformat(),
+        agent_id=agent_id,
+        action=action,
+        input_text=input_text,
+        output_text=output_text,
+        bdi_score=bdi_score,
+        policy_result=policy_result,
+        session_id=session_id,
+    )
+
+
 async def _insert_audit_log(
     payload: ChatProxyRequest,
     request: Request,
     pulse: Dict[str, Any],
     response_payload: Dict[str, Any],
 ) -> None:
-    await supabase_audit_client.insert_audit_log(
-        agent_id=_agent_id(payload, request),
+    agent_id = _agent_id(payload, request)
+    bdi_score = _effective_bdi_score(payload, pulse)
+    event_id = await supabase_audit_client.insert_audit_log(
+        agent_id=agent_id,
         request_payload=payload.model_dump(exclude_none=True),
         response_payload=response_payload,
-        bdi_score=_effective_bdi_score(payload, pulse),
+        bdi_score=bdi_score,
+    )
+    await _insert_ai_event_log(
+        event_id=event_id,
+        agent_id=agent_id,
+        action=_request_action(payload, request),
+        input_text=_messages_text(payload.messages),
+        output_text=_extract_output_text(response_payload),
+        bdi_score=bdi_score,
+        policy_result=_policy_result(response_payload),
+        session_id=_session_id_from_payload(payload),
+    )
+
+
+async def _insert_intercept_logs(
+    payload: InterceptRequest,
+    *,
+    request_id: str,
+    bdi_score: float,
+    policy_result: str,
+) -> None:
+    action = str((payload.metadata or {}).get("operation") or "/intercept")
+    event_id = await supabase_audit_client.insert_audit_log(
+        agent_id=payload.agent_id,
+        request_payload=payload.model_dump(exclude_none=True),
+        response_payload={
+            "request_id": request_id,
+            "output_text": payload.output_text,
+            "policy_result": policy_result,
+        },
+        bdi_score=bdi_score,
+        event_id=request_id,
+    )
+    await _insert_ai_event_log(
+        event_id=event_id,
+        agent_id=payload.agent_id,
+        action=action,
+        input_text=payload.input_text,
+        output_text=payload.output_text,
+        bdi_score=bdi_score,
+        policy_result=policy_result,
+        session_id=payload.session_id,
     )
 
 
@@ -714,6 +826,100 @@ async def chat_completions(payload: ChatProxyRequest, request: Request):
     _record_output(pulse["request_id"], response_json)
     await _insert_audit_log(payload, request, pulse, response_json)
     return JSONResponse(response_json)
+
+
+@app.post("/intercept")
+async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
+    """SDK hook: record agent input/output and apply circuit-breaker governance."""
+    bdi_score = float(payload.bdi_score or 0.0)
+    entropy = (
+        float(payload.entropy)
+        if payload.entropy is not None
+        else _calculate_shannon_entropy(payload.input_text)
+    )
+
+    disposition = circuit_breaker.gate_request(
+        agent_id=payload.agent_id,
+        bdi_score=bdi_score,
+        entropy=entropy,
+        shadow_mode=SHADOW_MODE,
+    )
+
+    if disposition.get("shadow_mode") and disposition.get("would_have_action"):
+        _record_shadow_event(
+            disposition,
+            agent_id=payload.agent_id,
+            bdi_score=bdi_score,
+            entropy=entropy,
+        )
+    elif disposition.get("action") != RequestAction.PROCEED.value:
+        _record_drop_event(
+            disposition,
+            agent_id=payload.agent_id,
+            bdi_score=bdi_score,
+            entropy=entropy,
+        )
+        request_id = str(uuid.uuid4())
+        await _insert_intercept_logs(
+            payload,
+            request_id=request_id,
+            bdi_score=bdi_score,
+            policy_result="blocked",
+        )
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "Circuit breaker tripped",
+                "reason": disposition.get("reason"),
+                "state": disposition.get("state"),
+                "action": disposition.get("action"),
+            },
+        )
+
+    request_id = str(uuid.uuid4())
+    feed.add(
+        PulseEvent(
+            kind="input",
+            text=payload.input_text,
+            data={
+                "request_id": request_id,
+                "agent_id": payload.agent_id,
+                "session_id": payload.session_id,
+                "metadata": payload.metadata or {},
+                "bdi_score": bdi_score,
+                "entropy": entropy,
+                "decision": "allowed",
+                "status_code": 200,
+            },
+        )
+    )
+    refusal = detect_refusal(payload.output_text)
+    feed.add(
+        PulseEvent(
+            kind="output",
+            text=payload.output_text,
+            data={
+                "request_id": request_id,
+                "agent_id": payload.agent_id,
+                "session_id": payload.session_id,
+                "refusal": refusal,
+                "decision": "allowed",
+                "status_code": 200,
+            },
+        )
+    )
+    await _insert_intercept_logs(
+        payload,
+        request_id=request_id,
+        bdi_score=bdi_score,
+        policy_result="allowed",
+    )
+    return {
+        "ok": True,
+        "allowed": True,
+        "output_text": payload.output_text,
+        "request_id": request_id,
+    }
 
 
 @app.post("/pulse/reset")
