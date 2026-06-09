@@ -44,20 +44,23 @@ StateListener = Callable[[KillSwitchEvent], None]
 class CircuitBreakerMiddleware:
     def __init__(
         self,
-        bdi_threshold: float = 0.65,
+        bdi_threshold: float = 0.85,
         entropy_threshold: float = 0.95,
         agent_cooldown_seconds: float = 30.0,
+        minimum_calls: int = 5,
     ):
         self.state: CircuitState = CircuitState.CLOSED
         self.bdi_threshold = bdi_threshold
         self.entropy_threshold = entropy_threshold
         self.agent_cooldown_seconds = agent_cooldown_seconds
+        self.minimum_calls = minimum_calls
         self.last_event: Optional[KillSwitchEvent] = None
         self.failure_count: int = 0
         self.last_failure: Optional[dict[str, object]] = None
         self._listeners: List[StateListener] = []
         self._lock = threading.RLock()
         self._agent_cooldown_until: Dict[str, float] = {}
+        self._intercept_calls: int = 0
 
     def register_listener(self, listener: StateListener) -> None:
         with self._lock:
@@ -111,6 +114,7 @@ class CircuitBreakerMiddleware:
             if self.state != CircuitState.CLOSED:
                 self.state = CircuitState.CLOSED
                 self._agent_cooldown_until.clear()
+                self._intercept_calls = 0
                 self._emit(
                     KillSwitchEvent(
                         state=self.state,
@@ -200,6 +204,12 @@ class CircuitBreakerMiddleware:
             cooldown_seconds_remaining=self.agent_cooldown_seconds,
         )
 
+    def _record_intercept_call_locked(self) -> None:
+        self._intercept_calls += 1
+
+    def _bdi_warming_up_locked(self, *, intercept: bool) -> bool:
+        return intercept and self._intercept_calls < self.minimum_calls
+
     def gate_request(
         self,
         *,
@@ -207,6 +217,7 @@ class CircuitBreakerMiddleware:
         bdi_score: float,
         entropy: float,
         shadow_mode: bool = False,
+        intercept: bool = False,
     ) -> Dict[str, object]:
         """
         Thread-safe entry point for concurrent proxy requests.
@@ -214,11 +225,17 @@ class CircuitBreakerMiddleware:
         When OPEN: drops requests (never returns a retryable 409-style outcome).
         Applies a per-agent cooldown window while open.
 
+        BDI tripping is deferred until at least minimum_calls intercept requests
+        have been recorded (cold-start / low-traffic protection).
+
         When shadow_mode is True, governance is evaluated but state is not mutated
         and traffic is always allowed through (would-block metadata is attached).
         """
         with self._lock:
             now = time.monotonic()
+
+            if intercept:
+                self._record_intercept_call_locked()
 
             if self.state != CircuitState.CLOSED:
                 would_have = self._handle_open_locked(agent_id, now)
@@ -237,7 +254,7 @@ class CircuitBreakerMiddleware:
                 )
                 return would_have
 
-            if bdi_score > self.bdi_threshold:
+            if bdi_score > self.bdi_threshold and not self._bdi_warming_up_locked(intercept=intercept):
                 would_have = self._trip_drop("Governance kill switch engaged due to elevated BDI.")
                 if shadow_mode:
                     return self._shadow_proceed(would_have)
@@ -248,7 +265,15 @@ class CircuitBreakerMiddleware:
                 )
                 return would_have
 
-            return self._proceed(shadow_mode=shadow_mode) if shadow_mode else self._proceed()
+            extra: Dict[str, object] = {}
+            if intercept and self._bdi_warming_up_locked(intercept=intercept):
+                extra["bdi_warming_up"] = True
+                extra["intercept_calls"] = self._intercept_calls
+                extra["minimum_calls"] = self.minimum_calls
+
+            if shadow_mode:
+                return self._proceed(shadow_mode=shadow_mode, **extra)
+            return self._proceed(**extra)
 
     def evaluate(
         self,
@@ -256,6 +281,7 @@ class CircuitBreakerMiddleware:
         entropy: float,
         agent_id: Optional[str] = None,
         shadow_mode: bool = False,
+        intercept: bool = False,
     ) -> Dict[str, object]:
         """Backward-compatible wrapper around gate_request."""
         return self.gate_request(
@@ -263,6 +289,7 @@ class CircuitBreakerMiddleware:
             bdi_score=bdi_score,
             entropy=entropy,
             shadow_mode=shadow_mode,
+            intercept=intercept,
         )
 
     def status(self) -> Dict[str, object]:
@@ -276,4 +303,7 @@ class CircuitBreakerMiddleware:
                 "last_failure": self.last_failure,
                 "agent_cooldown_seconds": self.agent_cooldown_seconds,
                 "active_agent_cooldowns": active_cooldowns,
+                "bdi_threshold": self.bdi_threshold,
+                "minimum_calls": self.minimum_calls,
+                "intercept_calls": self._intercept_calls,
             }

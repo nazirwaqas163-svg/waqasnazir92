@@ -843,6 +843,7 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
         bdi_score=bdi_score,
         entropy=entropy,
         shadow_mode=SHADOW_MODE,
+        intercept=True,
     )
 
     if disposition.get("shadow_mode") and disposition.get("would_have_action"):
