@@ -11,20 +11,22 @@ ALLOWED_OPERATIONS: Final[frozenset[str]] = frozenset(
     {"READ", "QUERY", "STATUS", "WRITE_INTERNAL", "PING"}
 )
 
-# Regulatory frameworks referenced in compliance exports.
-FRAMEWORK_EU_AI_ACT: Final[str] = "EU AI Act"
-FRAMEWORK_GDPR: Final[str] = "GDPR"
-FRAMEWORK_SOC2: Final[str] = "SOC2"
+# ASEAN regulatory frameworks referenced in compliance exports.
+FRAMEWORK_PDPA_MY: Final[str] = "PDPA Malaysia"
+FRAMEWORK_PDPA_TH: Final[str] = "PDPA Thailand"
+FRAMEWORK_PDPC_SG: Final[str] = "PDPC Singapore"
+FRAMEWORK_MGF_SG: Final[str] = "MAS Model AI Governance Framework"
+FRAMEWORK_VIETNAM_AI: Final[str] = "Vietnam AI Law 2024"
 FRAMEWORK_ISO_42001: Final[str] = "ISO 42001"
 
 VIOLATION_REGULATORY_TAGS: Final[dict[str, Tuple[str, ...]]] = {
-    "missing_operation": (FRAMEWORK_GDPR, FRAMEWORK_SOC2, FRAMEWORK_ISO_42001),
-    "blocked_delete": (FRAMEWORK_EU_AI_ACT, FRAMEWORK_GDPR, FRAMEWORK_ISO_42001),
-    "blocked_export": (FRAMEWORK_GDPR, FRAMEWORK_SOC2, FRAMEWORK_EU_AI_ACT),
-    "blocked_write_external": (FRAMEWORK_GDPR, FRAMEWORK_SOC2, FRAMEWORK_EU_AI_ACT),
-    "blocked_query_all": (FRAMEWORK_GDPR, FRAMEWORK_ISO_42001, FRAMEWORK_EU_AI_ACT),
-    "deny_by_default": (FRAMEWORK_EU_AI_ACT, FRAMEWORK_ISO_42001, FRAMEWORK_SOC2),
-    "unknown_operation": (FRAMEWORK_EU_AI_ACT, FRAMEWORK_ISO_42001),
+    "missing_operation": (FRAMEWORK_PDPA_MY, FRAMEWORK_PDPC_SG, FRAMEWORK_ISO_42001),
+    "blocked_delete": (FRAMEWORK_PDPA_MY, FRAMEWORK_PDPA_TH, FRAMEWORK_MGF_SG, FRAMEWORK_ISO_42001),
+    "blocked_export": (FRAMEWORK_PDPA_MY, FRAMEWORK_PDPC_SG, FRAMEWORK_VIETNAM_AI, FRAMEWORK_MGF_SG),
+    "blocked_write_external": (FRAMEWORK_PDPA_MY, FRAMEWORK_PDPC_SG, FRAMEWORK_MGF_SG, FRAMEWORK_VIETNAM_AI),
+    "blocked_query_all": (FRAMEWORK_PDPA_MY, FRAMEWORK_PDPA_TH, FRAMEWORK_ISO_42001, FRAMEWORK_MGF_SG),
+    "deny_by_default": (FRAMEWORK_MGF_SG, FRAMEWORK_ISO_42001, FRAMEWORK_PDPA_MY),
+    "unknown_operation": (FRAMEWORK_MGF_SG, FRAMEWORK_ISO_42001),
 }
 
 
@@ -58,7 +60,7 @@ def _blocked_evaluation(
     reason: str,
     risk_level: str,
 ) -> PolicyEvaluation:
-    frameworks = VIOLATION_REGULATORY_TAGS.get(violation_type, (FRAMEWORK_EU_AI_ACT, FRAMEWORK_ISO_42001))
+    frameworks = VIOLATION_REGULATORY_TAGS.get(violation_type, (FRAMEWORK_MGF_SG, FRAMEWORK_ISO_42001))
     return PolicyEvaluation(
         allowed=False,
         reason=reason,
