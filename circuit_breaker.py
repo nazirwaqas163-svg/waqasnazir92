@@ -45,7 +45,7 @@ class CircuitBreakerMiddleware:
     def __init__(
         self,
         bdi_threshold: float = 0.65,
-        entropy_threshold: float = 0.85,
+        entropy_threshold: float = 0.95,
         agent_cooldown_seconds: float = 30.0,
     ):
         self.state: CircuitState = CircuitState.CLOSED
