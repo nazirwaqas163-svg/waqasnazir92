@@ -332,9 +332,9 @@ svg.hm{width:100%;height:55px}
             <button class="act-btn"><div class="act-icon">△</div>Escalate to CISO</button>
           </div>
           <button class="act-full act-danger">⚡ Remediate</button>
-          <button class="act-full">▷ Replay Event Chain</button>
-          <button class="act-full">↓ Export Evidence Package</button>
-          <button class="act-full">☰ Generate Full Incident Report</button>
+          <button class="act-full" id="btn-replay" onclick="replayEventChain()">▷ Replay Event Chain</button>
+          <button class="act-full" id="btn-export" onclick="exportEvidencePackage()">↓ Export Evidence Package</button>
+          <button class="act-full" id="btn-report" onclick="generateIncidentReport()">☰ Generate Full Incident Report</button>
         </div>
       </div>
     </div>
@@ -343,7 +343,7 @@ svg.hm{width:100%;height:55px}
 </div>
 
 <script>
-const API = 'https://pulse-proxy-je0p.onrender.com';
+const API = 'https://pulse-proxy-8dqx.onrender.com';
 let ALL = [], filter = 'all', search = '', selIdx = -1;
 
 function tick(){
@@ -487,6 +487,128 @@ function openInv(idx){
 function closeInv(){
   document.getElementById('inv').classList.remove('open');
   selIdx=-1; renderRows(filtered());
+}
+
+
+async function replayEventChain(){
+  var btn=document.getElementById('btn-replay');
+  btn.disabled=true; btn.textContent='▷ Replaying…'; closeInv();
+  var evs=filtered(); var tb=document.getElementById('tbody'); tb.innerHTML='';
+  for(var i=0;i<evs.length;i++){
+    await new Promise(function(r){setTimeout(r,380)});
+    var e=evs[i], ridx=ALL.indexOf(e), s=sev(e), bd=e.data&&e.data.bdi_score||0, en=e.data&&e.data.entropy||0;
+    var ts=e.created_at?new Date(e.created_at).toLocaleString():'—';
+    var bpct=Math.round(bd*100), epct=Math.round(en*100);
+    var row=document.createElement('div'); row.className='evt-row';
+    row.style.background='rgba(0,212,255,0.09)';
+    row.setAttribute('onclick','openInv('+ridx+')');
+    row.innerHTML='<div><div class="evt-id"><strong>EV-'+String(ridx+1).padStart(4,'0')+'</strong></div><div class="evt-ts">'+ts+'</div></div>'+
+      '<div class="actor-wrap">'+avatarFor(e.kind)+'<div style="min-width:0"><div class="actor-name">'+actorName(e.kind)+'</div><div class="actor-desc">'+shortText(e.text)+'</div></div></div>'+
+      '<div><span class="badge '+s+'">'+s+'</span></div>'+
+      '<div class="bdi-wrap"><div class="bdi-track"><div class="bdi-fill" style="width:'+bpct+'%;background:'+bdiC(bd)+'"></div></div><span class="mono-val" style="color:'+bdiC(bd)+'">'+bpct+'%</span></div>'+
+      '<div class="mono-val" style="color:'+entC(en)+'">'+epct+'%</div>'+
+      '<div><div class="pulse-dot '+pulseClass(s)+'">'+pulseIcon(s)+'</div></div>';
+    tb.appendChild(row);
+    (function(rr){setTimeout(function(){rr.style.background=''},600)})(row);
+  }
+  btn.disabled=false; btn.textContent='▷ Replay Event Chain';
+}
+
+async function exportEvidencePackage(){
+  var btn=document.getElementById('btn-export');
+  btn.disabled=true; btn.textContent='↓ Exporting…';
+  try{
+    var e=selIdx>=0?ALL[selIdx]:null;
+    var results=await Promise.all([
+      fetch(API+'/health',{cache:'no-store'}).then(function(r){return r.json()}),
+      fetch(API+'/circuit-breaker/status',{cache:'no-store'}).then(function(r){return r.json()}),
+      fetch(API+'/events',{cache:'no-store'}).then(function(r){return r.json()})
+    ]);
+    var pkg={
+      exported_at:new Date().toISOString(),
+      governance_version:'pulse-v1-beta',
+      jurisdiction:'ASEAN — PDPA Malaysia (24hr) / Singapore MGF (72hr) / Vietnam AI Law (72hr)',
+      selected_event:e?Object.assign({event_id:'EV-'+String(selIdx+1).padStart(4,'0'),severity:sev(e)},e):null,
+      health:results[0], circuit_breaker:results[1],
+      all_events:results[2].events||[], total_events:(results[2].events||[]).length
+    };
+    var blob=new Blob([JSON.stringify(pkg,null,2)],{type:'application/json'});
+    var url=URL.createObjectURL(blob); var a=document.createElement('a');
+    a.href=url; a.download='pulse-evidence-'+new Date().toISOString().replace(/[:.]/g,'-')+'.json';
+    a.click(); URL.revokeObjectURL(url);
+  }catch(err){alert('Export failed: '+err.message)}
+  btn.disabled=false; btn.textContent='↓ Export Evidence Package';
+}
+
+async function generateIncidentReport(){
+  var btn=document.getElementById('btn-report');
+  btn.disabled=true; btn.textContent='☰ Generating…';
+  try{
+    var e=selIdx>=0?ALL[selIdx]:null;
+    var s=e?sev(e):'n/a', bd=e&&e.data&&e.data.bdi_score||0, en=e&&e.data&&e.data.entropy||0;
+    var ts=e&&e.created_at?new Date(e.created_at).toLocaleString():'Unknown';
+    var now=new Date().toISOString();
+    var health={ok:'?'}, cb={state:'?',failure_count:0};
+    try{
+      var r2=await Promise.all([
+        fetch(API+'/health',{cache:'no-store'}).then(function(r){return r.json()}),
+        fetch(API+'/circuit-breaker/status',{cache:'no-store'}).then(function(r){return r.json()})
+      ]);
+      health=r2[0]; cb=r2[1];
+    }catch(_){}
+    var L=[];
+    L.push('PULSE AI GOVERNANCE INCIDENT REPORT');
+    L.push('=====================================');
+    L.push('Generated:    '+now);
+    L.push('Jurisdiction: ASEAN (PDPA Malaysia 24hr / Singapore MGF 72hr / Vietnam AI Law 72hr)');
+    L.push('');
+    L.push('SYSTEM STATUS'); L.push('-------------');
+    L.push('Health:          '+(health.ok===true?'HEALTHY':'UNKNOWN'));
+    L.push('Circuit Breaker: '+(cb.state||'unknown').toUpperCase());
+    L.push('Failures:        '+(cb.failure_count||0));
+    L.push('');
+    if(e){
+      L.push('SELECTED EVENT'); L.push('--------------');
+      L.push('Event ID:  EV-'+String(selIdx+1).padStart(4,'0'));
+      L.push('Severity:  '+s.toUpperCase());
+      L.push('Triggered: '+ts);
+      L.push('Kind:      '+(e.kind||'unknown'));
+      L.push('BDI Score: '+Math.round(bd*100)+'%');
+      L.push('Entropy:   '+Math.round(en*100)+'%');
+      L.push('Text:      '+(e.text||'(none)'));
+      L.push('');
+      if(s==='critical'){
+        L.push('REQUIRED ACTIONS (CRITICAL EVENT)'); L.push('---------------------------------');
+        L.push('PDPA Malaysia:   Notify PDPC within 24 hours');
+        L.push('Singapore MGF:   File incident report within 72 hours');
+        L.push('Vietnam AI Law:  Notify competent authority within 72 hours');
+        L.push('Internal:        Pause automated pipeline, activate HITL review');
+        L.push('');
+      }
+    } else {
+      L.push('NOTE: No event selected. Select an event in the investigator for per-event detail.');
+      L.push('');
+    }
+    L.push('ALL EVENTS SUMMARY'); L.push('------------------');
+    L.push('Total:    '+ALL.length);
+    L.push('Critical: '+ALL.filter(function(x){return sev(x)==='critical'}).length);
+    L.push('Elevated: '+ALL.filter(function(x){return sev(x)==='elevated'}).length);
+    L.push('Stable:   '+ALL.filter(function(x){return sev(x)==='stable'}).length);
+    L.push('');
+    L.push('EVENT TIMELINE'); L.push('--------------');
+    ALL.forEach(function(x,i){
+      var xt=x.created_at?new Date(x.created_at).toLocaleString():'?';
+      L.push('['+String(i+1)+'] '+xt+' | '+sev(x).toUpperCase()+' | '+x.kind+' | '+(x.text||'').substring(0,55));
+    });
+    L.push(''); L.push('=====================================');
+    L.push('Pulse — Immutable Compliance for ASEAN AI Governance');
+    L.push('Built by Waqas Nazir');
+    var blob=new Blob([L.join('\n')],{type:'text/plain'});
+    var url=URL.createObjectURL(blob); var a=document.createElement('a');
+    a.href=url; a.download='pulse-incident-report-'+now.replace(/[:.]/g,'-')+'.txt';
+    a.click(); URL.revokeObjectURL(url);
+  }catch(err){alert('Report generation failed: '+err.message)}
+  btn.disabled=false; btn.textContent='☰ Generate Full Incident Report';
 }
 
 async function load(){
