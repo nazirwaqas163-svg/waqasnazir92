@@ -188,7 +188,7 @@ class SupabaseAuditClient:
             "input_text": input_text,
             "output_text": output_text,
             "bdi_score": bdi_score,
-            "policy_result": policy_result,
+            "status": policy_result,
             "session_id": session_id,
         }
         return await self._post_row("ai_events", row)
