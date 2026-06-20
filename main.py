@@ -22,6 +22,7 @@ from embeddings import embed_texts, novelty_score
 from compliance_report import compliance_store
 from policy_engine import PolicyEvaluation, evaluate_tool_call
 from pulse_feed import PulseEvent, PulseFeed
+from session_store import session_store
 from refusal import detect_refusal
 from synthesis_engine import forensic_auditor, synthesis_runner
 
@@ -831,7 +832,12 @@ async def chat_completions(payload: ChatProxyRequest, request: Request):
 @app.post("/intercept")
 async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
     """SDK hook: record agent input/output and apply circuit-breaker governance."""
-    bdi_score = float(payload.bdi_score or 0.0)
+    bdi_score = session_store.record_turn(
+        payload.session_id or "default",
+        payload.agent_id or "unknown",
+        payload.input_text,
+        payload.output_text,
+    )
     entropy = (
         float(payload.entropy)
         if payload.entropy is not None
@@ -927,6 +933,7 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
 def reset() -> Dict[str, Any]:
     feed.clear()
     bdi_state.reset()
+    session_store.reset()
     circuit_breaker.close(reason="manual reset", bdi_score=0.0, entropy=0.0)
     return {"ok": True}
 
