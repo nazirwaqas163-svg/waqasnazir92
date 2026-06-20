@@ -243,10 +243,6 @@ class CircuitBreakerMiddleware:
                     return self._shadow_proceed(would_have)
                 return would_have
 
-            if entropy > self.entropy_threshold:
-                would_have = self._trip_drop("Governance kill switch engaged due to high entropy.")
-                if shadow_mode:
-                    return self._shadow_proceed(would_have)
                 self.open(
                     reason="Shannon entropy exceeded kill threshold",
                     bdi_score=bdi_score,

@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 F = TypeVar("F", bound=Callable[..., Any])
 
-CIRCUIT_TRIP_STATUS_CODES = frozenset({409, 503})
+CIRCUIT_TRIP_STATUS_CODES = frozenset({409, 423, 503})
 
 
 class PulseCircuitTrippedException(Exception):
