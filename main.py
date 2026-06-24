@@ -1,4 +1,4 @@
-﻿import os
+import os
 import re
 import time
 import uuid
@@ -25,7 +25,7 @@ from pulse_feed import PulseEvent, PulseFeed
 from session_store import session_store
 from refusal import detect_refusal
 from synthesis_engine import forensic_auditor, synthesis_runner
-
+from drift import drift_engine
 APP_NAME = "pulse-proxy"
 SYNTHESIS_ENABLED = os.getenv("PULSE_SYNTHESIS_ENABLED", "true").lower() in {"1", "true", "yes"}
 SHADOW_MODE = os.getenv("PULSE_SHADOW_MODE", "false").lower() in {"1", "true", "yes"}
@@ -849,6 +849,11 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
         payload.input_text,
         payload.output_text,
     )
+    drift_result = drift_engine.record_turn(
+        session_id=payload.session_id or "default",
+        input_text=payload.input_text,
+        output_text=payload.output_text,    
+)
     entropy = (
         float(payload.entropy)
         if payload.entropy is not None
@@ -937,6 +942,7 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
         "allowed": True,
         "output_text": payload.output_text,
         "request_id": request_id,
+        "drift": drift_result,
     }
 
 
