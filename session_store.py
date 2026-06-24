@@ -1,4 +1,3 @@
-cat > session_store.py << 'EOF'
 from __future__ import annotations
 import math
 import threading
@@ -69,4 +68,3 @@ class SessionStore:
 
 
 session_store = SessionStore()
-EOF
