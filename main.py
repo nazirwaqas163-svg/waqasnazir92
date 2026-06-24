@@ -952,7 +952,26 @@ def reset() -> Dict[str, Any]:
     bdi_state.reset()
     session_store.reset()
     circuit_breaker.close(reason="manual reset", bdi_score=0.0, entropy=0.0)
+    drift_engine.reset()
+
+
     return {"ok": True}
+
+@app.get("/drift/{session_id}")
+def get_drift(session_id: str) -> Dict[str, Any]:
+    """Return current drift score for a session."""
+    return {"ok": True, "session_id": session_id, "drift": drift_engine.get_drift(session_id)}
+
+
+@app.get("/drift")
+def list_drift_sessions() -> Dict[str, Any]:
+    """List all active drift sessions."""
+    sessions = drift_engine.session_ids()
+    return {
+        "ok": True,
+        "sessions": sessions,
+        "drift": {sid: drift_engine.get_drift(sid) for sid in sessions},
+    }
 
 
 @app.get("/synthesis/report")
