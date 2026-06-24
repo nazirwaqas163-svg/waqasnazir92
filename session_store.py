@@ -1,8 +1,11 @@
+cat > session_store.py << 'EOF'
 from __future__ import annotations
+import math
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, Optional
+
 
 @dataclass
 class SessionState:
@@ -13,36 +16,41 @@ class SessionState:
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     last_seen: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
- def record_turn(self, input_text: str, output_text: str) -> float:
-    import math
-    self.turn_count += 1
-    self.last_seen = datetime.now(timezone.utc).isoformat()
+    def record_turn(self, input_text: str, output_text: str) -> float:
+        self.turn_count += 1
+        self.last_seen = datetime.now(timezone.utc).isoformat()
 
-    text = input_text or ""
-    if text:
-        freq: dict[str, int] = {}
-        for ch in text:
-            freq[ch] = freq.get(ch, 0) + 1
-        length = len(text)
-        entropy = 0.0
-        for count in freq.values():
-            p = count / length
-            entropy -= p * math.log2(p)
-        max_entropy = math.log2(len(freq)) if freq else 1.0
-        normalized_entropy = entropy / max_entropy if max_entropy > 0 else 0.0
-    else:
-        normalized_entropy = 0.0
+        text = input_text or ""
+        if text:
+            freq: dict[str, int] = {}
+            for ch in text:
+                freq[ch] = freq.get(ch, 0) + 1
+            length = len(text)
+            entropy = 0.0
+            for count in freq.values():
+                p = count / length
+                entropy -= p * math.log2(p)
+            max_entropy = math.log2(len(freq)) if freq else 1.0
+            normalized_entropy = entropy / max_entropy if max_entropy > 0 else 0.0
+        else:
+            normalized_entropy = 0.0
 
-    risk_keywords = ["override","ignore","bypass","disable","delete","drop","admin","root","execute","sudo","hack","inject","exfiltrate","leak","steal","exploit"]
-    keyword_bonus = 0.15 if any(k in input_text.lower() for k in risk_keywords) else 0.0
-    length_bonus = 0.02 if len(output_text) > 500 else 0.0
+        risk_keywords = ["override","ignore","bypass","disable","delete","drop","admin","root","execute","sudo","hack","inject","exfiltrate","leak","steal","exploit"]
+        keyword_bonus = 0.15 if any(k in input_text.lower() for k in risk_keywords) else 0.0
+        length_bonus = 0.02 if len(output_text) > 500 else 0.0
 
-    increment = (normalized_entropy * 0.6) + keyword_bonus + length_bonus
-    self.bdi_score = min(1.0, self.bdi_score + increment)
-    return self.bdi_score
+        increment = (normalized_entropy * 0.6) + keyword_bonus + length_bonus
+        self.bdi_score = min(1.0, self.bdi_score + increment)
+        return self.bdi_score
 
     def to_dict(self) -> dict:
-        return {"session_id": self.session_id, "agent_id": self.agent_id, "turn_count": self.turn_count, "bdi_score": round(self.bdi_score, 4)}
+        return {
+            "session_id": self.session_id,
+            "agent_id": self.agent_id,
+            "turn_count": self.turn_count,
+            "bdi_score": round(self.bdi_score, 4),
+        }
+
 
 class SessionStore:
     def __init__(self):
@@ -59,4 +67,6 @@ class SessionStore:
         with self._lock:
             self._sessions.clear()
 
+
 session_store = SessionStore()
+EOF
