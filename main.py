@@ -332,12 +332,23 @@ def _normalized_bdi_score(bdi_snapshot: dict[str, object]) -> float:
     intentions = bdi_snapshot.get("intentions") or []
     turns = int(bdi_snapshot.get("turns") or 0)
 
-    belief_score = min(1.0, len(beliefs) / 10.0)
+    public_beliefs = {k: v for k, v in beliefs.items() if not k.startswith("_")}
+
+    belief_score = min(1.0, len(public_beliefs) / 8.0)
     desire_score = min(1.0, len(desires) / 8.0)
     intention_score = min(1.0, len(intentions) / 5.0)
     turn_score = min(1.0, turns / 20.0)
 
-    score = (belief_score * 0.25) + (desire_score * 0.25) + (intention_score * 0.3) + (turn_score * 0.2)
+    escalation = int(beliefs.get("escalation_keywords") or 0)
+    escalation_bonus = min(0.4, escalation * 0.1)
+
+    score = (
+        (belief_score * 0.25)
+        + (desire_score * 0.25)
+        + (intention_score * 0.30)
+        + (turn_score * 0.20)
+        + escalation_bonus
+    )
     return min(1.0, max(0.0, score))
 
 

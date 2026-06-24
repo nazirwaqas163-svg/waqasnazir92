@@ -21,17 +21,32 @@ class BDIState:
 
     def observe(self, messages: List[Dict[str, Any]]) -> Dict[str, Any]:
         self.turns += 1
-        user_texts = [extract_text(message.get("content", "")) for message in messages if message.get("role") == "user"]
+        user_texts = [
+            extract_text(m.get("content", ""))
+            for m in messages
+            if m.get("role") == "user"
+        ]
         latest = user_texts[-1] if user_texts else ""
+        all_text = " ".join(user_texts)
         intents = [name for name, pattern in INTENT_PATTERNS.items() if pattern.search(latest)]
 
-        self.beliefs.update(
-            {
-                "last_user_chars": len(latest),
-                "message_count": len(messages),
-                "has_system_prompt": any(message.get("role") == "system" for message in messages),
-            }
+        self.beliefs["last_user_chars"] = len(latest)
+        self.beliefs["message_count"] = len(messages)
+        self.beliefs["has_system_prompt"] = any(m.get("role") == "system" for m in messages)
+        self.beliefs["tool_calls_detected"] = sum(
+            1 for m in messages if m.get("role") == "tool" or m.get("tool_calls")
         )
+        self.beliefs["escalation_keywords"] = sum(
+            1 for kw in ("admin", "root", "sudo", "override", "bypass", "ignore", "disable")
+            if kw in all_text.lower()
+        )
+        self.beliefs["unique_intents_seen"] = len(
+            set(self.beliefs.get("_intent_history", "").split(",") + intents)
+        )
+        self.beliefs["_intent_history"] = ",".join(
+            (self.beliefs.get("_intent_history", "") + "," + ",".join(intents)).strip(",").split(",")[-20:]
+        )
+
         if latest:
             desire = latest[:180]
             if desire not in self.desires:
