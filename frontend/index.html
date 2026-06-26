@@ -373,6 +373,18 @@ const avatarCfg={
 function avatarFor(k){const c=avatarCfg[k]||{bg:'rgba(100,116,139,0.15)',color:'#64748b',label:'??'};return `<div class="avatar" style="background:${c.bg};color:${c.color}">${c.label}</div>`}
 function actorName(k){return{input:'AI Agent',output:'Model Response',governance:'Circuit Breaker',stream_end:'Stream End'}[k]||k}
 function shortText(t){return t?(t.length>65?t.slice(0,65)+'…':t):'(no description)'}
+  function plainEnglish(e){
+  const s=sev(e);
+  const en=Math.round((e.data?.entropy??0)*100);
+  const what=e.kind==='input'?'An AI agent submitted a request':
+              e.kind==='output'?'The model returned a response':
+              e.kind==='governance'?'The circuit breaker was triggered':
+              'An agent action was recorded';
+  const why=s==='critical'?`Flagged as high-risk — behaviour deviated significantly (entropy ${en}%). Human review required before execution.`:
+             s==='elevated'?`Elevated risk detected — monitoring active (entropy ${en}%). Review recommended.`:
+             `Behaviour within normal parameters (entropy ${en}%). No action required.`;
+  return `${what}. ${why}`;
+}
 
 function renderRows(evs){
   const tb = document.getElementById('tbody');
@@ -390,6 +402,7 @@ function renderRows(evs){
       <div><div class="evt-id"><strong>EV-${String(ridx+1).padStart(4,'0')}</strong></div><div class="evt-ts">${ts}</div></div>
       <div class="actor-wrap">${avatarFor(e.kind)}<div style="min-width:0"><div class="actor-name">${actorName(e.kind)}</div><div class="actor-desc">${shortText(e.text)}</div></div></div>
       <div><span class="badge ${s}">${s}</span></div>
+      <div style="font-size:9px;color:var(--muted);margin-top:3px;line-height:1.5">${plainEnglish(e)}</div>
       <div class="bdi-wrap"><div class="bdi-track"><div class="bdi-fill" style="width:${bpct}%;background:${bdiC(bd)}"></div></div><span class="mono-val" style="color:${bdiC(bd)}">${bpct}%</span></div>
       <div class="mono-val" style="color:${entC(en)}">${epct}%</div>
       <div><div class="pulse-dot ${pulseClass(s)}">${pulseIcon(s)}</div></div>
