@@ -402,9 +402,9 @@ function renderRows(evs){
     const ridx = ALL.indexOf(e);
     return `<div class="evt-row${selIdx===ridx?' selected':''}" onclick="openInv(${ridx})">
       <div><div class="evt-id"><strong>EV-${String(ridx+1).padStart(4,'0')}</strong></div><div class="evt-ts">${ts}</div></div>
-      <div class="actor-wrap">${avatarFor(e.kind)}<div style="min-width:0"><div class="actor-name">${actorName(e.kind)}</div><div class="actor-desc">${shortText(e.text)}</div></div></div>
+      <div class="actor-wrap">${avatarFor(e.kind)}<div style="min-width:0"><div class="actor-name">${actorName(e.kind)}</div><div class="actor-desc">${shortText(e.text)}</div><div style="font-size:9px;color:var(--muted);margin-top:3px;line-height:1.5;white-space:normal">${plainEnglish(e)}</div></div></div>
       <div><span class="badge ${s}">${s}</span></div>
-      <div style="font-size:9px;color:var(--muted);margin-top:3px;line-height:1.5">${plainEnglish(e)}</div>
+
       <div class="bdi-wrap"><div class="bdi-track"><div class="bdi-fill" style="width:${bpct}%;background:${bdiC(bd)}"></div></div><span class="mono-val" style="color:${bdiC(bd)}">${bpct}%</span></div>
       <div class="mono-val" style="color:${entC(en)}">${epct}%</div>
       <div><div class="pulse-dot ${pulseClass(s)}">${pulseIcon(s)}</div></div>
