@@ -19,18 +19,12 @@
 }
 body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:13px;overflow:hidden}
 .app{display:flex;height:100vh}
-
-/* SIDEBAR */
 .sidebar{width:52px;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding:14px 0;gap:6px;flex-shrink:0}
 .logo{width:30px;height:30px;background:var(--accent);border-radius:7px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:#000;margin-bottom:12px;cursor:pointer}
 .nav-btn{width:34px;height:34px;border-radius:7px;display:flex;align-items:center;justify-content:center;color:var(--muted);cursor:pointer;transition:all 0.15s;border:none;background:none}
 .nav-btn:hover,.nav-btn.active{background:var(--bg5);color:var(--accent)}
 .nav-btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-
-/* MAIN */
 .main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
-
-/* TOPBAR */
 .topbar{height:46px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 18px;gap:14px;flex-shrink:0}
 .topbar-title{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap}
 .topbar-sub{font-size:11px;color:var(--muted);white-space:nowrap}
@@ -41,16 +35,10 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 .pill.fallback{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-border)}
 .pill.open-cb{background:var(--danger-bg);color:var(--danger);border:1px solid var(--danger-border)}
 #clock{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);white-space:nowrap}
-
-/* CONTENT */
 .content{flex:1;display:flex;overflow:hidden;min-width:0}
-
-/* LEDGER */
 .ledger{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:14px;min-width:0}
 .ledger::-webkit-scrollbar{width:3px}
 .ledger::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
-
-/* KPI */
 .kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
 .kpi{background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:12px 14px;position:relative;overflow:hidden;cursor:default}
 .kpi::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--accent);opacity:0.5}
@@ -65,8 +53,6 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 .kpi-val.c-green{color:var(--ok)}
 .kpi-val.c-white{color:var(--text)}
 .kpi-sub{font-size:10px;color:var(--muted)}
-
-/* TABLE HEADER */
 .tbl-head-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .section-label{font-size:10px;text-transform:uppercase;letter-spacing:0.09em;color:var(--muted);font-weight:600;display:flex;align-items:center;gap:6px}
 .section-label::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--accent);display:inline-block}
@@ -81,21 +67,20 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 .cnt{font-size:10px;color:var(--muted);background:var(--bg4);border:1px solid var(--border);border-radius:999px;padding:2px 7px;white-space:nowrap}
 .refresh-btn{background:var(--bg4);border:1px solid var(--border);border-radius:5px;padding:4px 9px;color:var(--muted);cursor:pointer;font-size:10px;font-family:'Inter',sans-serif;transition:all 0.12s}
 .refresh-btn:hover{color:var(--accent);border-color:rgba(0,212,255,0.3)}
-
-/* EVENT TABLE */
 .evt-tbl{background:var(--bg3);border:1px solid var(--border);border-radius:9px;overflow:hidden}
 .evt-hdr{display:grid;grid-template-columns:155px 1fr 90px 95px 75px 60px;padding:9px 14px;background:var(--bg4);border-bottom:1px solid var(--border);gap:10px;font-size:9px;text-transform:uppercase;letter-spacing:0.09em;color:var(--muted);font-weight:600}
-.evt-row{display:grid;grid-template-columns:155px 1fr 90px 95px 75px 60px;padding:11px 14px;border-bottom:1px solid var(--border);gap:10px;cursor:pointer;transition:background 0.1s;align-items:center}
+.evt-row{display:grid;grid-template-columns:155px 1fr 90px 95px 75px 60px;padding:11px 14px;border-bottom:1px solid var(--border);gap:10px;cursor:pointer;transition:background 0.1s;align-items:start}
 .evt-row:last-child{border-bottom:none}
 .evt-row:hover{background:rgba(0,212,255,0.025)}
 .evt-row.selected{background:rgba(0,212,255,0.05);border-left:2px solid var(--accent)}
 .evt-id{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted2)}
 .evt-id strong{color:var(--accent);font-weight:500}
 .evt-ts{font-size:9px;color:var(--muted);margin-top:2px}
-.actor-wrap{display:flex;align-items:center;gap:7px;min-width:0}
-.avatar{width:22px;height:22px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0}
+.actor-wrap{display:flex;align-items:flex-start;gap:7px;min-width:0}
+.avatar{width:22px;height:22px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0;margin-top:2px}
 .actor-name{font-size:11px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .actor-desc{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.actor-plain{font-size:9px;color:var(--muted);margin-top:4px;line-height:1.5;white-space:normal;word-break:break-word}
 .badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:999px;font-size:9px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase}
 .badge.critical{background:var(--critical-bg);color:var(--critical);border:1px solid var(--critical-border)}
 .badge.elevated{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-border)}
@@ -113,8 +98,6 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 .loading{display:flex;align-items:center;justify-content:center;gap:8px;padding:32px;color:var(--muted);font-size:12px}
 .spin{width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-
-/* INVESTIGATOR */
 .inv{width:0;background:var(--bg2);border-left:1px solid var(--border);overflow:hidden;flex-shrink:0;transition:width 0.25s ease;display:flex;flex-direction:column}
 .inv.open{width:480px}
 .inv-inner{width:480px;overflow-y:auto;display:flex;flex-direction:column;height:100%}
@@ -173,7 +156,6 @@ svg.hm{width:100%;height:55px}
 <body>
 <div class="app">
 
-<!-- SIDEBAR -->
 <div class="sidebar">
   <div class="logo">P</div>
   <button class="nav-btn active" title="Ledger">
@@ -197,7 +179,6 @@ svg.hm{width:100%;height:55px}
   </button>
 </div>
 
-<!-- MAIN -->
 <div class="main">
   <div class="topbar">
     <div class="topbar-title">AI Governance Ledger</div>
@@ -210,8 +191,6 @@ svg.hm{width:100%;height:55px}
 
   <div class="content">
     <div class="ledger">
-
-      <!-- KPIs -->
       <div class="kpi-row">
         <div class="kpi">
           <div class="kpi-label">Total Events</div>
@@ -240,7 +219,6 @@ svg.hm{width:100%;height:55px}
         </div>
       </div>
 
-      <!-- TABLE -->
       <div>
         <div class="tbl-head-row">
           <div style="display:flex;align-items:center;gap:10px">
@@ -274,10 +252,8 @@ svg.hm{width:100%;height:55px}
           <div id="tbody"><div class="loading"><div class="spin"></div>Loading events…</div></div>
         </div>
       </div>
-
     </div>
 
-    <!-- INVESTIGATOR -->
     <div class="inv" id="inv">
       <div class="inv-inner">
         <div class="inv-hdr">
@@ -286,7 +262,6 @@ svg.hm{width:100%;height:55px}
           <div class="inv-meta" id="i-meta"></div>
           <button class="close-btn" onclick="closeInv()">✕</button>
         </div>
-
         <div class="inv-sec">
           <div class="inv-sec-title">◆ Executive Insight</div>
           <div class="tags" id="i-tags"></div>
@@ -303,7 +278,6 @@ svg.hm{width:100%;height:55px}
             </div>
           </div>
         </div>
-
         <div class="inv-sec">
           <div class="inv-sec-title">◎ Signal-to-Noise — Confidence Logic</div>
           <div class="sig-row">
@@ -313,17 +287,14 @@ svg.hm{width:100%;height:55px}
           <div class="sig-pct" id="i-signal">—%</div>
           <ul class="tl-list" id="i-tl"></ul>
         </div>
-
         <div class="inv-sec">
           <div class="inv-sec-title">⚑ Triggered Regulations (3)</div>
           <div id="i-regs"></div>
         </div>
-
         <div class="inv-sec">
           <div class="inv-sec-title">🏁 SLA Status</div>
           <div id="i-sla"></div>
         </div>
-
         <div class="inv-sec">
           <div class="inv-sec-title">⚡ Recommended Action</div>
           <div class="act-grid">
@@ -348,8 +319,7 @@ let ALL = [], filter = 'all', search = '', selIdx = -1;
 
 function tick(){
   const n = new Date();
-  document.getElementById('clock').textContent =
-    n.toISOString().replace('T',' ').slice(0,19)+' UTC';
+  document.getElementById('clock').textContent = n.toISOString().replace('T',' ').slice(0,19)+' UTC';
 }
 tick(); setInterval(tick,1000);
 
@@ -373,7 +343,8 @@ const avatarCfg={
 function avatarFor(k){const c=avatarCfg[k]||{bg:'rgba(100,116,139,0.15)',color:'#64748b',label:'??'};return `<div class="avatar" style="background:${c.bg};color:${c.color}">${c.label}</div>`}
 function actorName(k){return{input:'AI Agent',output:'Model Response',governance:'Circuit Breaker',stream_end:'Stream End'}[k]||k}
 function shortText(t){return t?(t.length>65?t.slice(0,65)+'…':t):'(no description)'}
-  function plainEnglish(e){
+
+function plainEnglish(e){
   const s=sev(e);
   const en=Math.round((e.data?.entropy??0)*100);
   const reason=e.data?.reason||null;
@@ -402,9 +373,8 @@ function renderRows(evs){
     const ridx = ALL.indexOf(e);
     return `<div class="evt-row${selIdx===ridx?' selected':''}" onclick="openInv(${ridx})">
       <div><div class="evt-id"><strong>EV-${String(ridx+1).padStart(4,'0')}</strong></div><div class="evt-ts">${ts}</div></div>
-      <div class="actor-wrap">${avatarFor(e.kind)}<div style="min-width:0"><div class="actor-name">${actorName(e.kind)}</div><div class="actor-desc">${shortText(e.text)}</div><div style="font-size:9px;color:var(--muted);margin-top:3px;line-height:1.5;white-space:normal">${plainEnglish(e)}</div></div></div>
+      <div class="actor-wrap">${avatarFor(e.kind)}<div style="min-width:0"><div class="actor-name">${actorName(e.kind)}</div><div class="actor-desc">${shortText(e.text)}</div><div class="actor-plain">${plainEnglish(e)}</div></div></div>
       <div><span class="badge ${s}">${s}</span></div>
-
       <div class="bdi-wrap"><div class="bdi-track"><div class="bdi-fill" style="width:${bpct}%;background:${bdiC(bd)}"></div></div><span class="mono-val" style="color:${bdiC(bd)}">${bpct}%</span></div>
       <div class="mono-val" style="color:${entC(en)}">${epct}%</div>
       <div><div class="pulse-dot ${pulseClass(s)}">${pulseIcon(s)}</div></div>
@@ -430,7 +400,6 @@ function openInv(idx){
   const e=ALL[idx]; if(!e) return;
   const s=sev(e), bd=e.data?.bdi_score??0, en=e.data?.entropy??0;
   const ts=e.created_at?new Date(e.created_at).toLocaleString():'Unknown';
-
   const si=document.getElementById('i-sev');
   si.textContent=s.toUpperCase(); si.className='inv-sev '+s;
   document.getElementById('i-title').textContent=`Investigator: EV-${String(idx+1).padStart(4,'0')}`;
@@ -438,14 +407,12 @@ function openInv(idx){
     <span>Model: <strong>${e.data?.model||'unknown'}</strong></span>
     <span>Triggered: <strong>${ts}</strong></span>
     <span>Entropy: <strong style="color:${entC(en)}">${Math.round(en*100)}%</strong></span>`;
-
   const tags=['#'+e.kind];
   if(en>=0.7) tags.push('#high-entropy');
   if(bd>=0.65) tags.push('#bdi-critical');
   if(s==='critical') tags.push('#auto-isolated');
   if(e.kind==='governance') tags.push('#circuit-breaker');
   document.getElementById('i-tags').innerHTML=tags.map(t=>`<span class="tag">${t}</span>`).join('');
-
   const pts=[];
   for(let i=0;i<22;i++){
     const x=i*(400/21);
@@ -458,11 +425,9 @@ function openInv(idx){
   document.getElementById('hm-dot').setAttribute('cx',lp[0]);
   document.getElementById('hm-dot').setAttribute('cy',lp[1]);
   if(s==='critical') document.getElementById('hm-spike').textContent='▼ Event Spike: '+ts.slice(11,19);
-
   const sig=Math.round((1-en)*100);
   const sp=document.getElementById('i-signal');
   sp.textContent=sig+'%'; sp.style.color=sig>60?'var(--ok)':sig>30?'var(--warn)':'var(--danger)';
-
   const tl=[
     {t:'T+0',c:'#10b981',x:'System Normal — Entropy stable at '+(Math.max(0,en-0.25)).toFixed(2)},
     {t:'T+1',c:'#f59e0b',x:'Anomaly Detected — Output distribution shifted from baseline'},
@@ -476,7 +441,6 @@ function openInv(idx){
     tl.push({t:'T+3',c:'#10b981',x:'Recovery Complete — Stable state restored. Incident report generated.'});
   }
   document.getElementById('i-tl').innerHTML=tl.map(t=>`<li class="tl-item"><span class="tl-t">${t.t}</span><div class="tl-dot" style="background:${t.c}"></div><span class="tl-text">${t.x}</span></li>`).join('');
-
   const regs=s==='critical'?[
     {n:'EU AI Act — Article 9',r:'HIGH',d:'High-risk AI systems must have a risk management system established and maintained.',a:'Log incident, notify DPO, initiate risk management review within 72 hours.'},
     {n:'GDPR — Article 22',r:'HIGH',d:'No solely automated decision-making with significant effects on individuals without human oversight.',a:'Pause automated pipeline. Introduce human-in-the-loop review for flagged decisions.'},
@@ -486,7 +450,6 @@ function openInv(idx){
     {n:'SOC2 CC7.2',r:'LOW',d:'System monitoring and logging requirements for security events.',a:'Confirm event is captured in tamper-evident audit chain.'},
   ];
   document.getElementById('i-regs').innerHTML=regs.map(r=>`<div class="reg-card"><div class="reg-hdr"><span class="reg-name">${r.n}</span><span class="badge ${r.r==='HIGH'?'critical':r.r==='MED'?'elevated':'stable'}">${r.r}</span></div><div class="reg-desc">${r.d}</div><div class="reg-action">↳ ${r.a}</div></div>`).join('');
-
   const now=new Date();
   const d1=new Date(now.getTime()+86400000).toLocaleString();
   const d3=new Date(now.getTime()+259200000).toLocaleString();
@@ -495,7 +458,6 @@ function openInv(idx){
     <div class="sla-item"><div class="sla-hdr"><span class="sla-name">Acknowledge</span><span class="sla-met" style="color:var(--ok)">Met</span></div><div class="sla-bar"><div class="sla-fill" style="width:100%;background:var(--ok)"></div></div><div class="sla-due">Due: ${d1}</div></div>
     <div class="sla-item"><div class="sla-hdr"><span class="sla-name">Resolve</span><span class="sla-met" style="color:var(--ok)">Met</span></div><div class="sla-bar"><div class="sla-fill" style="width:100%;background:var(--ok)"></div></div><div class="sla-due">Due: ${d3}</div></div>
     <div class="sla-item"><div class="sla-hdr"><span class="sla-name">Report</span><span class="sla-met" style="color:var(--warn)">Pending</span></div><div class="sla-bar"><div class="sla-fill" style="width:35%;background:var(--warn)"></div></div><div class="sla-due">Due: ${d7}</div></div>`;
-
   document.getElementById('inv').classList.add('open');
 }
 
@@ -518,24 +480,20 @@ async function load(){
     if(state==='open'){pill.className='pill open-cb';ptxt.textContent='CIRCUIT OPEN';}
     else if(state==='half-open'){pill.className='pill fallback';ptxt.textContent='FALLBACK';}
     else{pill.className='pill live';ptxt.textContent='Systems Nominal';}
-
     const cbEl=document.getElementById('k-cb');
     cbEl.textContent=state.toUpperCase();
     cbEl.className='kpi-val '+(state==='closed'?'c-green':state==='open'?'c-red':'c-amber');
     document.getElementById('k-fail').textContent=fails;
-
     ALL=(ev.events||[]).slice().reverse();
     const tot=ALL.length, crits=ALL.filter(e=>sev(e)==='critical').length;
     const risk=ALL.filter(e=>(e.data?.entropy??0)>=0.7).length;
     const avgE=tot?ALL.reduce((s,e)=>s+(e.data?.entropy??0),0)/tot:0;
-
     document.getElementById('k-total').textContent=tot;
     document.getElementById('k-total-sub').textContent=crits+' critical in last 24h';
     document.getElementById('k-crit').textContent=crits;
     document.getElementById('k-ent').textContent=avgE.toFixed(2);
     const kr=document.getElementById('k-risk');
     kr.textContent=risk; kr.className='kpi-val '+(risk>0?'c-red':'c-green');
-
     renderRows(filtered());
   }catch(err){
     document.getElementById('tbody').innerHTML=`<div class="empty"><div style="color:var(--danger);font-size:20px">⚠</div><div style="color:var(--danger);margin-top:6px;font-weight:500">Backend unreachable</div><div style="font-size:11px;margin-top:4px;color:var(--muted2)">${err.message}</div></div>`;
