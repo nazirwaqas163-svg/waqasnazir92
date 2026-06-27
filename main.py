@@ -763,6 +763,12 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
         input_text=payload.input_text,
         output_text=payload.output_text,
     )
+    if drift_result.get("status") == "critical":
+        circuit_breaker.open(
+            reason=f"Auto-trip: critical drift detected (entropy={drift_result.get('score', 0):.3f})",
+            bdi_score=float(drift_result.get("score", 0.0)),
+            entropy=float(drift_result.get("score", 0.0)),
+        )
     entropy = (
         float(payload.entropy)
         if payload.entropy is not None
