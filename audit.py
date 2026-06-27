@@ -224,5 +224,98 @@ class SupabaseAuditClient:
             logger.exception("Failed to fetch session events for %s", session_id)
             return []
 
+    async def register_agent(
+        self,
+        agent_id: str,
+        name: str = "",
+        owner: str = "",
+        scope: list = None,
+        description: str = "",
+        metadata: dict = None,
+    ) -> dict:
+        if not self.configured:
+            return {"ok": False, "reason": "supabase_not_configured"}
+        row = {
+            "agent_id": agent_id,
+            "name": name,
+            "owner": owner,
+            "scope": scope or [],
+            "description": description,
+            "metadata": metadata or {},
+        }
+        try:
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.post(
+                    f"{self.url}/rest/v1/agent_registry",
+                    headers={
+                        "apikey": self.key or "",
+                        "authorization": f"Bearer {self.key}",
+                        "content-type": "application/json",
+                        "prefer": "return=representation",
+                    },
+                    json=row,
+                )
+                if response.status_code in (200, 201):
+                    data = response.json()
+                    return {"ok": True, "agent": data[0] if data else row}
+                if response.status_code == 409:
+                    return {"ok": False, "reason": "agent_id_already_registered"}
+                return {"ok": False, "reason": response.text}
+        except Exception as exc:
+            return {"ok": False, "reason": str(exc)}
+
+    async def get_agent(self, agent_id: str) -> Optional[Dict[str, Any]]:
+        if not self.configured:
+            return None
+        try:
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.get(
+                    f"{self.url}/rest/v1/agent_registry",
+                    headers={
+                        "apikey": self.key or "",
+                        "authorization": f"Bearer {self.key}",
+                    },
+                    params={"agent_id": f"eq.{agent_id}", "select": "*", "limit": "1"},
+                )
+                rows = response.json()
+                return rows[0] if rows else None
+        except Exception:
+            return None
+
+    async def list_agents(self, limit: int = 100) -> List[Dict[str, Any]]:
+        if not self.configured:
+            return []
+        try:
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.get(
+                    f"{self.url}/rest/v1/agent_registry",
+                    headers={
+                        "apikey": self.key or "",
+                        "authorization": f"Bearer {self.key}",
+                    },
+                    params={"select": "*", "order": "registered_at.asc", "limit": str(limit)},
+                )
+                return response.json() if response.status_code == 200 else []
+        except Exception:
+            return []
+
+    async def update_agent_last_seen(self, agent_id: str) -> None:
+        if not self.configured:
+            return
+        try:
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                await client.patch(
+                    f"{self.url}/rest/v1/agent_registry",
+                    headers={
+                        "apikey": self.key or "",
+                        "authorization": f"Bearer {self.key}",
+                        "content-type": "application/json",
+                    },
+                    params={"agent_id": f"eq.{agent_id}"},
+                    json={"last_seen_at": datetime.now(timezone.utc).isoformat()},
+                )
+        except Exception:
+            pass
+
 
 supabase_audit_client = SupabaseAuditClient(SUPABASE_URL, SUPABASE_KEY)
