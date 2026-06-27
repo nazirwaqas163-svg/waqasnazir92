@@ -1268,3 +1268,96 @@ async def session_lineage(session_id: str) -> Dict[str, Any]:
         "summary": summary,
         "lineage": lineage,
     }
+@app.get("/trust/score")
+async def trust_score(
+    agent_id: Optional[str] = None,
+    session_id: Optional[str] = None,
+    entropy: Optional[float] = None,
+    bdi_score: Optional[float] = None,
+    drift_status: Optional[str] = None,
+    blocked_turns: Optional[int] = None,
+    total_turns: Optional[int] = None,
+) -> Dict[str, Any]:
+    """
+    Entropy-Weighted Trust Score — Action 4 (Phase 2).
+    Computes a composite 0-1 trust index for an agent/session
+    weighted across entropy, BDI, drift, and policy compliance.
+    Lower score = lower trust. Score < 0.40 = untrusted.
+    """
+    # Weights — must sum to 1.0
+    W_ENTROPY = 0.35
+    W_BDI = 0.25
+    W_DRIFT = 0.20
+    W_COMPLIANCE = 0.20
+
+    # Entropy component — inverted (high entropy = low trust)
+    eff_entropy = max(0.0, min(1.0, entropy if entropy is not None else 0.0))
+    entropy_component = 1.0 - eff_entropy
+
+    # BDI component — inverted (high BDI score = suspicious intent = low trust)
+    eff_bdi = max(0.0, min(1.0, bdi_score if bdi_score is not None else 0.0))
+    bdi_component = 1.0 - eff_bdi
+
+    # Drift component
+    drift_map = {
+        "stable": 1.0,
+        "elevated": 0.5,
+        "critical": 0.0,
+        "unknown": 0.7,
+    }
+    eff_drift = (drift_status or "unknown").lower()
+    drift_component = drift_map.get(eff_drift, 0.7)
+
+    # Compliance component — ratio of allowed turns
+    if total_turns and total_turns > 0:
+        blocked = blocked_turns or 0
+        compliance_component = max(0.0, (total_turns - blocked) / total_turns)
+    else:
+        compliance_component = 1.0
+
+    # Weighted composite
+    raw_score = (
+        (entropy_component * W_ENTROPY)
+        + (bdi_component * W_BDI)
+        + (drift_component * W_DRIFT)
+        + (compliance_component * W_COMPLIANCE)
+    )
+    trust_score_value = round(max(0.0, min(1.0, raw_score)), 4)
+
+    # Trust band
+    if trust_score_value >= 0.75:
+        trust_band = "TRUSTED"
+    elif trust_score_value >= 0.55:
+        trust_band = "PROVISIONAL"
+    elif trust_score_value >= 0.40:
+        trust_band = "CAUTION"
+    else:
+        trust_band = "UNTRUSTED"
+
+    return {
+        "ok": True,
+        "agent_id": agent_id,
+        "session_id": session_id,
+        "computed_at": datetime.now(timezone.utc).isoformat(),
+        "trust_score": trust_score_value,
+        "trust_band": trust_band,
+        "components": {
+            "entropy_component": round(entropy_component, 4),
+            "bdi_component": round(bdi_component, 4),
+            "drift_component": round(drift_component, 4),
+            "compliance_component": round(compliance_component, 4),
+        },
+        "weights": {
+            "entropy": W_ENTROPY,
+            "bdi": W_BDI,
+            "drift": W_DRIFT,
+            "compliance": W_COMPLIANCE,
+        },
+        "inputs": {
+            "entropy": eff_entropy,
+            "bdi_score": eff_bdi,
+            "drift_status": eff_drift,
+            "blocked_turns": blocked_turns,
+            "total_turns": total_turns,
+        },
+    }
