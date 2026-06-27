@@ -1102,3 +1102,103 @@ def compliance_deadlines(incident_time: Optional[str] = None) -> Dict[str, Any]:
         "overall_status": overall_status,
         "deadlines": deadlines,
     }
+@app.get("/compliance/mgf")
+def compliance_mgf(
+    entropy: Optional[float] = None,
+    severity: Optional[str] = None,
+    session_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    MGF Compliance Mapper — Action 2 (Phase 2).
+    Maps current entropy/severity against Singapore Model AI Governance
+    Framework clauses and returns triggered obligations.
+    """
+    MGF_CLAUSES = [
+        {
+            "clause": "2.1",
+            "title": "Internal Governance Structures and Measures",
+            "trigger_severity": ["elevated", "critical"],
+            "trigger_entropy_min": 0.40,
+            "obligation": "Ensure senior management oversight of AI decisions at elevated risk.",
+            "recommended_action": "Escalate to AI governance owner. Log decision rationale.",
+            "priority": "HIGH",
+        },
+        {
+            "clause": "2.2",
+            "title": "Determining AI Decision Type",
+            "trigger_severity": ["critical"],
+            "trigger_entropy_min": 0.70,
+            "obligation": "Classify AI decision impact. Flag fully automated decisions on individuals.",
+            "recommended_action": "Introduce human-in-the-loop review before execution.",
+            "priority": "CRITICAL",
+        },
+        {
+            "clause": "2.3",
+            "title": "Operations Management",
+            "trigger_severity": ["elevated", "critical"],
+            "trigger_entropy_min": 0.40,
+            "obligation": "Monitor AI system operations and log anomalous behaviour.",
+            "recommended_action": "Review session event chain. Verify no policy boundary crossed.",
+            "priority": "HIGH",
+        },
+        {
+            "clause": "2.4",
+            "title": "Stakeholder Interaction and Communication",
+            "trigger_severity": ["critical"],
+            "trigger_entropy_min": 0.70,
+            "obligation": "Notify affected stakeholders of high-risk AI behaviour.",
+            "recommended_action": "Prepare incident summary. Notify data owner within 72 hours.",
+            "priority": "CRITICAL",
+        },
+        {
+            "clause": "2.5",
+            "title": "Incident Reporting",
+            "trigger_severity": ["critical"],
+            "trigger_entropy_min": 0.70,
+            "obligation": "Document and report AI incidents within MGF 72-hour window.",
+            "recommended_action": "Export evidence package. Submit to compliance officer.",
+            "priority": "CRITICAL",
+        },
+    ]
+
+    effective_entropy = entropy if entropy is not None else 0.0
+    effective_severity = (severity or "stable").lower()
+
+    triggered = []
+    for clause in MGF_CLAUSES:
+        severity_match = effective_severity in clause["trigger_severity"]
+        entropy_match = effective_entropy >= clause["trigger_entropy_min"]
+        if severity_match and entropy_match:
+            triggered.append({
+                "clause": clause["clause"],
+                "title": clause["title"],
+                "obligation": clause["obligation"],
+                "recommended_action": clause["recommended_action"],
+                "priority": clause["priority"],
+                "trigger": {
+                    "entropy": effective_entropy,
+                    "severity": effective_severity,
+                    "entropy_threshold": clause["trigger_entropy_min"],
+                },
+            })
+
+    overall_priority = "NOMINAL"
+    if any(c["priority"] == "CRITICAL" for c in triggered):
+        overall_priority = "CRITICAL"
+    elif any(c["priority"] == "HIGH" for c in triggered):
+        overall_priority = "HIGH"
+
+    return {
+        "ok": True,
+        "framework": "Singapore Model AI Governance Framework",
+        "jurisdiction": "SG",
+        "evaluated_at": datetime.now(timezone.utc).isoformat(),
+        "inputs": {
+            "entropy": effective_entropy,
+            "severity": effective_severity,
+            "session_id": session_id,
+        },
+        "overall_priority": overall_priority,
+        "clauses_triggered": len(triggered),
+        "triggered_clauses": triggered,
+    }
