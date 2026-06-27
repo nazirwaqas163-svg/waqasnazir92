@@ -1202,3 +1202,69 @@ def compliance_mgf(
         "clauses_triggered": len(triggered),
         "triggered_clauses": triggered,
     }
+@app.get("/session/lineage/{session_id}")
+async def session_lineage(session_id: str) -> Dict[str, Any]:
+    """
+    Session Lineage Tracker — Action 5 (Phase 2).
+    Reconstructs the full ordered event chain for a session
+    from the audit ledger. Returns entropy progression,
+    BDI scores, governance decisions, and risk trajectory.
+    """
+    try:
+        result = await supabase_audit_client.get_session_events(session_id=session_id)
+        events = result or []
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve session lineage: {str(exc)}",
+        )
+
+    if not events:
+        return {
+            "ok": True,
+            "session_id": session_id,
+            "found": False,
+            "message": "No events found for this session.",
+            "lineage": [],
+            "summary": {},
+        }
+
+    lineage = []
+    for i, event in enumerate(events):
+        lineage.append({
+            "turn": i + 1,
+            "event_id": event.get("event_id"),
+            "timestamp": event.get("timestamp"),
+            "agent_id": event.get("agent_id"),
+            "action": event.get("action"),
+            "bdi_score": event.get("bdi_score"),
+            "entropy": event.get("entropy"),
+            "policy_result": event.get("policy_result", "unknown"),
+            "input_preview": (event.get("input_text") or "")[:120],
+            "output_preview": (event.get("output_text") or "")[:120],
+        })
+
+    bdi_scores = [e.get("bdi_score") for e in events if e.get("bdi_score") is not None]
+    entropy_scores = [e.get("entropy") for e in events if e.get("entropy") is not None]
+    blocked_count = sum(1 for e in events if e.get("policy_result") == "blocked")
+
+    summary = {
+        "total_turns": len(lineage),
+        "blocked_turns": blocked_count,
+        "allowed_turns": len(lineage) - blocked_count,
+        "peak_bdi": round(max(bdi_scores), 4) if bdi_scores else None,
+        "avg_bdi": round(sum(bdi_scores) / len(bdi_scores), 4) if bdi_scores else None,
+        "peak_entropy": round(max(entropy_scores), 4) if entropy_scores else None,
+        "avg_entropy": round(sum(entropy_scores) / len(entropy_scores), 4) if entropy_scores else None,
+        "risk_trajectory": "ESCALATING" if len(entropy_scores) >= 2 and entropy_scores[-1] > entropy_scores[0] else "STABLE",
+        "first_event": events[0].get("timestamp"),
+        "last_event": events[-1].get("timestamp"),
+    }
+
+    return {
+        "ok": True,
+        "session_id": session_id,
+        "found": True,
+        "summary": summary,
+        "lineage": lineage,
+    }
