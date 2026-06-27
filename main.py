@@ -770,6 +770,10 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
         payload.input_text,
         payload.output_text,
     )
+    # Phase 3 Stage 1b: Agent Identity Registry check
+    agent_record = await supabase_audit_client.get_agent(payload.agent_id)
+    agent_registered = agent_record is not None
+    agent_status = agent_record.get("status", "unknown") if agent_record else "unregistered"
     drift_result = drift_engine.record_turn(
         session_id=payload.session_id or "default",
         input_text=payload.input_text,
@@ -822,6 +826,8 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
                 "entropy": entropy,
                 "decision": "allowed",
                 "status_code": 200,
+                "agent_registered": agent_registered,
+                "agent_status": agent_status,
             },
         )
     )
@@ -847,6 +853,8 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
         "output_text": payload.output_text,
         "request_id": request_id,
         "drift": drift_result,
+        "agent_registered": agent_registered,
+        "agent_status": agent_status,
     }
 
 
