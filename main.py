@@ -1,4 +1,5 @@
 import os
+import json
 import re
 import time
 import uuid
@@ -26,6 +27,7 @@ from session_store import session_store
 from refusal import detect_refusal
 from synthesis_engine import forensic_auditor, synthesis_runner
 from drift import drift_engine
+
 APP_NAME = "pulse-proxy"
 SYNTHESIS_ENABLED = os.getenv("PULSE_SYNTHESIS_ENABLED", "true").lower() in {"1", "true", "yes"}
 SHADOW_MODE = os.getenv("PULSE_SHADOW_MODE", "false").lower() in {"1", "true", "yes"}
@@ -35,45 +37,19 @@ UPSTREAM_TIMEOUT = float(os.getenv("PULSE_UPSTREAM_TIMEOUT", "120"))
 AGENT_COOLDOWN_SECONDS = float(os.getenv("PULSE_AGENT_COOLDOWN_SECONDS", "30"))
 FINANCIAL_TRANSACTION_LIMIT = Decimal("5000")
 FINANCIAL_KEYWORDS = {
-    "budget",
-    "charge",
-    "contract",
-    "cost",
-    "expense",
-    "financial",
-    "invoice",
-    "order",
-    "pay",
-    "payment",
-    "procure",
-    "procurement",
-    "purchase",
-    "quote",
-    "requisition",
-    "spend",
-    "transaction",
-    "vendor",
+    "budget", "charge", "contract", "cost", "expense", "financial", "invoice",
+    "order", "pay", "payment", "procure", "procurement", "purchase", "quote",
+    "requisition", "spend", "transaction", "vendor",
 }
 FINANCIAL_FIELD_HINTS = {
-    "amount",
-    "budget",
-    "charge",
-    "cost",
-    "expense",
-    "invoice",
-    "payment",
-    "price",
-    "purchase",
-    "quote",
-    "spend",
-    "total",
-    "transaction",
-    "value",
+    "amount", "budget", "charge", "cost", "expense", "invoice", "payment",
+    "price", "purchase", "quote", "spend", "total", "transaction", "value",
 }
 AMOUNT_PATTERN = re.compile(
     r"(?:\$|usd\s*)\s*(\d[\d,]*(?:\.\d+)?)|(\d[\d,]*(?:\.\d+)?)\s*(?:usd|dollars?)",
     re.IGNORECASE,
 )
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -101,12 +77,10 @@ circuit_breaker = CircuitBreakerMiddleware(agent_cooldown_seconds=AGENT_COOLDOWN
 def _emit_circuit_breaker_event(event: object) -> None:
     if not hasattr(event, "state"):
         return
-
     state = getattr(event, "state", None)
     state_value = state.value if hasattr(state, "value") else str(state or "unknown")
     decision = "blocked" if state_value in {"open", "half-open"} else "allowed"
     status_code = 200 if decision == "allowed" else 503
-
     feed.add(
         PulseEvent(
             kind="governance",
@@ -170,13 +144,20 @@ class InterceptRequest(BaseModel):
     entropy: Optional[float] = None
 
 
-def _dropped_response(disposition: Dict[str, Any]) -> Response:
-    """
-    Explicitly drop the request without a retryable 409 Conflict.
+class AGTToolCall(BaseModel):
+    tool_name: str
+    tool_input: Optional[Dict[str, Any]] = None
+    tool_output: Optional[str] = None
+    agent_id: Optional[str] = None
+    session_id: Optional[str] = None
+    run_id: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
 
-    Empty 503 + Connection: close signals the proxy rejected the call;
-    agents should not treat this as a conflict/retry loop trigger.
-    """
+    class Config:
+        extra = "allow"
+
+
+def _dropped_response(disposition: Dict[str, Any]) -> Response:
     retry_after = str(int(max(1, disposition.get("cooldown_seconds_remaining", 30))))
     return Response(
         status_code=503,
@@ -276,7 +257,6 @@ def _financial_amounts_from_payload(value: Any, key_path: str = "") -> List[Deci
     amounts: List[Decimal] = []
     lowered_key = key_path.lower()
     has_financial_hint = any(hint in lowered_key for hint in FINANCIAL_FIELD_HINTS)
-
     if isinstance(value, dict):
         for key, item in value.items():
             next_key = f"{key_path}.{key}" if key_path else str(key)
@@ -288,7 +268,6 @@ def _financial_amounts_from_payload(value: Any, key_path: str = "") -> List[Deci
         amount = _to_decimal(value)
         if amount is not None:
             amounts.append(amount)
-
     return amounts
 
 
@@ -314,13 +293,11 @@ def _calculate_shannon_entropy(text: str) -> float:
     frequencies: dict[str, int] = {}
     for symbol in text:
         frequencies[symbol] = frequencies.get(symbol, 0) + 1
-
     entropy = 0.0
     length = len(text)
     for count in frequencies.values():
         probability = count / length
         entropy -= probability * (probability and __import__("math").log2(probability))
-
     max_entropy = __import__("math").log2(len(frequencies)) if frequencies else 1.0
     normalized_entropy = entropy / max_entropy if max_entropy > 0 else 0.0
     return min(1.0, max(0.0, normalized_entropy))
@@ -331,17 +308,13 @@ def _normalized_bdi_score(bdi_snapshot: dict[str, object]) -> float:
     desires = bdi_snapshot.get("desires") or []
     intentions = bdi_snapshot.get("intentions") or []
     turns = int(bdi_snapshot.get("turns") or 0)
-
     public_beliefs = {k: v for k, v in beliefs.items() if not k.startswith("_")}
-
     belief_score = min(1.0, len(public_beliefs) / 8.0)
     desire_score = min(1.0, len(desires) / 8.0)
     intention_score = min(1.0, len(intentions) / 5.0)
     turn_score = min(1.0, turns / 20.0)
-
     escalation = int(beliefs.get("escalation_keywords") or 0)
     escalation_bonus = min(0.4, escalation * 0.1)
-
     score = (
         (belief_score * 0.25)
         + (desire_score * 0.25)
@@ -356,10 +329,8 @@ def _should_block_financial_transaction(payload: ChatProxyRequest) -> bool:
     payload_dict = payload.model_dump(exclude_none=True)
     prompt_text = _messages_text(payload.messages)
     amounts = _financial_amounts_from_payload(payload_dict)
-
     if _is_financial_text(prompt_text):
         amounts.extend(_financial_amounts_from_text(prompt_text))
-
     return any(amount > FINANCIAL_TRANSACTION_LIMIT for amount in amounts)
 
 
@@ -463,22 +434,13 @@ def _enforce_policy(operation: str | None, agent_id: Optional[str] = None) -> Po
     if not evaluation.allowed:
         policy_data["shadow_mode"] = SHADOW_MODE
         compliance_store.record_blocked(policy_data, agent_id=agent_id)
-    feed.add(
-        PulseEvent(
-            kind="policy",
-            text=operation or "",
-            data=policy_data,
-        )
-    )
+    feed.add(PulseEvent(kind="policy", text=operation or "", data=policy_data))
     if not evaluation.allowed:
         if SHADOW_MODE:
             return evaluation
         raise HTTPException(
             status_code=403,
-            detail={
-                "error": "Policy evaluation denied request",
-                "policy": evaluation.to_dict(),
-            },
+            detail={"error": "Policy evaluation denied request", "policy": evaluation.to_dict()},
         )
     return evaluation
 
@@ -635,15 +597,12 @@ def _gate_or_drop(
         shadow_mode=SHADOW_MODE,
     )
     action = disposition.get("action")
-
     if disposition.get("shadow_mode") and disposition.get("would_have_action"):
         _record_shadow_event(disposition, agent_id=agent_id, bdi_score=bdi_score, entropy=entropy)
         return None
-
     if action in {RequestAction.DROP.value, RequestAction.TRIP_DROP.value}:
         _record_drop_event(disposition, agent_id=agent_id, bdi_score=bdi_score, entropy=entropy)
         return _dropped_response(disposition)
-
     return None
 
 
@@ -672,34 +631,16 @@ def circuit_breaker_status() -> dict[str, object]:
 
 @app.post("/circuit-breaker/open")
 def circuit_breaker_open(payload: CircuitBreakerOpenRequest) -> dict[str, object]:
-    circuit_breaker.open(
-        reason=payload.reason,
-        bdi_score=payload.bdi_score,
-        entropy=payload.entropy,
-    )
+    circuit_breaker.open(reason=payload.reason, bdi_score=payload.bdi_score, entropy=payload.entropy)
     if circuit_breaker.last_failure is not None:
         circuit_breaker.last_failure["manual"] = True
-    return {
-        "ok": True,
-        "message": "Circuit breaker manually opened",
-        "status_code": 503,
-        **circuit_breaker.status(),
-    }
+    return {"ok": True, "message": "Circuit breaker manually opened", "status_code": 503, **circuit_breaker.status()}
 
 
 @app.post("/circuit-breaker/close")
 def circuit_breaker_close(payload: CircuitBreakerCloseRequest) -> dict[str, object]:
-    circuit_breaker.close(
-        reason=payload.reason,
-        bdi_score=payload.bdi_score,
-        entropy=payload.entropy,
-    )
-    return {
-        "ok": True,
-        "message": "Circuit breaker reset to closed",
-        "status_code": 200,
-        **circuit_breaker.status(),
-    }
+    circuit_breaker.close(reason=payload.reason, bdi_score=payload.bdi_score, entropy=payload.entropy)
+    return {"ok": True, "message": "Circuit breaker reset to closed", "status_code": 200, **circuit_breaker.status()}
 
 
 @app.get("/pulse")
@@ -718,14 +659,8 @@ def pulse_tool_call(payload: PulseToolCallRequest, request: Request):
     if disposition.get("shadow_mode") and disposition.get("would_have_action"):
         _record_shadow_event(disposition, agent_id=payload.agent_id, bdi_score=0.0, entropy=0.0)
     elif disposition.get("action") != RequestAction.PROCEED.value:
-        _record_drop_event(
-            disposition,
-            agent_id=payload.agent_id,
-            bdi_score=0.0,
-            entropy=0.0,
-        )
+        _record_drop_event(disposition, agent_id=payload.agent_id, bdi_score=0.0, entropy=0.0)
         return _dropped_response(disposition)
-
     evaluation = _enforce_policy(payload.operation, agent_id=payload.agent_id)
     event = PulseEvent(
         kind="tool_call",
@@ -757,36 +692,24 @@ async def chat_completions(payload: ChatProxyRequest, request: Request):
     extra_fields = _extra_payload_fields(payload)
     if extra_fields.get("operation") is not None:
         _enforce_policy(str(extra_fields["operation"]), agent_id=_agent_id(payload, request))
-
     _enforce_financial_circuit_breaker(payload)
-
     prompt_text = _messages_text(payload.messages)
     entropy = _effective_entropy(payload, prompt_text)
     provisional_pulse: Dict[str, Any] = {"entropy": entropy, "bdi_score": 0.0}
     bdi_score = _effective_bdi_score(payload, provisional_pulse)
-
     dropped = _gate_or_drop(payload, request, bdi_score=bdi_score, entropy=entropy)
     if dropped is not None:
-        await _insert_audit_log(
-            payload,
-            request,
-            provisional_pulse,
-            {"status_code": 503, "dropped": True},
-        )
+        await _insert_audit_log(payload, request, provisional_pulse, {"status_code": 503, "dropped": True})
         return dropped
-
     pulse = _record_input(payload)
     pulse["entropy"] = entropy
     pulse["bdi_score"] = _effective_bdi_score(payload, pulse)
-
     if not UPSTREAM_API_KEY and not request.headers.get("authorization"):
         response_json = _fallback_completion(payload, pulse)
         await _insert_audit_log(payload, request, pulse, response_json)
         return JSONResponse(response_json)
-
     body = payload.model_dump(exclude_none=True)
     headers = _auth_headers(request)
-
     if payload.stream:
         async def stream_upstream():
             response_payload: Dict[str, Any] = {"stream": True, "chunks": 0, "status_code": 200}
@@ -809,30 +732,16 @@ async def chat_completions(payload: ChatProxyRequest, request: Request):
                 raise HTTPException(status_code=502, detail=str(exc))
             feed.add(PulseEvent(kind="stream_end", text="", data={"request_id": pulse["request_id"]}))
             await _insert_audit_log(payload, request, pulse, response_payload)
-
         return StreamingResponse(stream_upstream(), media_type="text/event-stream")
-
     try:
         async with httpx.AsyncClient(timeout=UPSTREAM_TIMEOUT) as client:
             upstream = await client.post(UPSTREAM_CHAT_URL, headers=headers, json=body)
     except httpx.HTTPError as exc:
-        await _insert_audit_log(
-            payload,
-            request,
-            pulse,
-            {"status_code": 502, "error": str(exc)},
-        )
+        await _insert_audit_log(payload, request, pulse, {"status_code": 502, "error": str(exc)})
         raise HTTPException(status_code=502, detail=str(exc))
-
     if upstream.status_code >= 400:
-        await _insert_audit_log(
-            payload,
-            request,
-            pulse,
-            {"status_code": upstream.status_code, "error": upstream.text},
-        )
+        await _insert_audit_log(payload, request, pulse, {"status_code": upstream.status_code, "error": upstream.text})
         raise HTTPException(status_code=upstream.status_code, detail=upstream.text)
-
     response_json = upstream.json()
     response_json["pulse"] = {**pulse, "mode": "proxy"}
     _record_output(pulse["request_id"], response_json)
@@ -852,14 +761,13 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
     drift_result = drift_engine.record_turn(
         session_id=payload.session_id or "default",
         input_text=payload.input_text,
-        output_text=payload.output_text,    
-)
+        output_text=payload.output_text,
+    )
     entropy = (
         float(payload.entropy)
         if payload.entropy is not None
         else _calculate_shannon_entropy(payload.input_text)
     )
-
     disposition = circuit_breaker.gate_request(
         agent_id=payload.agent_id,
         bdi_score=bdi_score,
@@ -867,28 +775,12 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
         shadow_mode=SHADOW_MODE,
         intercept=True,
     )
-
     if disposition.get("shadow_mode") and disposition.get("would_have_action"):
-        _record_shadow_event(
-            disposition,
-            agent_id=payload.agent_id,
-            bdi_score=bdi_score,
-            entropy=entropy,
-        )
+        _record_shadow_event(disposition, agent_id=payload.agent_id, bdi_score=bdi_score, entropy=entropy)
     elif disposition.get("action") != RequestAction.PROCEED.value:
-        _record_drop_event(
-            disposition,
-            agent_id=payload.agent_id,
-            bdi_score=bdi_score,
-            entropy=entropy,
-        )
+        _record_drop_event(disposition, agent_id=payload.agent_id, bdi_score=bdi_score, entropy=entropy)
         request_id = str(uuid.uuid4())
-        await _insert_intercept_logs(
-            payload,
-            request_id=request_id,
-            bdi_score=bdi_score,
-            policy_result="blocked",
-        )
+        await _insert_intercept_logs(payload, request_id=request_id, bdi_score=bdi_score, policy_result="blocked")
         raise HTTPException(
             status_code=409,
             detail={
@@ -898,7 +790,6 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
                 "action": disposition.get("action"),
             },
         )
-
     request_id = str(uuid.uuid4())
     feed.add(
         PulseEvent(
@@ -931,12 +822,7 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
             },
         )
     )
-    await _insert_intercept_logs(
-        payload,
-        request_id=request_id,
-        bdi_score=bdi_score,
-        policy_result="allowed",
-    )
+    await _insert_intercept_logs(payload, request_id=request_id, bdi_score=bdi_score, policy_result="allowed")
     return {
         "ok": True,
         "allowed": True,
@@ -953,30 +839,22 @@ def reset() -> Dict[str, Any]:
     session_store.reset()
     circuit_breaker.close(reason="manual reset", bdi_score=0.0, entropy=0.0)
     drift_engine.reset()
-
-
     return {"ok": True}
+
 
 @app.get("/drift/{session_id}")
 def get_drift(session_id: str) -> Dict[str, Any]:
-    """Return current drift score for a session."""
     return {"ok": True, "session_id": session_id, "drift": drift_engine.get_drift(session_id)}
 
 
 @app.get("/drift")
 def list_drift_sessions() -> Dict[str, Any]:
-    """List all active drift sessions."""
     sessions = drift_engine.session_ids()
-    return {
-        "ok": True,
-        "sessions": sessions,
-        "drift": {sid: drift_engine.get_drift(sid) for sid in sessions},
-    }
+    return {"ok": True, "sessions": sessions, "drift": {sid: drift_engine.get_drift(sid) for sid in sessions}}
 
 
 @app.get("/synthesis/report")
 def synthesis_report() -> Dict[str, Any]:
-    """Latest pattern report from the background synthesis engine."""
     report = synthesis_runner.last_report
     if report is None:
         report = forensic_auditor.generate_pattern_report()
@@ -985,86 +863,49 @@ def synthesis_report() -> Dict[str, Any]:
 
 @app.post("/synthesis/run")
 def synthesis_run_now() -> Dict[str, Any]:
-    """Trigger an on-demand synthesis pass (runs off the request thread)."""
     report = synthesis_runner.run_once()
     return {"ok": True, "report": report}
 
 
 @app.get("/compliance/export", response_model=None)
 def compliance_export(format: str = "json") -> Union[Dict[str, Any], Response]:
-    """Export tagged compliance events (JSON or markdown)."""
     if format.lower() in {"md", "markdown"}:
         from fastapi.responses import PlainTextResponse
-
-        return PlainTextResponse(
-            compliance_store.export_markdown(),
-            media_type="text/markdown",
-        )
+        return PlainTextResponse(compliance_store.export_markdown(), media_type="text/markdown")
     return {"ok": True, "report": compliance_store.export_report()}
 
 
 @app.get("/compliance/events")
 def compliance_events(limit: int = 100) -> Dict[str, Any]:
     return {"ok": True, "events": compliance_store.list_blocked(limit=limit)}
+
+
 @app.get("/compliance/deadlines")
 def compliance_deadlines(incident_time: Optional[str] = None) -> Dict[str, Any]:
-    """
-    ASEAN Deadline Clock — Action 3 (Phase 2).
-    Given an incident timestamp (ISO 8601), returns countdown status
-    for each ASEAN regulatory reporting obligation.
-    Defaults to now if no incident_time provided.
-    """
+    """ASEAN Deadline Clock — Action 3 (Phase 2)."""
     from datetime import timedelta
-
     ASEAN_FRAMEWORKS = [
-        {
-            "framework": "PDPA Malaysia",
-            "obligation": "Notify PDPC of personal data breach",
-            "window_hours": 24,
-            "jurisdiction": "MY",
-        },
-        {
-            "framework": "Singapore Model AI Governance Framework",
-            "obligation": "Incident review and corrective action",
-            "window_hours": 72,
-            "jurisdiction": "SG",
-        },
-        {
-            "framework": "Vietnam AI Law",
-            "obligation": "Report AI system incident to authority",
-            "window_hours": 72,
-            "jurisdiction": "VN",
-        },
-        {
-            "framework": "ISO/IEC 42001",
-            "obligation": "Log and assess AI management system incident",
-            "window_hours": 168,
-            "jurisdiction": "INTL",
-        },
+        {"framework": "PDPA Malaysia", "obligation": "Notify PDPC of personal data breach", "window_hours": 24, "jurisdiction": "MY"},
+        {"framework": "Singapore Model AI Governance Framework", "obligation": "Incident review and corrective action", "window_hours": 72, "jurisdiction": "SG"},
+        {"framework": "Vietnam AI Law", "obligation": "Report AI system incident to authority", "window_hours": 72, "jurisdiction": "VN"},
+        {"framework": "ISO/IEC 42001", "obligation": "Log and assess AI management system incident", "window_hours": 168, "jurisdiction": "INTL"},
     ]
-
     now = datetime.now(timezone.utc)
-
     if incident_time:
         try:
             incident_dt = datetime.fromisoformat(incident_time.replace("Z", "+00:00"))
             if incident_dt.tzinfo is None:
                 incident_dt = incident_dt.replace(tzinfo=timezone.utc)
         except ValueError:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid incident_time format. Use ISO 8601, e.g. 2026-06-27T10:00:00Z",
-            )
+            raise HTTPException(status_code=400, detail="Invalid incident_time format. Use ISO 8601, e.g. 2026-06-27T10:00:00Z")
     else:
         incident_dt = now
-
     deadlines = []
     for fw in ASEAN_FRAMEWORKS:
         deadline_dt = incident_dt + timedelta(hours=fw["window_hours"])
         seconds_remaining = (deadline_dt - now).total_seconds()
         hours_remaining = seconds_remaining / 3600
         elapsed_hours = (now - incident_dt).total_seconds() / 3600
-
         if seconds_remaining <= 0:
             status = "BREACHED"
         elif hours_remaining <= fw["window_hours"] * 0.25:
@@ -1073,7 +914,6 @@ def compliance_deadlines(incident_time: Optional[str] = None) -> Dict[str, Any]:
             status = "WARNING"
         else:
             status = "ACTIVE"
-
         deadlines.append({
             "framework": fw["framework"],
             "jurisdiction": fw["jurisdiction"],
@@ -1086,7 +926,6 @@ def compliance_deadlines(incident_time: Optional[str] = None) -> Dict[str, Any]:
             "status": status,
             "breached": seconds_remaining <= 0,
         })
-
     overall_status = "NOMINAL"
     if any(d["status"] == "BREACHED" for d in deadlines):
         overall_status = "BREACHED"
@@ -1094,141 +933,47 @@ def compliance_deadlines(incident_time: Optional[str] = None) -> Dict[str, Any]:
         overall_status = "CRITICAL"
     elif any(d["status"] == "WARNING" for d in deadlines):
         overall_status = "WARNING"
+    return {"ok": True, "incident_time": incident_dt.isoformat(), "generated_at": now.isoformat(), "overall_status": overall_status, "deadlines": deadlines}
 
-    return {
-        "ok": True,
-        "incident_time": incident_dt.isoformat(),
-        "generated_at": now.isoformat(),
-        "overall_status": overall_status,
-        "deadlines": deadlines,
-    }
+
 @app.get("/compliance/mgf")
 def compliance_mgf(
     entropy: Optional[float] = None,
     severity: Optional[str] = None,
     session_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """
-    MGF Compliance Mapper — Action 2 (Phase 2).
-    Maps current entropy/severity against Singapore Model AI Governance
-    Framework clauses and returns triggered obligations.
-    """
+    """MGF Compliance Mapper — Action 2 (Phase 2)."""
     MGF_CLAUSES = [
-        {
-            "clause": "2.1",
-            "title": "Internal Governance Structures and Measures",
-            "trigger_severity": ["elevated", "critical"],
-            "trigger_entropy_min": 0.40,
-            "obligation": "Ensure senior management oversight of AI decisions at elevated risk.",
-            "recommended_action": "Escalate to AI governance owner. Log decision rationale.",
-            "priority": "HIGH",
-        },
-        {
-            "clause": "2.2",
-            "title": "Determining AI Decision Type",
-            "trigger_severity": ["critical"],
-            "trigger_entropy_min": 0.70,
-            "obligation": "Classify AI decision impact. Flag fully automated decisions on individuals.",
-            "recommended_action": "Introduce human-in-the-loop review before execution.",
-            "priority": "CRITICAL",
-        },
-        {
-            "clause": "2.3",
-            "title": "Operations Management",
-            "trigger_severity": ["elevated", "critical"],
-            "trigger_entropy_min": 0.40,
-            "obligation": "Monitor AI system operations and log anomalous behaviour.",
-            "recommended_action": "Review session event chain. Verify no policy boundary crossed.",
-            "priority": "HIGH",
-        },
-        {
-            "clause": "2.4",
-            "title": "Stakeholder Interaction and Communication",
-            "trigger_severity": ["critical"],
-            "trigger_entropy_min": 0.70,
-            "obligation": "Notify affected stakeholders of high-risk AI behaviour.",
-            "recommended_action": "Prepare incident summary. Notify data owner within 72 hours.",
-            "priority": "CRITICAL",
-        },
-        {
-            "clause": "2.5",
-            "title": "Incident Reporting",
-            "trigger_severity": ["critical"],
-            "trigger_entropy_min": 0.70,
-            "obligation": "Document and report AI incidents within MGF 72-hour window.",
-            "recommended_action": "Export evidence package. Submit to compliance officer.",
-            "priority": "CRITICAL",
-        },
+        {"clause": "2.1", "title": "Internal Governance Structures and Measures", "trigger_severity": ["elevated", "critical"], "trigger_entropy_min": 0.40, "obligation": "Ensure senior management oversight of AI decisions at elevated risk.", "recommended_action": "Escalate to AI governance owner. Log decision rationale.", "priority": "HIGH"},
+        {"clause": "2.2", "title": "Determining AI Decision Type", "trigger_severity": ["critical"], "trigger_entropy_min": 0.70, "obligation": "Classify AI decision impact. Flag fully automated decisions on individuals.", "recommended_action": "Introduce human-in-the-loop review before execution.", "priority": "CRITICAL"},
+        {"clause": "2.3", "title": "Operations Management", "trigger_severity": ["elevated", "critical"], "trigger_entropy_min": 0.40, "obligation": "Monitor AI system operations and log anomalous behaviour.", "recommended_action": "Review session event chain. Verify no policy boundary crossed.", "priority": "HIGH"},
+        {"clause": "2.4", "title": "Stakeholder Interaction and Communication", "trigger_severity": ["critical"], "trigger_entropy_min": 0.70, "obligation": "Notify affected stakeholders of high-risk AI behaviour.", "recommended_action": "Prepare incident summary. Notify data owner within 72 hours.", "priority": "CRITICAL"},
+        {"clause": "2.5", "title": "Incident Reporting", "trigger_severity": ["critical"], "trigger_entropy_min": 0.70, "obligation": "Document and report AI incidents within MGF 72-hour window.", "recommended_action": "Export evidence package. Submit to compliance officer.", "priority": "CRITICAL"},
     ]
-
     effective_entropy = entropy if entropy is not None else 0.0
     effective_severity = (severity or "stable").lower()
-
     triggered = []
     for clause in MGF_CLAUSES:
-        severity_match = effective_severity in clause["trigger_severity"]
-        entropy_match = effective_entropy >= clause["trigger_entropy_min"]
-        if severity_match and entropy_match:
-            triggered.append({
-                "clause": clause["clause"],
-                "title": clause["title"],
-                "obligation": clause["obligation"],
-                "recommended_action": clause["recommended_action"],
-                "priority": clause["priority"],
-                "trigger": {
-                    "entropy": effective_entropy,
-                    "severity": effective_severity,
-                    "entropy_threshold": clause["trigger_entropy_min"],
-                },
-            })
-
+        if effective_severity in clause["trigger_severity"] and effective_entropy >= clause["trigger_entropy_min"]:
+            triggered.append({"clause": clause["clause"], "title": clause["title"], "obligation": clause["obligation"], "recommended_action": clause["recommended_action"], "priority": clause["priority"], "trigger": {"entropy": effective_entropy, "severity": effective_severity, "entropy_threshold": clause["trigger_entropy_min"]}})
     overall_priority = "NOMINAL"
     if any(c["priority"] == "CRITICAL" for c in triggered):
         overall_priority = "CRITICAL"
     elif any(c["priority"] == "HIGH" for c in triggered):
         overall_priority = "HIGH"
+    return {"ok": True, "framework": "Singapore Model AI Governance Framework", "jurisdiction": "SG", "evaluated_at": datetime.now(timezone.utc).isoformat(), "inputs": {"entropy": effective_entropy, "severity": effective_severity, "session_id": session_id}, "overall_priority": overall_priority, "clauses_triggered": len(triggered), "triggered_clauses": triggered}
 
-    return {
-        "ok": True,
-        "framework": "Singapore Model AI Governance Framework",
-        "jurisdiction": "SG",
-        "evaluated_at": datetime.now(timezone.utc).isoformat(),
-        "inputs": {
-            "entropy": effective_entropy,
-            "severity": effective_severity,
-            "session_id": session_id,
-        },
-        "overall_priority": overall_priority,
-        "clauses_triggered": len(triggered),
-        "triggered_clauses": triggered,
-    }
+
 @app.get("/session/lineage/{session_id}")
 async def session_lineage(session_id: str) -> Dict[str, Any]:
-    """
-    Session Lineage Tracker — Action 5 (Phase 2).
-    Reconstructs the full ordered event chain for a session
-    from the audit ledger. Returns entropy progression,
-    BDI scores, governance decisions, and risk trajectory.
-    """
+    """Session Lineage Tracker — Action 5 (Phase 2)."""
     try:
         result = await supabase_audit_client.get_session_events(session_id=session_id)
         events = result or []
     except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to retrieve session lineage: {str(exc)}",
-        )
-
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve session lineage: {str(exc)}")
     if not events:
-        return {
-            "ok": True,
-            "session_id": session_id,
-            "found": False,
-            "message": "No events found for this session.",
-            "lineage": [],
-            "summary": {},
-        }
-
+        return {"ok": True, "session_id": session_id, "found": False, "message": "No events found for this session.", "lineage": [], "summary": {}}
     lineage = []
     for i, event in enumerate(events):
         lineage.append({
@@ -1243,11 +988,9 @@ async def session_lineage(session_id: str) -> Dict[str, Any]:
             "input_preview": (event.get("input_text") or "")[:120],
             "output_preview": (event.get("output_text") or "")[:120],
         })
-
     bdi_scores = [e.get("bdi_score") for e in events if e.get("bdi_score") is not None]
     entropy_scores = [e.get("entropy") for e in events if e.get("entropy") is not None]
     blocked_count = sum(1 for e in events if e.get("policy_result") == "blocked")
-
     summary = {
         "total_turns": len(lineage),
         "blocked_turns": blocked_count,
@@ -1260,14 +1003,9 @@ async def session_lineage(session_id: str) -> Dict[str, Any]:
         "first_event": events[0].get("timestamp"),
         "last_event": events[-1].get("timestamp"),
     }
+    return {"ok": True, "session_id": session_id, "found": True, "summary": summary, "lineage": lineage}
 
-    return {
-        "ok": True,
-        "session_id": session_id,
-        "found": True,
-        "summary": summary,
-        "lineage": lineage,
-    }
+
 @app.get("/trust/score")
 async def trust_score(
     agent_id: Optional[str] = None,
@@ -1278,53 +1016,25 @@ async def trust_score(
     blocked_turns: Optional[int] = None,
     total_turns: Optional[int] = None,
 ) -> Dict[str, Any]:
-    """
-    Entropy-Weighted Trust Score — Action 4 (Phase 2).
-    Computes a composite 0-1 trust index for an agent/session
-    weighted across entropy, BDI, drift, and policy compliance.
-    Lower score = lower trust. Score < 0.40 = untrusted.
-    """
-    # Weights — must sum to 1.0
+    """Entropy-Weighted Trust Score — Action 4 (Phase 2)."""
     W_ENTROPY = 0.35
     W_BDI = 0.25
     W_DRIFT = 0.20
     W_COMPLIANCE = 0.20
-
-    # Entropy component — inverted (high entropy = low trust)
     eff_entropy = max(0.0, min(1.0, entropy if entropy is not None else 0.0))
     entropy_component = 1.0 - eff_entropy
-
-    # BDI component — inverted (high BDI score = suspicious intent = low trust)
     eff_bdi = max(0.0, min(1.0, bdi_score if bdi_score is not None else 0.0))
     bdi_component = 1.0 - eff_bdi
-
-    # Drift component
-    drift_map = {
-        "stable": 1.0,
-        "elevated": 0.5,
-        "critical": 0.0,
-        "unknown": 0.7,
-    }
+    drift_map = {"stable": 1.0, "elevated": 0.5, "critical": 0.0, "unknown": 0.7}
     eff_drift = (drift_status or "unknown").lower()
     drift_component = drift_map.get(eff_drift, 0.7)
-
-    # Compliance component — ratio of allowed turns
     if total_turns and total_turns > 0:
         blocked = blocked_turns or 0
         compliance_component = max(0.0, (total_turns - blocked) / total_turns)
     else:
         compliance_component = 1.0
-
-    # Weighted composite
-    raw_score = (
-        (entropy_component * W_ENTROPY)
-        + (bdi_component * W_BDI)
-        + (drift_component * W_DRIFT)
-        + (compliance_component * W_COMPLIANCE)
-    )
+    raw_score = (entropy_component * W_ENTROPY) + (bdi_component * W_BDI) + (drift_component * W_DRIFT) + (compliance_component * W_COMPLIANCE)
     trust_score_value = round(max(0.0, min(1.0, raw_score)), 4)
-
-    # Trust band
     if trust_score_value >= 0.75:
         trust_band = "TRUSTED"
     elif trust_score_value >= 0.55:
@@ -1333,7 +1043,6 @@ async def trust_score(
         trust_band = "CAUTION"
     else:
         trust_band = "UNTRUSTED"
-
     return {
         "ok": True,
         "agent_id": agent_id,
@@ -1341,23 +1050,71 @@ async def trust_score(
         "computed_at": datetime.now(timezone.utc).isoformat(),
         "trust_score": trust_score_value,
         "trust_band": trust_band,
-        "components": {
-            "entropy_component": round(entropy_component, 4),
-            "bdi_component": round(bdi_component, 4),
-            "drift_component": round(drift_component, 4),
-            "compliance_component": round(compliance_component, 4),
-        },
-        "weights": {
-            "entropy": W_ENTROPY,
-            "bdi": W_BDI,
-            "drift": W_DRIFT,
-            "compliance": W_COMPLIANCE,
-        },
-        "inputs": {
-            "entropy": eff_entropy,
-            "bdi_score": eff_bdi,
-            "drift_status": eff_drift,
-            "blocked_turns": blocked_turns,
-            "total_turns": total_turns,
-        },
+        "components": {"entropy_component": round(entropy_component, 4), "bdi_component": round(bdi_component, 4), "drift_component": round(drift_component, 4), "compliance_component": round(compliance_component, 4)},
+        "weights": {"entropy": W_ENTROPY, "bdi": W_BDI, "drift": W_DRIFT, "compliance": W_COMPLIANCE},
+        "inputs": {"entropy": eff_entropy, "bdi_score": eff_bdi, "drift_status": eff_drift, "blocked_turns": blocked_turns, "total_turns": total_turns},
+    }
+
+
+@app.post("/agt/bridge")
+async def agt_bridge(payload: AGTToolCall) -> Dict[str, Any]:
+    """AGT-to-Pulse Bridge — Action 1 (Phase 2)."""
+    input_text = ""
+    if payload.tool_input:
+        try:
+            input_text = json.dumps(payload.tool_input)
+        except Exception:
+            input_text = str(payload.tool_input)
+    output_text = payload.tool_output or ""
+    agent_id = payload.agent_id or f"agt-{payload.tool_name}"
+    session_id = payload.session_id or payload.run_id or "agt-default"
+    bdi_score = session_store.record_turn(session_id, agent_id, input_text, output_text)
+    drift_result = drift_engine.record_turn(session_id=session_id, input_text=input_text, output_text=output_text)
+    entropy = _calculate_shannon_entropy(input_text)
+    disposition = circuit_breaker.gate_request(agent_id=agent_id, bdi_score=bdi_score, entropy=entropy, shadow_mode=SHADOW_MODE, intercept=True)
+    request_id = str(uuid.uuid4())
+    if disposition.get("action") not in {None, RequestAction.PROCEED.value}:
+        _record_drop_event(disposition, agent_id=agent_id, bdi_score=bdi_score, entropy=entropy)
+        await supabase_audit_client.insert_ai_event(
+            event_id=request_id,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            agent_id=agent_id,
+            action=f"agt/{payload.tool_name}",
+            input_text=input_text,
+            output_text=output_text,
+            bdi_score=bdi_score,
+            policy_result="blocked",
+            session_id=session_id,
+        )
+        raise HTTPException(
+            status_code=409,
+            detail={"error": "AGT tool call blocked by Pulse circuit breaker", "tool_name": payload.tool_name, "reason": disposition.get("reason"), "state": disposition.get("state")},
+        )
+    feed.add(
+        PulseEvent(
+            kind="input",
+            text=input_text,
+            data={"request_id": request_id, "agent_id": agent_id, "session_id": session_id, "tool_name": payload.tool_name, "run_id": payload.run_id, "bdi_score": bdi_score, "entropy": entropy, "decision": "allowed", "status_code": 200, "source": "agt_bridge"},
+        )
+    )
+    await supabase_audit_client.insert_ai_event(
+        event_id=request_id,
+        timestamp=datetime.now(timezone.utc).isoformat(),
+        agent_id=agent_id,
+        action=f"agt/{payload.tool_name}",
+        input_text=input_text,
+        output_text=output_text,
+        bdi_score=bdi_score,
+        policy_result="allowed",
+        session_id=session_id,
+    )
+    return {
+        "ok": True,
+        "allowed": True,
+        "request_id": request_id,
+        "source": "agt_bridge",
+        "tool_name": payload.tool_name,
+        "agent_id": agent_id,
+        "session_id": session_id,
+        "governance": {"bdi_score": bdi_score, "entropy": entropy, "drift": drift_result, "circuit_breaker": disposition.get("state", "closed")},
     }
