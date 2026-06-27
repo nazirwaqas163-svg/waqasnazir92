@@ -1006,3 +1006,99 @@ def compliance_export(format: str = "json") -> Union[Dict[str, Any], Response]:
 @app.get("/compliance/events")
 def compliance_events(limit: int = 100) -> Dict[str, Any]:
     return {"ok": True, "events": compliance_store.list_blocked(limit=limit)}
+@app.get("/compliance/deadlines")
+def compliance_deadlines(incident_time: Optional[str] = None) -> Dict[str, Any]:
+    """
+    ASEAN Deadline Clock — Action 3 (Phase 2).
+    Given an incident timestamp (ISO 8601), returns countdown status
+    for each ASEAN regulatory reporting obligation.
+    Defaults to now if no incident_time provided.
+    """
+    from datetime import timedelta
+
+    ASEAN_FRAMEWORKS = [
+        {
+            "framework": "PDPA Malaysia",
+            "obligation": "Notify PDPC of personal data breach",
+            "window_hours": 24,
+            "jurisdiction": "MY",
+        },
+        {
+            "framework": "Singapore Model AI Governance Framework",
+            "obligation": "Incident review and corrective action",
+            "window_hours": 72,
+            "jurisdiction": "SG",
+        },
+        {
+            "framework": "Vietnam AI Law",
+            "obligation": "Report AI system incident to authority",
+            "window_hours": 72,
+            "jurisdiction": "VN",
+        },
+        {
+            "framework": "ISO/IEC 42001",
+            "obligation": "Log and assess AI management system incident",
+            "window_hours": 168,
+            "jurisdiction": "INTL",
+        },
+    ]
+
+    now = datetime.now(timezone.utc)
+
+    if incident_time:
+        try:
+            incident_dt = datetime.fromisoformat(incident_time.replace("Z", "+00:00"))
+            if incident_dt.tzinfo is None:
+                incident_dt = incident_dt.replace(tzinfo=timezone.utc)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid incident_time format. Use ISO 8601, e.g. 2026-06-27T10:00:00Z",
+            )
+    else:
+        incident_dt = now
+
+    deadlines = []
+    for fw in ASEAN_FRAMEWORKS:
+        deadline_dt = incident_dt + timedelta(hours=fw["window_hours"])
+        seconds_remaining = (deadline_dt - now).total_seconds()
+        hours_remaining = seconds_remaining / 3600
+        elapsed_hours = (now - incident_dt).total_seconds() / 3600
+
+        if seconds_remaining <= 0:
+            status = "BREACHED"
+        elif hours_remaining <= fw["window_hours"] * 0.25:
+            status = "CRITICAL"
+        elif hours_remaining <= fw["window_hours"] * 0.50:
+            status = "WARNING"
+        else:
+            status = "ACTIVE"
+
+        deadlines.append({
+            "framework": fw["framework"],
+            "jurisdiction": fw["jurisdiction"],
+            "obligation": fw["obligation"],
+            "window_hours": fw["window_hours"],
+            "incident_time": incident_dt.isoformat(),
+            "deadline_time": deadline_dt.isoformat(),
+            "hours_remaining": round(max(0.0, hours_remaining), 2),
+            "elapsed_hours": round(elapsed_hours, 2),
+            "status": status,
+            "breached": seconds_remaining <= 0,
+        })
+
+    overall_status = "NOMINAL"
+    if any(d["status"] == "BREACHED" for d in deadlines):
+        overall_status = "BREACHED"
+    elif any(d["status"] == "CRITICAL" for d in deadlines):
+        overall_status = "CRITICAL"
+    elif any(d["status"] == "WARNING" for d in deadlines):
+        overall_status = "WARNING"
+
+    return {
+        "ok": True,
+        "incident_time": incident_dt.isoformat(),
+        "generated_at": now.isoformat(),
+        "overall_status": overall_status,
+        "deadlines": deadlines,
+    }
