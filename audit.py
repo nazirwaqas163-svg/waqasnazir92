@@ -193,5 +193,36 @@ class SupabaseAuditClient:
         }
         return await self._post_row("ai_events", row)
 
+    async def get_session_events(self, session_id: str) -> List[Dict[str, Any]]:
+        """Fetch all ai_events for a given session_id, ordered by timestamp."""
+        if not self.configured:
+            logger.warning("Skipping get_session_events because Supabase is not configured")
+            return []
+        try:
+            headers = {
+                "apikey": self.key or "",
+                "authorization": f"Bearer {self.key}",
+                "content-type": "application/json",
+            }
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.get(
+                    f"{self.url}/rest/v1/ai_events",
+                    headers=headers,
+                    params={
+                        "session_id": f"eq.{session_id}",
+                        "order": "timestamp.asc",
+                        "select": "event_id,timestamp,agent_id,action,input_text,output_text,bdi_score,status,session_id",
+                    },
+                )
+                response.raise_for_status()
+                data = response.json()
+                for row in data:
+                    if "status" in row:
+                        row["policy_result"] = row.pop("status")
+                return data
+        except httpx.HTTPError:
+            logger.exception("Failed to fetch session events for %s", session_id)
+            return []
+
 
 supabase_audit_client = SupabaseAuditClient(SUPABASE_URL, SUPABASE_KEY)
