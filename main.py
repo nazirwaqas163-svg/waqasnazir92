@@ -157,6 +157,18 @@ class AGTToolCall(BaseModel):
         extra = "allow"
 
 
+class AgentRegisterRequest(BaseModel):
+    agent_id: str
+    name: str = ""
+    owner: str = ""
+    scope: List[str] = Field(default_factory=list)
+    description: str = ""
+    metadata: Optional[Dict[str, Any]] = None
+
+    class Config:
+        extra = "allow"
+
+
 def _dropped_response(disposition: Dict[str, Any]) -> Response:
     retry_after = str(int(max(1, disposition.get("cooldown_seconds_remaining", 30))))
     return Response(
@@ -1124,17 +1136,13 @@ async def agt_bridge(payload: AGTToolCall) -> Dict[str, Any]:
         "session_id": session_id,
         "governance": {"bdi_score": bdi_score, "entropy": entropy, "drift": drift_result, "circuit_breaker": disposition.get("state", "closed")},
     }
+
+
 @app.get("/ledger/integrity")
 async def ledger_integrity(limit: int = 100) -> Dict[str, Any]:
-    """
-    Ledger Integrity Verifier — SHA-256 hash chain proof.
-    Fetches audit_logs ordered by created_at, re-computes each
-    hash link, and returns pass/fail with tamper evidence.
-    Covers CTO Direction 2: encryption and agent immutability.
-    """
+    """Ledger Integrity Verifier — SHA-256 hash chain proof."""
     if not supabase_audit_client.configured:
         raise HTTPException(status_code=503, detail="Supabase not configured")
-
     try:
         headers = {
             "apikey": supabase_audit_client.key or "",
@@ -1155,22 +1163,17 @@ async def ledger_integrity(limit: int = 100) -> Dict[str, Any]:
             rows = response.json()
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail=f"Failed to fetch audit_logs: {str(exc)}")
-
     total = len(rows)
     verified = 0
     broken = 0
     skipped = 0
     broken_links = []
-
     for i, row in enumerate(rows):
         chain_hash = row.get("chain_hash")
         chain_previous_hash = row.get("chain_previous_hash")
-
         if not chain_hash or not chain_previous_hash:
             skipped += 1
             continue
-
-        # Verify previous link matches previous row's hash
         if i > 0:
             prev_row = rows[i - 1]
             prev_hash = prev_row.get("chain_hash")
@@ -1188,10 +1191,8 @@ async def ledger_integrity(limit: int = 100) -> Dict[str, Any]:
                 verified += 1
         else:
             verified += 1
-
     integrity_status = "VERIFIED" if broken == 0 else "TAMPERED"
     tamper_detected = broken > 0
-
     return {
         "ok": True,
         "integrity_status": integrity_status,
@@ -1212,4 +1213,58 @@ async def ledger_integrity(limit: int = 100) -> Dict[str, Any]:
             "immutability": "DELETE and UPDATE are revoked at database level",
             "storage": "Supabase PostgreSQL — Singapore region (ap-southeast-1)",
         },
+    }
+
+
+@app.post("/agents/register")
+async def register_agent(payload: AgentRegisterRequest) -> Dict[str, Any]:
+    """Agent Identity Registry — Phase 3 Stage 1. Register an agent identity."""
+    result = await supabase_audit_client.register_agent(
+        agent_id=payload.agent_id,
+        name=payload.name,
+        owner=payload.owner,
+        scope=payload.scope,
+        description=payload.description,
+        metadata=payload.metadata or {},
+    )
+    if not result.get("ok"):
+        reason = result.get("reason", "unknown")
+        if reason == "agent_id_already_registered":
+            raise HTTPException(status_code=409, detail=f"Agent '{payload.agent_id}' is already registered.")
+        raise HTTPException(status_code=500, detail=f"Registration failed: {reason}")
+    return {
+        "ok": True,
+        "message": f"Agent '{payload.agent_id}' registered successfully.",
+        "agent": result.get("agent"),
+    }
+
+
+@app.get("/agents")
+async def list_agents(limit: int = 100) -> Dict[str, Any]:
+    """Agent Identity Registry — list all registered agents."""
+    agents = await supabase_audit_client.list_agents(limit=limit)
+    return {
+        "ok": True,
+        "total": len(agents),
+        "agents": agents,
+    }
+
+
+@app.get("/agents/{agent_id}")
+async def get_agent(agent_id: str) -> Dict[str, Any]:
+    """Agent Identity Registry — look up a single agent."""
+    agent = await supabase_audit_client.get_agent(agent_id=agent_id)
+    if agent is None:
+        return {
+            "ok": True,
+            "found": False,
+            "agent_id": agent_id,
+            "registered": False,
+            "message": "Agent not found in registry. Treat as UNREGISTERED.",
+        }
+    return {
+        "ok": True,
+        "found": True,
+        "registered": True,
+        "agent": agent,
     }
