@@ -210,7 +210,7 @@ svg.hm{width:100%;height:55px}
         <div class="kpi">
           <div class="kpi-label">High-Risk Events</div>
           <div class="kpi-val c-white" id="k-risk">—</div>
-          <div class="kpi-sub">Entropy ≥ 70% threshold</div>
+          <div class="kpi-sub">Entropy >= 70% threshold</div>
         </div>
         <div class="kpi kpi-green">
           <div class="kpi-label">Circuit Breaker</div>
@@ -232,11 +232,11 @@ svg.hm{width:100%;height:55px}
           </div>
           <div class="tools-row">
             <div class="search">
-              <span style="color:var(--muted);font-size:12px">⌕</span>
-              <input id="srch" type="text" placeholder="Search events, actors, tags…"/>
+              <span style="color:var(--muted);font-size:12px">search</span>
+              <input id="srch" type="text" placeholder="Search events, actors, tags..."/>
             </div>
             <span class="cnt" id="evt-cnt">0 events</span>
-            <button class="refresh-btn" onclick="load()">↻ Refresh</button>
+            <button class="refresh-btn" onclick="load()">Refresh</button>
           </div>
         </div>
 
@@ -249,7 +249,7 @@ svg.hm{width:100%;height:55px}
             <div>Entropy</div>
             <div>Pulse</div>
           </div>
-          <div id="tbody"><div class="loading"><div class="spin"></div>Loading events…</div></div>
+          <div id="tbody"><div class="loading"><div class="spin"></div>Loading events...</div></div>
         </div>
       </div>
     </div>
@@ -260,52 +260,52 @@ svg.hm{width:100%;height:55px}
           <div class="inv-sev" id="i-sev">STABLE</div>
           <div class="inv-title" id="i-title">Investigator</div>
           <div class="inv-meta" id="i-meta"></div>
-          <button class="close-btn" onclick="closeInv()">✕</button>
+          <button class="close-btn" onclick="closeInv()">X</button>
         </div>
         <div class="inv-sec">
-          <div class="inv-sec-title">◆ Executive Insight</div>
+          <div class="inv-sec-title">Executive Insight</div>
           <div class="tags" id="i-tags"></div>
           <div class="chart-box">
-            <div class="chart-lbl">▼ Heart Monitor — Temporal Logic</div>
+            <div class="chart-lbl" id="hm-label">Heart Monitor — Live Drift Feed</div>
             <svg class="hm" viewBox="0 0 400 55" preserveAspectRatio="none">
               <polyline id="hm-line" points="" fill="none" stroke="#00d4ff" stroke-width="1.5"/>
               <circle id="hm-dot" cx="400" cy="27" r="3.5" fill="#ef4444"/>
             </svg>
             <div style="display:flex;justify-content:space-between;margin-top:4px">
-              <span style="font-size:9px;color:var(--muted)">← 60 min ago</span>
+              <span style="font-size:9px;color:var(--muted)">60 min ago</span>
               <span style="font-size:9px;color:var(--warn)" id="hm-spike"></span>
-              <span style="font-size:9px;color:var(--muted)">Now →</span>
+              <span style="font-size:9px;color:var(--muted)">Now</span>
             </div>
           </div>
         </div>
         <div class="inv-sec">
-          <div class="inv-sec-title">◎ Signal-to-Noise — Confidence Logic</div>
+          <div class="inv-sec-title">Signal-to-Noise — Confidence Logic</div>
           <div class="sig-row">
             <span style="font-size:10px;color:var(--danger);font-weight:600">NOISE</span>
             <span style="font-size:10px;color:var(--ok);font-weight:600">SIGNAL</span>
           </div>
-          <div class="sig-pct" id="i-signal">—%</div>
+          <div class="sig-pct" id="i-signal">-%</div>
           <ul class="tl-list" id="i-tl"></ul>
         </div>
         <div class="inv-sec">
-          <div class="inv-sec-title">⚑ Triggered Regulations (3)</div>
+          <div class="inv-sec-title">Triggered Regulations</div>
           <div id="i-regs"></div>
         </div>
         <div class="inv-sec">
-          <div class="inv-sec-title">🏁 SLA Status</div>
+          <div class="inv-sec-title">SLA Status</div>
           <div id="i-sla"></div>
         </div>
         <div class="inv-sec">
-          <div class="inv-sec-title">⚡ Recommended Action</div>
+          <div class="inv-sec-title">Recommended Action</div>
           <div class="act-grid">
-            <button class="act-btn"><div class="act-icon">⊘</div>Presumptive Defense</button>
-            <button class="act-btn"><div class="act-icon">✓</div>Executive Sign-off</button>
-            <button class="act-btn"><div class="act-icon">△</div>Escalate to CISO</button>
+            <button class="act-btn"><div class="act-icon">O</div>Presumptive Defense</button>
+            <button class="act-btn"><div class="act-icon">V</div>Executive Sign-off</button>
+            <button class="act-btn"><div class="act-icon">!</div>Escalate to CISO</button>
           </div>
-          <button class="act-full act-danger">⚡ Remediate</button>
-          <button class="act-full">▷ Replay Event Chain</button>
-          <button class="act-full">↓ Export Evidence Package</button>
-          <button class="act-full">☰ Generate Full Incident Report</button>
+          <button class="act-full act-danger" onclick="remediate()">Remediate</button>
+          <button class="act-full" onclick="replayChain()">Replay Event Chain</button>
+          <button class="act-full" onclick="exportEvidence()">Export Evidence Package</button>
+          <button class="act-full" onclick="generateReport()">Generate Full Incident Report</button>
         </div>
       </div>
     </div>
@@ -332,7 +332,7 @@ function sev(e){
 function bdiC(v){return v>=0.65?'var(--danger)':v>=0.35?'var(--warn)':'var(--ok)'}
 function entC(v){return v>=0.7?'var(--danger)':v>=0.4?'var(--warn)':'var(--ok)'}
 function pulseClass(s){return s==='critical'?'err':s==='elevated'?'warn':'ok'}
-function pulseIcon(s){return s==='critical'?'✕':s==='elevated'?'!':'✓'}
+function pulseIcon(s){return s==='critical'?'X':s==='elevated'?'!':'V'}
 
 const avatarCfg={
   input:{bg:'rgba(14,165,233,0.15)',color:'#0ea5e9',label:'AI'},
@@ -340,9 +340,9 @@ const avatarCfg={
   governance:{bg:'rgba(239,68,68,0.15)',color:'#ef4444',label:'CB'},
   stream_end:{bg:'rgba(100,116,139,0.15)',color:'#64748b',label:'ST'}
 };
-function avatarFor(k){const c=avatarCfg[k]||{bg:'rgba(100,116,139,0.15)',color:'#64748b',label:'??'};return `<div class="avatar" style="background:${c.bg};color:${c.color}">${c.label}</div>`}
+function avatarFor(k){const c=avatarCfg[k]||{bg:'rgba(100,116,139,0.15)',color:'#64748b',label:'??'};return '<div class="avatar" style="background:'+c.bg+';color:'+c.color+'">'+c.label+'</div>'}
 function actorName(k){return{input:'AI Agent',output:'Model Response',governance:'Circuit Breaker',stream_end:'Stream End'}[k]||k}
-function shortText(t){return t?(t.length>65?t.slice(0,65)+'…':t):'(no description)'}
+function shortText(t){return t?(t.length>65?t.slice(0,65)+'...':t):'(no description)'}
 
 function plainEnglish(e){
   const s=sev(e);
@@ -353,32 +353,32 @@ function plainEnglish(e){
               e.kind==='governance'?'Governance intervention triggered':
               'An agent action was recorded';
   const why=reason?reason:
-             s==='critical'?`Flagged as high-risk — behaviour deviated significantly (entropy ${en}%). Human review required before execution.`:
-             s==='elevated'?`Elevated risk detected — monitoring active (entropy ${en}%). Review recommended.`:
-             `Behaviour within normal parameters (entropy ${en}%). No action required.`;
-  return `${what}. ${why}`;
+             s==='critical'?'Flagged as high-risk - behaviour deviated significantly (entropy '+en+'%). Human review required before execution.':
+             s==='elevated'?'Elevated risk detected - monitoring active (entropy '+en+'%). Review recommended.':
+             'Behaviour within normal parameters (entropy '+en+'%). No action required.';
+  return what+'. '+why;
 }
 
 function renderRows(evs){
   const tb = document.getElementById('tbody');
-  document.getElementById('evt-cnt').textContent = `${evs.length} of ${ALL.length} events`;
+  document.getElementById('evt-cnt').textContent = evs.length+' of '+ALL.length+' events';
   if(!evs.length){
-    tb.innerHTML='<div class="empty"><div class="empty-icon">◎</div><div>No events available.</div><div style="font-size:11px;margin-top:6px;color:var(--muted2)">Events appear here when AI agents route through the Pulse proxy.</div></div>';
+    tb.innerHTML='<div class="empty"><div class="empty-icon">O</div><div>No events available.</div><div style="font-size:11px;margin-top:6px;color:var(--muted2)">Events appear here when AI agents route through the Pulse proxy.</div></div>';
     return;
   }
-  tb.innerHTML = evs.map((e,i)=>{
+  tb.innerHTML = evs.map((e)=>{
     const s=sev(e), bd=e.data?.bdi_score??0, en=e.data?.entropy??0;
-    const ts=e.created_at?new Date(e.created_at).toLocaleString():'—';
+    const ts=e.created_at?new Date(e.created_at).toLocaleString():'--';
     const bpct=Math.round(bd*100), epct=Math.round(en*100);
     const ridx = ALL.indexOf(e);
-    return `<div class="evt-row${selIdx===ridx?' selected':''}" onclick="openInv(${ridx})">
-      <div><div class="evt-id"><strong>EV-${String(ridx+1).padStart(4,'0')}</strong></div><div class="evt-ts">${ts}</div></div>
-      <div class="actor-wrap">${avatarFor(e.kind)}<div style="min-width:0"><div class="actor-name">${actorName(e.kind)}</div><div class="actor-desc">${shortText(e.text)}</div><div class="actor-plain">${plainEnglish(e)}</div></div></div>
-      <div><span class="badge ${s}">${s}</span></div>
-      <div class="bdi-wrap"><div class="bdi-track"><div class="bdi-fill" style="width:${bpct}%;background:${bdiC(bd)}"></div></div><span class="mono-val" style="color:${bdiC(bd)}">${bpct}%</span></div>
-      <div class="mono-val" style="color:${entC(en)}">${epct}%</div>
-      <div><div class="pulse-dot ${pulseClass(s)}">${pulseIcon(s)}</div></div>
-    </div>`;
+    return '<div class="evt-row'+(selIdx===ridx?' selected':'')+'" onclick="openInv('+ridx+')">'
+      +'<div><div class="evt-id"><strong>EV-'+String(ridx+1).padStart(4,'0')+'</strong></div><div class="evt-ts">'+ts+'</div></div>'
+      +'<div class="actor-wrap">'+avatarFor(e.kind)+'<div style="min-width:0"><div class="actor-name">'+actorName(e.kind)+'</div><div class="actor-desc">'+shortText(e.text)+'</div><div class="actor-plain">'+plainEnglish(e)+'</div></div></div>'
+      +'<div><span class="badge '+s+'">'+s+'</span></div>'
+      +'<div class="bdi-wrap"><div class="bdi-track"><div class="bdi-fill" style="width:'+bpct+'%;background:'+bdiC(bd)+'"></div></div><span class="mono-val" style="color:'+bdiC(bd)+'">'+bpct+'%</span></div>'
+      +'<div class="mono-val" style="color:'+entC(en)+'">'+epct+'%</div>'
+      +'<div><div class="pulse-dot '+pulseClass(s)+'">'+pulseIcon(s)+'</div></div>'
+      +'</div>';
   }).join('');
 }
 
@@ -395,70 +395,136 @@ document.querySelectorAll('.ftab').forEach(t=>t.addEventListener('click',()=>{
 }));
 document.getElementById('srch').addEventListener('input',e=>{search=e.target.value;renderRows(filtered())});
 
-function openInv(idx){
+async function drawHeartMonitor(e, en){
+  const sid = e.data?.session_id || 'default';
+  const hmLine = document.getElementById('hm-line');
+  const hmDot = document.getElementById('hm-dot');
+  const hmLabel = document.getElementById('hm-label');
+
+  try {
+    const dr = await fetch(API+'/drift/'+sid, {cache:'no-store'}).then(r=>r.json());
+    const history = dr.drift?.history || [];
+
+    if(history.length >= 2){
+      hmLabel.textContent = 'Heart Monitor - Live Drift Feed (session: '+sid+')';
+      const pts = [];
+      const slice = history.slice(-22);
+      slice.forEach((v,i,arr)=>{
+        const x = (i/(arr.length-1))*400;
+        const y = Math.max(4, Math.min(51, 27-(v*24)));
+        pts.push(x.toFixed(1)+','+y.toFixed(1));
+      });
+      const lp = pts[pts.length-1].split(',');
+      hmLine.setAttribute('points', pts.join(' '));
+      hmDot.setAttribute('cx', lp[0]);
+      hmDot.setAttribute('cy', lp[1]);
+      return;
+    }
+  } catch(_){}
+
+  // Fallback: entropy-based wave
+  hmLabel.textContent = 'Heart Monitor - Entropy Wave (no drift history)';
+  const pts = [];
+  for(let i=0;i<22;i++){
+    const x = i*(400/21);
+    const base=27, wave=Math.sin(i*0.7+en*8)*12+Math.sin(i*1.3)*5;
+    const y = Math.max(4,Math.min(51,base-wave+(Math.random()-0.5)*4));
+    pts.push(x.toFixed(1)+','+y.toFixed(1));
+  }
+  const lp = pts[pts.length-1].split(',');
+  hmLine.setAttribute('points', pts.join(' '));
+  hmDot.setAttribute('cx', lp[0]);
+  hmDot.setAttribute('cy', lp[1]);
+}
+
+async function openInv(idx){
   selIdx=idx; renderRows(filtered());
   const e=ALL[idx]; if(!e) return;
   const s=sev(e), bd=e.data?.bdi_score??0, en=e.data?.entropy??0;
   const ts=e.created_at?new Date(e.created_at).toLocaleString():'Unknown';
   const si=document.getElementById('i-sev');
   si.textContent=s.toUpperCase(); si.className='inv-sev '+s;
-  document.getElementById('i-title').textContent=`Investigator: EV-${String(idx+1).padStart(4,'0')}`;
-  document.getElementById('i-meta').innerHTML=`
-    <span>Model: <strong>${e.data?.model||'unknown'}</strong></span>
-    <span>Triggered: <strong>${ts}</strong></span>
-    <span>Entropy: <strong style="color:${entC(en)}">${Math.round(en*100)}%</strong></span>`;
+  document.getElementById('i-title').textContent='Investigator: EV-'+String(idx+1).padStart(4,'0');
+  document.getElementById('i-meta').innerHTML=
+    '<span>Model: <strong>'+(e.data?.model||'unknown')+'</strong></span>'
+    +'<span>Triggered: <strong>'+ts+'</strong></span>'
+    +'<span>Entropy: <strong style="color:'+entC(en)+'">'+Math.round(en*100)+'%</strong></span>';
   const tags=['#'+e.kind];
   if(en>=0.7) tags.push('#high-entropy');
   if(bd>=0.65) tags.push('#bdi-critical');
   if(s==='critical') tags.push('#auto-isolated');
   if(e.kind==='governance') tags.push('#circuit-breaker');
-  document.getElementById('i-tags').innerHTML=tags.map(t=>`<span class="tag">${t}</span>`).join('');
-  const pts=[];
-  for(let i=0;i<22;i++){
-    const x=i*(400/21);
-    const base=27, wave=Math.sin(i*0.7+en*8)*12+Math.sin(i*1.3)*5;
-    const y=Math.max(4,Math.min(51,base-wave+(Math.random()-0.5)*4));
-    pts.push(`${x.toFixed(1)},${y.toFixed(1)}`);
-  }
-  const lp=pts[pts.length-1].split(',');
-  document.getElementById('hm-line').setAttribute('points',pts.join(' '));
-  document.getElementById('hm-dot').setAttribute('cx',lp[0]);
-  document.getElementById('hm-dot').setAttribute('cy',lp[1]);
-  if(s==='critical') document.getElementById('hm-spike').textContent='▼ Event Spike: '+ts.slice(11,19);
+  document.getElementById('i-tags').innerHTML=tags.map(t=>'<span class="tag">'+t+'</span>').join('');
+
+  await drawHeartMonitor(e, en);
+
+  if(s==='critical') document.getElementById('hm-spike').textContent='Event Spike: '+ts.slice(11,19);
+  else document.getElementById('hm-spike').textContent='';
+
   const sig=Math.round((1-en)*100);
   const sp=document.getElementById('i-signal');
   sp.textContent=sig+'%'; sp.style.color=sig>60?'var(--ok)':sig>30?'var(--warn)':'var(--danger)';
   const tl=[
-    {t:'T+0',c:'#10b981',x:'System Normal — Entropy stable at '+(Math.max(0,en-0.25)).toFixed(2)},
-    {t:'T+1',c:'#f59e0b',x:'Anomaly Detected — Output distribution shifted from baseline'},
-    {t:'T+2',c:'#f59e0b',x:'Confidence Dropping — Token probability collapse '+Math.round(en*90)+'%'},
+    {t:'T+0',c:'#10b981',x:'System Normal - Entropy stable at '+Math.max(0,en-0.25).toFixed(2)},
+    {t:'T+1',c:'#f59e0b',x:'Anomaly Detected - Output distribution shifted from baseline'},
+    {t:'T+2',c:'#f59e0b',x:'Confidence Dropping - Token probability collapse '+Math.round(en*90)+'%'},
   ];
   if(s==='critical'){
-    tl.push({t:'T+3',c:'#ef4444',x:'LOCKDOWN — Entropy '+en.toFixed(2)+'. Model isolated. Rollback initiated'});
-    tl.push({t:'T+4',c:'#ef4444',x:'Alert Dispatched — CISO + Legal notified via PagerDuty'});
-    tl.push({t:'T+5',c:'#0ea5e9',x:'Recovery Complete — Stable state restored. Incident report generated.'});
+    tl.push({t:'T+3',c:'#ef4444',x:'LOCKDOWN - Entropy '+en.toFixed(2)+'. Model isolated. Rollback initiated'});
+    tl.push({t:'T+4',c:'#ef4444',x:'Alert Dispatched - CISO + Legal notified via PagerDuty'});
+    tl.push({t:'T+5',c:'#0ea5e9',x:'Recovery Complete - Stable state restored. Incident report generated.'});
   } else {
-    tl.push({t:'T+3',c:'#10b981',x:'Recovery Complete — Stable state restored. Incident report generated.'});
+    tl.push({t:'T+3',c:'#10b981',x:'Recovery Complete - Stable state restored. Incident report generated.'});
   }
-  document.getElementById('i-tl').innerHTML=tl.map(t=>`<li class="tl-item"><span class="tl-t">${t.t}</span><div class="tl-dot" style="background:${t.c}"></div><span class="tl-text">${t.x}</span></li>`).join('');
+  document.getElementById('i-tl').innerHTML=tl.map(t=>'<li class="tl-item"><span class="tl-t">'+t.t+'</span><div class="tl-dot" style="background:'+t.c+'"></div><span class="tl-text">'+t.x+'</span></li>').join('');
   const regs=s==='critical'?[
-    {n:'EU AI Act — Article 9',r:'HIGH',d:'High-risk AI systems must have a risk management system established and maintained.',a:'Log incident, notify DPO, initiate risk management review within 72 hours.'},
-    {n:'GDPR — Article 22',r:'HIGH',d:'No solely automated decision-making with significant effects on individuals without human oversight.',a:'Pause automated pipeline. Introduce human-in-the-loop review for flagged decisions.'},
-    {n:'ISO/IEC 42001 — Clause 6.1',r:'HIGH',d:'AI management system must identify and address risks and opportunities.',a:'Update risk register. Reassess AI system objectives against observed drift.'},
+    {n:'EU AI Act - Article 9',r:'HIGH',d:'High-risk AI systems must have a risk management system established and maintained.',a:'Log incident, notify DPO, initiate risk management review within 72 hours.'},
+    {n:'GDPR - Article 22',r:'HIGH',d:'No solely automated decision-making with significant effects on individuals without human oversight.',a:'Pause automated pipeline. Introduce human-in-the-loop review for flagged decisions.'},
+    {n:'ISO/IEC 42001 - Clause 6.1',r:'HIGH',d:'AI management system must identify and address risks and opportunities.',a:'Update risk register. Reassess AI system objectives against observed drift.'},
   ]:[
-    {n:'EU AI Act — Article 13',r:'MED',d:'Transparency and providing information to users of AI systems.',a:'Verify audit log completeness and timestamp integrity.'},
+    {n:'EU AI Act - Article 13',r:'MED',d:'Transparency and providing information to users of AI systems.',a:'Verify audit log completeness and timestamp integrity.'},
     {n:'SOC2 CC7.2',r:'LOW',d:'System monitoring and logging requirements for security events.',a:'Confirm event is captured in tamper-evident audit chain.'},
   ];
-  document.getElementById('i-regs').innerHTML=regs.map(r=>`<div class="reg-card"><div class="reg-hdr"><span class="reg-name">${r.n}</span><span class="badge ${r.r==='HIGH'?'critical':r.r==='MED'?'elevated':'stable'}">${r.r}</span></div><div class="reg-desc">${r.d}</div><div class="reg-action">↳ ${r.a}</div></div>`).join('');
+  document.getElementById('i-regs').innerHTML=regs.map(r=>'<div class="reg-card"><div class="reg-hdr"><span class="reg-name">'+r.n+'</span><span class="badge '+(r.r==='HIGH'?'critical':r.r==='MED'?'elevated':'stable')+'">'+r.r+'</span></div><div class="reg-desc">'+r.d+'</div><div class="reg-action">Action: '+r.a+'</div></div>').join('');
   const now=new Date();
   const d1=new Date(now.getTime()+86400000).toLocaleString();
   const d3=new Date(now.getTime()+259200000).toLocaleString();
   const d7=new Date(now.getTime()+604800000).toLocaleString();
-  document.getElementById('i-sla').innerHTML=`
-    <div class="sla-item"><div class="sla-hdr"><span class="sla-name">Acknowledge</span><span class="sla-met" style="color:var(--ok)">Met</span></div><div class="sla-bar"><div class="sla-fill" style="width:100%;background:var(--ok)"></div></div><div class="sla-due">Due: ${d1}</div></div>
-    <div class="sla-item"><div class="sla-hdr"><span class="sla-name">Resolve</span><span class="sla-met" style="color:var(--ok)">Met</span></div><div class="sla-bar"><div class="sla-fill" style="width:100%;background:var(--ok)"></div></div><div class="sla-due">Due: ${d3}</div></div>
-    <div class="sla-item"><div class="sla-hdr"><span class="sla-name">Report</span><span class="sla-met" style="color:var(--warn)">Pending</span></div><div class="sla-bar"><div class="sla-fill" style="width:35%;background:var(--warn)"></div></div><div class="sla-due">Due: ${d7}</div></div>`;
+  document.getElementById('i-sla').innerHTML=
+    '<div class="sla-item"><div class="sla-hdr"><span class="sla-name">Acknowledge</span><span class="sla-met" style="color:var(--ok)">Met</span></div><div class="sla-bar"><div class="sla-fill" style="width:100%;background:var(--ok)"></div></div><div class="sla-due">Due: '+d1+'</div></div>'
+    +'<div class="sla-item"><div class="sla-hdr"><span class="sla-name">Resolve</span><span class="sla-met" style="color:var(--ok)">Met</span></div><div class="sla-bar"><div class="sla-fill" style="width:100%;background:var(--ok)"></div></div><div class="sla-due">Due: '+d3+'</div></div>'
+    +'<div class="sla-item"><div class="sla-hdr"><span class="sla-name">Report</span><span class="sla-met" style="color:var(--warn)">Pending</span></div><div class="sla-bar"><div class="sla-fill" style="width:35%;background:var(--warn)"></div></div><div class="sla-due">Due: '+d7+'</div></div>';
   document.getElementById('inv').classList.add('open');
+}
+
+async function remediate(){
+  if(!confirm('Trip circuit breaker and halt all agent requests?')) return;
+  await fetch(API+'/circuit-breaker/open',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({reason:'Manual remediation from dashboard',bdi_score:1.0,entropy:1.0})
+  });
+  load();
+}
+
+async function replayChain(){
+  const e=ALL[selIdx]; if(!e) return;
+  const sid=e.data?.session_id||'default';
+  try{
+    const r=await fetch(API+'/session/lineage/'+sid,{cache:'no-store'}).then(r=>r.json());
+    const turns=r.lineage?.length||0;
+    alert('Session Lineage: '+sid+'\nTotal turns: '+turns+'\nRisk trajectory: '+(r.summary?.risk_trajectory||'unknown')+'\nPeak entropy: '+(r.summary?.peak_entropy??'n/a')+'\nBlocked turns: '+(r.summary?.blocked_turns??0));
+  }catch(err){
+    alert('Could not load session lineage: '+err.message);
+  }
+}
+
+function exportEvidence(){
+  window.open(API+'/compliance/export?format=json','_blank');
+}
+
+function generateReport(){
+  window.open(API+'/compliance/export?format=markdown','_blank');
 }
 
 function closeInv(){
@@ -496,7 +562,7 @@ async function load(){
     kr.textContent=risk; kr.className='kpi-val '+(risk>0?'c-red':'c-green');
     renderRows(filtered());
   }catch(err){
-    document.getElementById('tbody').innerHTML=`<div class="empty"><div style="color:var(--danger);font-size:20px">⚠</div><div style="color:var(--danger);margin-top:6px;font-weight:500">Backend unreachable</div><div style="font-size:11px;margin-top:4px;color:var(--muted2)">${err.message}</div></div>`;
+    document.getElementById('tbody').innerHTML='<div class="empty"><div style="color:var(--danger);font-size:20px">!</div><div style="color:var(--danger);margin-top:6px;font-weight:500">Backend unreachable</div><div style="font-size:11px;margin-top:4px;color:var(--muted2)">'+err.message+'</div></div>';
   }
 }
 
