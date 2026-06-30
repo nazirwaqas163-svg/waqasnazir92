@@ -67,10 +67,10 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 .kpi-sub{font-size:10px;color:var(--muted)}
 
 /* TABLE HEADER */
-.tbl-head-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
-.section-label{font-size:10px;text-transform:uppercase;letter-spacing:0.09em;color:var(--muted);font-weight:600;display:flex;align-items:center;gap:6px}
+.tbl-head-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;row-gap:8px}
+.section-label{font-size:10px;text-transform:uppercase;letter-spacing:0.09em;color:var(--muted);font-weight:600;display:flex;align-items:center;gap:6px;white-space:nowrap;flex-shrink:0}
 .section-label::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--accent);display:inline-block}
-.filter-row{display:flex;gap:3px}
+.filter-row{display:flex;gap:3px;flex-shrink:0}
 .ftab{padding:3px 9px;border-radius:5px;font-size:10px;font-weight:500;cursor:pointer;color:var(--muted);background:transparent;border:1px solid transparent;transition:all 0.12s;white-space:nowrap}
 .ftab:hover{color:var(--text);background:var(--bg5)}
 .ftab.active{color:var(--accent);background:rgba(0,212,255,0.07);border-color:rgba(0,212,255,0.2)}
@@ -398,7 +398,7 @@ svg.hm{width:100%;height:55px}
             <button class="act-btn"><div class="act-icon">✓</div>Executive Sign-off</button>
             <button class="act-btn"><div class="act-icon">△</div>Escalate to CISO</button>
           </div>
-          <button class="act-full act-danger">⚡ Remediate</button>
+          <button class="act-full act-danger" onclick="remediateEvent()">⚡ Remediate</button>
           <button class="act-full" id="btn-replay" onclick="replayEventChain()">▷ Replay Event Chain</button>
           <button class="act-full" id="btn-export" onclick="exportEvidencePackage()">↓ Export Evidence Package</button>
           <button class="act-full" id="btn-report" onclick="generateIncidentReport()">☰ Generate Full Incident Report</button>
@@ -531,7 +531,7 @@ function updateKpis(evs){
   document.getElementById('k-total').textContent=tot;
   document.getElementById('k-total-sub').textContent=crits+' critical in current view';
   document.getElementById('k-crit').textContent=crits;
-  document.getElementById('k-ent').textContent=avgE.toFixed(2);
+  document.getElementById('k-ent').textContent=Math.round(avgE*100)+'%';
   const kr=document.getElementById('k-risk');
   kr.textContent=risk; kr.className='kpi-val '+(risk>0?'c-red':'c-green');
 }
@@ -739,6 +739,53 @@ function openInv(idx){
 function closeInv(){
   document.getElementById('inv').classList.remove('open');
   selIdx=-1; refresh();
+}
+
+/* REMEDIATE: the one action button wired to a real backend write -- creates
+   a genuine, persisted legal hold (Phase 3 Stage 6) tied to this specific
+   event. Distinct from the automatic holds that fire on critical drift or
+   swarm detection -- this one means "a human reviewed this and flagged it."
+   Writes are permanent (no delete), so this confirms before firing. */
+async function remediateEvent(){
+  if(selIdx<0){ alert('Select an event first.'); return; }
+  const e = ALL[selIdx];
+  const id = evId(selIdx);
+  const ok = confirm(
+    'Create a permanent legal hold for '+id+'?\n\n'+
+    'This writes an immutable forensic record (agent, session, reason, timestamp) '+
+    'that cannot be deleted -- the same protection your audit ledger already guarantees.'
+  );
+  if(!ok) return;
+  const btn = document.querySelector('.act-full.act-danger');
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = '⚡ Creating hold…';
+  try{
+    const sevMap = {critical:'CRITICAL', elevated:'HIGH', stable:'MEDIUM'};
+    const s = sev(e);
+    const res = await fetch(API+'/legal-hold', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        trigger_type:'manual',
+        reason:'Manually remediated via dashboard — '+id,
+        severity: sevMap[s]||'HIGH',
+        agent_id: e.data?.agent_id || null,
+        session_id: e.raw?.session_id || null,
+        event_id: e.raw?.event_id || null
+      })
+    });
+    const data = await res.json();
+    if(data.created===false){
+      alert('No new hold created — an active hold already exists for this session.');
+    } else if(data.hold){
+      alert('Legal hold created for '+id+'.\nHold ID: '+data.hold.id+'\nStatus: ACTIVE — visible via /legal-hold.');
+    } else {
+      alert('Hold request sent, but the response was unexpected. Check /legal-hold to confirm it landed.');
+    }
+  }catch(err){
+    alert('Could not create legal hold: '+err.message);
+  }
+  btn.disabled = false; btn.textContent = orig;
 }
 
 
