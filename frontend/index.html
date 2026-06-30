@@ -374,6 +374,27 @@ function avatarFor(k){const c=avatarCfg[k]||{bg:'rgba(100,116,139,0.15)',color:'
 function actorName(k){return{input:'AI Agent',output:'Model Response',governance:'Circuit Breaker',stream_end:'Stream End'}[k]||k}
 function shortText(t){return t?(t.length>65?t.slice(0,65)+'…':t):'(no description)'}
 
+/* STAGE 1 FIX: ai_events rows (durable, Supabase-backed) come back as raw
+   table rows -- event_id, agent_id, action, status, input_text, output_text,
+   bdi_score, entropy, session_id, parent_session_id, created_at, row_hash,
+   prev_hash. Every render function below still expects the old PulseFeed
+   shape {kind, text, data:{entropy,bdi_score}, created_at}, so this adapter
+   maps one shape onto the other instead of rewriting every render path. */
+function transformAiEvent(row){
+  const blocked = row.status === 'blocked';
+  return {
+    kind: blocked ? 'governance' : 'input',
+    text: row.output_text || row.input_text || '',
+    created_at: row.created_at || row.timestamp,
+    data: {
+      entropy: row.entropy ?? 0,
+      bdi_score: row.bdi_score ?? 0,
+      agent_id: row.agent_id || 'unknown'
+    },
+    raw: row
+  };
+}
+
 function renderRows(evs){
   const tb = document.getElementById('tbody');
   document.getElementById('evt-cnt').textContent = `${evs.length} of ${ALL.length} events`;
@@ -420,7 +441,7 @@ function openInv(idx){
   si.textContent=s.toUpperCase(); si.className='inv-sev '+s;
   document.getElementById('i-title').textContent=`Investigator: EV-${String(idx+1).padStart(4,'0')}`;
   document.getElementById('i-meta').innerHTML=`
-    <span>Model: <strong>${e.data?.model||'unknown'}</strong></span>
+    <span>Agent: <strong>${e.data?.agent_id||'unknown'}</strong></span>
     <span>Triggered: <strong>${ts}</strong></span>
     <span>Entropy: <strong style="color:${entC(en)}">${Math.round(en*100)}%</strong></span>`;
 
@@ -522,7 +543,7 @@ async function exportEvidencePackage(){
     var results=await Promise.all([
       fetch(API+'/health',{cache:'no-store'}).then(function(r){return r.json()}),
       fetch(API+'/circuit-breaker/status',{cache:'no-store'}).then(function(r){return r.json()}),
-      fetch(API+'/events',{cache:'no-store'}).then(function(r){return r.json()})
+      fetch(API+'/ai_events/recent',{cache:'no-store'}).then(function(r){return r.json()})
     ]);
     var pkg={
       exported_at:new Date().toISOString(),
@@ -616,7 +637,7 @@ async function load(){
     const [h,cb,ev]=await Promise.all([
       fetch(API+'/health',{cache:'no-store'}).then(r=>r.json()),
       fetch(API+'/circuit-breaker/status',{cache:'no-store'}).then(r=>r.json()),
-      fetch(API+'/events',{cache:'no-store'}).then(r=>r.json())
+      fetch(API+'/ai_events/recent',{cache:'no-store'}).then(r=>r.json())
     ]);
     const state=cb.state||h.circuit_breaker?.state||'unknown';
     const fails=cb.failure_count??0;
@@ -631,7 +652,11 @@ async function load(){
     cbEl.className='kpi-val '+(state==='closed'?'c-green':state==='open'?'c-red':'c-amber');
     document.getElementById('k-fail').textContent=fails;
 
-    ALL=(ev.events||[]).slice().reverse();
+    /* STAGE 1 FIX: durable feed from Supabase via /ai_events/recent, already
+       ordered newest-first by the backend -- replaces the old /events call,
+       which only read Pulse's in-memory feed and went empty on every Render
+       free-tier cold start. */
+    ALL=(ev.events||[]).map(transformAiEvent);
     const tot=ALL.length, crits=ALL.filter(e=>sev(e)==='critical').length;
     const risk=ALL.filter(e=>(e.data?.entropy??0)>=0.7).length;
     const avgE=tot?ALL.reduce((s,e)=>s+(e.data?.entropy??0),0)/tot:0;
