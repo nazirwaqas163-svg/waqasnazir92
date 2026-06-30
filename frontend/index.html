@@ -81,6 +81,11 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 .cnt{font-size:10px;color:var(--muted);background:var(--bg4);border:1px solid var(--border);border-radius:999px;padding:2px 7px;white-space:nowrap}
 .refresh-btn{background:var(--bg4);border:1px solid var(--border);border-radius:5px;padding:4px 9px;color:var(--muted);cursor:pointer;font-size:10px;font-family:'Inter',sans-serif;transition:all 0.12s}
 .refresh-btn:hover{color:var(--accent);border-color:rgba(0,212,255,0.3)}
+.daterange{display:flex;align-items:center;gap:5px;background:var(--bg4);border:1px solid var(--border);border-radius:6px;padding:3px 8px}
+.daterange input[type=date]{background:none;border:none;outline:none;color:var(--text);font-size:11px;font-family:'Inter',sans-serif;color-scheme:dark}
+.daterange-sep{color:var(--muted);font-size:10px}
+#date-clear{padding:2px 6px;font-size:11px}
+.day-divider{padding:7px 14px;background:var(--bg4);border-bottom:1px solid var(--border);font-size:9px;text-transform:uppercase;letter-spacing:0.09em;color:var(--muted);font-weight:600;position:sticky;top:0;z-index:1}
 
 /* EVENT TABLE */
 .evt-tbl{background:var(--bg3);border:1px solid var(--border);border-radius:9px;overflow:hidden}
@@ -257,6 +262,12 @@ svg.hm{width:100%;height:55px}
               <span style="color:var(--muted);font-size:12px">⌕</span>
               <input id="srch" type="text" placeholder="Search events, actors, tags…"/>
             </div>
+            <div class="daterange">
+              <input id="date-from" type="date" title="From date"/>
+              <span class="daterange-sep">→</span>
+              <input id="date-to" type="date" title="To date"/>
+              <button class="refresh-btn" id="date-clear" title="Clear date filter">✕</button>
+            </div>
             <span class="cnt" id="evt-cnt">0 events</span>
             <button class="refresh-btn" onclick="load()">↻ Refresh</button>
           </div>
@@ -344,7 +355,7 @@ svg.hm{width:100%;height:55px}
 
 <script>
 const API = 'https://pulse-proxy-8dqx.onrender.com';
-let ALL = [], filter = 'all', search = '', selIdx = -1;
+let ALL = [], filter = 'all', search = '', selIdx = -1, dateFrom = '', dateTo = '';
 
 function tick(){
   const n = new Date();
@@ -363,6 +374,25 @@ function bdiC(v){return v>=0.65?'var(--danger)':v>=0.35?'var(--warn)':'var(--ok)
 function entC(v){return v>=0.7?'var(--danger)':v>=0.4?'var(--warn)':'var(--ok)'}
 function pulseClass(s){return s==='critical'?'err':s==='elevated'?'warn':'ok'}
 function pulseIcon(s){return s==='critical'?'✕':s==='elevated'?'!':'✓'}
+
+/* STAGE 1.5 FIX: ALL is newest-first (index 0 = most recent). A ledger ID
+   should read like an incrementing ticket number -- oldest event is #1, each
+   later event gets a higher number, newest gets the highest. Index 0 (newest)
+   therefore maps to ALL.length, and the last index (oldest) maps to 1. */
+function evId(ridx){
+  return 'EV-'+String(ALL.length-ridx).padStart(4,'0');
+}
+
+function sameDay(a,b){
+  return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
+}
+function dayLabel(d){
+  const now=new Date();
+  const yest=new Date(now); yest.setDate(now.getDate()-1);
+  if(sameDay(d,now)) return 'Today — '+d.toLocaleDateString(undefined,{month:'long',day:'numeric',year:'numeric'});
+  if(sameDay(d,yest)) return 'Yesterday — '+d.toLocaleDateString(undefined,{month:'long',day:'numeric',year:'numeric'});
+  return d.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+}
 
 const avatarCfg={
   input:{bg:'rgba(14,165,233,0.15)',color:'#0ea5e9',label:'AI'},
@@ -402,26 +432,36 @@ function renderRows(evs){
     tb.innerHTML='<div class="empty"><div class="empty-icon">◎</div><div>No events available.</div><div style="font-size:11px;margin-top:6px;color:var(--muted2)">Events appear here when AI agents route through the Pulse proxy.</div></div>';
     return;
   }
-  tb.innerHTML = evs.map((e,i)=>{
+  let html = '';
+  let lastDay = null;
+  evs.forEach((e)=>{
     const s=sev(e), bd=e.data?.bdi_score??0, en=e.data?.entropy??0;
-    const ts=e.created_at?new Date(e.created_at).toLocaleString():'—';
+    const dt = e.created_at?new Date(e.created_at):null;
+    const ts = dt?dt.toLocaleString():'—';
     const bpct=Math.round(bd*100), epct=Math.round(en*100);
     const ridx = ALL.indexOf(e);
-    return `<div class="evt-row${selIdx===ridx?' selected':''}" onclick="openInv(${ridx})">
-      <div><div class="evt-id"><strong>EV-${String(ridx+1).padStart(4,'0')}</strong></div><div class="evt-ts">${ts}</div></div>
+    if(dt && (!lastDay || !sameDay(dt,lastDay))){
+      html += `<div class="day-divider">${dayLabel(dt)}</div>`;
+      lastDay = dt;
+    }
+    html += `<div class="evt-row${selIdx===ridx?' selected':''}" onclick="openInv(${ridx})">
+      <div><div class="evt-id"><strong>${evId(ridx)}</strong></div><div class="evt-ts">${ts}</div></div>
       <div class="actor-wrap">${avatarFor(e.kind)}<div style="min-width:0"><div class="actor-name">${actorName(e.kind)}</div><div class="actor-desc">${shortText(e.text)}</div></div></div>
       <div><span class="badge ${s}">${s}</span></div>
       <div class="bdi-wrap"><div class="bdi-track"><div class="bdi-fill" style="width:${bpct}%;background:${bdiC(bd)}"></div></div><span class="mono-val" style="color:${bdiC(bd)}">${bpct}%</span></div>
       <div class="mono-val" style="color:${entC(en)}">${epct}%</div>
       <div><div class="pulse-dot ${pulseClass(s)}">${pulseIcon(s)}</div></div>
     </div>`;
-  }).join('');
+  });
+  tb.innerHTML = html;
 }
 
 function filtered(){
   let r=ALL;
   if(filter!=='all') r=r.filter(e=>sev(e)===filter);
   if(search) r=r.filter(e=>{const q=search.toLowerCase();return(e.text||'').toLowerCase().includes(q)||(e.kind||'').includes(q)});
+  if(dateFrom) r=r.filter(e=>e.created_at && e.created_at.slice(0,10)>=dateFrom);
+  if(dateTo) r=r.filter(e=>e.created_at && e.created_at.slice(0,10)<=dateTo);
   return r;
 }
 
@@ -430,6 +470,14 @@ document.querySelectorAll('.ftab').forEach(t=>t.addEventListener('click',()=>{
   t.classList.add('active'); filter=t.dataset.f; renderRows(filtered());
 }));
 document.getElementById('srch').addEventListener('input',e=>{search=e.target.value;renderRows(filtered())});
+document.getElementById('date-from').addEventListener('change',e=>{dateFrom=e.target.value;renderRows(filtered())});
+document.getElementById('date-to').addEventListener('change',e=>{dateTo=e.target.value;renderRows(filtered())});
+document.getElementById('date-clear').addEventListener('click',()=>{
+  dateFrom=''; dateTo='';
+  document.getElementById('date-from').value='';
+  document.getElementById('date-to').value='';
+  renderRows(filtered());
+});
 
 function openInv(idx){
   selIdx=idx; renderRows(filtered());
@@ -439,7 +487,7 @@ function openInv(idx){
 
   const si=document.getElementById('i-sev');
   si.textContent=s.toUpperCase(); si.className='inv-sev '+s;
-  document.getElementById('i-title').textContent=`Investigator: EV-${String(idx+1).padStart(4,'0')}`;
+  document.getElementById('i-title').textContent=`Investigator: ${evId(idx)}`;
   document.getElementById('i-meta').innerHTML=`
     <span>Agent: <strong>${e.data?.agent_id||'unknown'}</strong></span>
     <span>Triggered: <strong>${ts}</strong></span>
@@ -523,7 +571,7 @@ async function replayEventChain(){
     var row=document.createElement('div'); row.className='evt-row';
     row.style.background='rgba(0,212,255,0.09)';
     row.setAttribute('onclick','openInv('+ridx+')');
-    row.innerHTML='<div><div class="evt-id"><strong>EV-'+String(ridx+1).padStart(4,'0')+'</strong></div><div class="evt-ts">'+ts+'</div></div>'+
+    row.innerHTML='<div><div class="evt-id"><strong>'+evId(ridx)+'</strong></div><div class="evt-ts">'+ts+'</div></div>'+
       '<div class="actor-wrap">'+avatarFor(e.kind)+'<div style="min-width:0"><div class="actor-name">'+actorName(e.kind)+'</div><div class="actor-desc">'+shortText(e.text)+'</div></div></div>'+
       '<div><span class="badge '+s+'">'+s+'</span></div>'+
       '<div class="bdi-wrap"><div class="bdi-track"><div class="bdi-fill" style="width:'+bpct+'%;background:'+bdiC(bd)+'"></div></div><span class="mono-val" style="color:'+bdiC(bd)+'">'+bpct+'%</span></div>'+
@@ -549,7 +597,7 @@ async function exportEvidencePackage(){
       exported_at:new Date().toISOString(),
       governance_version:'pulse-v1-beta',
       jurisdiction:'ASEAN — PDPA Malaysia (24hr) / Singapore MGF (72hr) / Vietnam AI Law (72hr)',
-      selected_event:e?Object.assign({event_id:'EV-'+String(selIdx+1).padStart(4,'0'),severity:sev(e)},e):null,
+      selected_event:e?Object.assign({event_id:evId(selIdx),severity:sev(e)},e):null,
       health:results[0], circuit_breaker:results[1],
       all_events:results[2].events||[], total_events:(results[2].events||[]).length
     };
@@ -590,7 +638,7 @@ async function generateIncidentReport(){
     L.push('');
     if(e){
       L.push('SELECTED EVENT'); L.push('--------------');
-      L.push('Event ID:  EV-'+String(selIdx+1).padStart(4,'0'));
+      L.push('Event ID:  '+evId(selIdx));
       L.push('Severity:  '+s.toUpperCase());
       L.push('Triggered: '+ts);
       L.push('Kind:      '+(e.kind||'unknown'));
