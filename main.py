@@ -27,6 +27,10 @@ from session_store import session_store
 from refusal import detect_refusal
 from synthesis_engine import forensic_auditor, synthesis_runner
 from drift import drift_engine
+from swarm import swarm_detector
+from shadow import compute_shadow
+from topology import build_topology
+from legal_hold import legal_hold_manager, evaluate_triggers
 
 APP_NAME = "pulse-proxy"
 SYNTHESIS_ENABLED = os.getenv("PULSE_SYNTHESIS_ENABLED", "true").lower() in {"1", "true", "yes"}
@@ -137,11 +141,13 @@ class CircuitBreakerCloseRequest(BaseModel):
 class InterceptRequest(BaseModel):
     agent_id: str
     session_id: Optional[str] = None
+    parent_session_id: Optional[str] = None
     input_text: str = ""
     output_text: str = ""
     metadata: Optional[Dict[str, Any]] = None
     bdi_score: Optional[float] = None
     entropy: Optional[float] = None
+    self_reported_risk: Optional[float] = None
 
 
 class AGTToolCall(BaseModel):
@@ -150,6 +156,7 @@ class AGTToolCall(BaseModel):
     tool_output: Optional[str] = None
     agent_id: Optional[str] = None
     session_id: Optional[str] = None
+    parent_session_id: Optional[str] = None
     run_id: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
 
@@ -463,6 +470,12 @@ def _session_id_from_payload(payload: ChatProxyRequest) -> Optional[str]:
     return str(value) if value is not None else None
 
 
+def _parent_session_id_from_payload(payload: ChatProxyRequest) -> Optional[str]:
+    extra_fields = _extra_payload_fields(payload)
+    value = extra_fields.get("parent_session_id")
+    return str(value) if value is not None else None
+
+
 def _request_action(payload: ChatProxyRequest, request: Request) -> str:
     extra_fields = _extra_payload_fields(payload)
     if extra_fields.get("operation") is not None:
@@ -501,6 +514,7 @@ async def _insert_ai_event_log(
     bdi_score: Optional[float],
     policy_result: str,
     session_id: Optional[str] = None,
+    parent_session_id: Optional[str] = None,
 ) -> None:
     await supabase_audit_client.insert_ai_event(
         event_id=event_id,
@@ -512,6 +526,7 @@ async def _insert_ai_event_log(
         bdi_score=bdi_score,
         policy_result=policy_result,
         session_id=session_id,
+        parent_session_id=parent_session_id,
     )
 
 
@@ -538,6 +553,7 @@ async def _insert_audit_log(
         bdi_score=bdi_score,
         policy_result=_policy_result(response_payload),
         session_id=_session_id_from_payload(payload),
+        parent_session_id=_parent_session_id_from_payload(payload),
     )
 
 
@@ -569,7 +585,62 @@ async def _insert_intercept_logs(
         bdi_score=bdi_score,
         policy_result=policy_result,
         session_id=payload.session_id,
+        parent_session_id=payload.parent_session_id,
     )
+
+
+async def _maybe_open_legal_hold(
+    *,
+    agent_id: Optional[str],
+    session_id: Optional[str],
+    event_id: Optional[str],
+    drift_result: Optional[Dict[str, Any]] = None,
+    shadow: Optional[Dict[str, Any]] = None,
+    swarm: Optional[Dict[str, Any]] = None,
+    deadlines: Optional[List[Dict[str, Any]]] = None,
+) -> List[Dict[str, Any]]:
+    triggers = evaluate_triggers(
+        drift_result=drift_result, shadow=shadow, swarm=swarm, deadlines=deadlines
+    )
+    if not triggers:
+        return []
+    chain_hash = supabase_audit_client.get_chain_hash_local(event_id) if event_id else None
+    opened: List[Dict[str, Any]] = []
+    for t in triggers:
+        hold = legal_hold_manager.create(
+            trigger_type=t["trigger_type"],
+            reason=t["reason"],
+            severity=t.get("severity", "HIGH"),
+            agent_id=agent_id,
+            session_id=session_id,
+            event_id=event_id,
+            chain_hash=chain_hash,
+            framework=t.get("framework"),
+            jurisdiction=t.get("jurisdiction"),
+            evidence={"drift": drift_result, "shadow": shadow},
+            dedupe_scope=t.get("dedupe_scope"),
+        )
+        if hold is None:
+            continue
+        feed.add(
+            PulseEvent(
+                kind="alert",
+                text=t["reason"],
+                data={
+                    "decision": "alert",
+                    "status_code": 200,
+                    "severity": hold["severity"],
+                    "trigger_type": hold["trigger_type"],
+                    "legal_hold_id": hold["id"],
+                    "agent_id": agent_id,
+                    "session_id": session_id,
+                    "chain_hash": chain_hash,
+                },
+            )
+        )
+        await supabase_audit_client.insert_legal_hold(hold)
+        opened.append(hold)
+    return opened
 
 
 def _fallback_completion(payload: ChatProxyRequest, pulse: Dict[str, Any]) -> Dict[str, Any]:
@@ -770,10 +841,6 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
         payload.input_text,
         payload.output_text,
     )
-    # Phase 3 Stage 1b: Agent Identity Registry check
-    agent_record = await supabase_audit_client.get_agent(payload.agent_id)
-    agent_registered = agent_record is not None
-    agent_status = agent_record.get("status", "unknown") if agent_record else "unregistered"
     drift_result = drift_engine.record_turn(
         session_id=payload.session_id or "default",
         input_text=payload.input_text,
@@ -785,6 +852,11 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
             bdi_score=float(drift_result.get("score", 0.0)),
             entropy=float(drift_result.get("score", 0.0)),
         )
+
+    drift_score = float(drift_result.get("score") or 0.0)
+    baselined = (drift_result.get("turns_analyzed") or 0) >= 1
+    shadow = compute_shadow(payload.self_reported_risk, drift_score, baselined=baselined)
+
     entropy = (
         float(payload.entropy)
         if payload.entropy is not None
@@ -803,6 +875,13 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
         _record_drop_event(disposition, agent_id=payload.agent_id, bdi_score=bdi_score, entropy=entropy)
         request_id = str(uuid.uuid4())
         await _insert_intercept_logs(payload, request_id=request_id, bdi_score=bdi_score, policy_result="blocked")
+        holds = await _maybe_open_legal_hold(
+            agent_id=payload.agent_id,
+            session_id=payload.session_id,
+            event_id=request_id,
+            drift_result=drift_result,
+            shadow=shadow,
+        )
         raise HTTPException(
             status_code=409,
             detail={
@@ -810,6 +889,8 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
                 "reason": disposition.get("reason"),
                 "state": disposition.get("state"),
                 "action": disposition.get("action"),
+                "shadow": shadow,
+                "legal_holds": [h["id"] for h in holds],
             },
         )
     request_id = str(uuid.uuid4())
@@ -821,13 +902,12 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
                 "request_id": request_id,
                 "agent_id": payload.agent_id,
                 "session_id": payload.session_id,
+                "parent_session_id": payload.parent_session_id,
                 "metadata": payload.metadata or {},
                 "bdi_score": bdi_score,
                 "entropy": entropy,
                 "decision": "allowed",
                 "status_code": 200,
-                "agent_registered": agent_registered,
-                "agent_status": agent_status,
             },
         )
     )
@@ -847,14 +927,21 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
         )
     )
     await _insert_intercept_logs(payload, request_id=request_id, bdi_score=bdi_score, policy_result="allowed")
+    holds = await _maybe_open_legal_hold(
+        agent_id=payload.agent_id,
+        session_id=payload.session_id,
+        event_id=request_id,
+        drift_result=drift_result,
+        shadow=shadow,
+    )
     return {
         "ok": True,
         "allowed": True,
         "output_text": payload.output_text,
         "request_id": request_id,
         "drift": drift_result,
-        "agent_registered": agent_registered,
-        "agent_status": agent_status,
+        "shadow": shadow,
+        "legal_holds": [h["id"] for h in holds],
     }
 
 
@@ -865,6 +952,7 @@ def reset() -> Dict[str, Any]:
     session_store.reset()
     circuit_breaker.close(reason="manual reset", bdi_score=0.0, entropy=0.0)
     drift_engine.reset()
+    legal_hold_manager.reset()
     return {"ok": True}
 
 
@@ -907,8 +995,8 @@ def compliance_events(limit: int = 100) -> Dict[str, Any]:
 
 
 @app.get("/compliance/deadlines")
-def compliance_deadlines(incident_time: Optional[str] = None) -> Dict[str, Any]:
-    """ASEAN Deadline Clock — Action 3 (Phase 2)."""
+async def compliance_deadlines(incident_time: Optional[str] = None, auto_hold: bool = True) -> Dict[str, Any]:
+    """ASEAN Deadline Clock — Action 3 (Phase 2) + auto legal hold on breach (Stage 6)."""
     from datetime import timedelta
     ASEAN_FRAMEWORKS = [
         {"framework": "PDPA Malaysia", "obligation": "Notify PDPC of personal data breach", "window_hours": 24, "jurisdiction": "MY"},
@@ -959,6 +1047,26 @@ def compliance_deadlines(incident_time: Optional[str] = None) -> Dict[str, Any]:
         overall_status = "CRITICAL"
     elif any(d["status"] == "WARNING" for d in deadlines):
         overall_status = "WARNING"
+    if auto_hold:
+        for d in deadlines:
+            if not d.get("breached"):
+                continue
+            hold = legal_hold_manager.create(
+                trigger_type="compliance_breach",
+                reason=f"{d['framework']} reporting deadline breached",
+                severity="CRITICAL",
+                framework=d["framework"],
+                jurisdiction=d["jurisdiction"],
+                evidence={"incident_time": incident_dt.isoformat(), "window_hours": d["window_hours"]},
+                dedupe_scope=d["framework"],
+            )
+            if hold is not None:
+                feed.add(PulseEvent(kind="alert", text=hold["reason"], data={
+                    "decision": "alert", "status_code": 200, "severity": "CRITICAL",
+                    "trigger_type": "compliance_breach", "legal_hold_id": hold["id"],
+                    "framework": d["framework"],
+                }))
+                await supabase_audit_client.insert_legal_hold(hold)
     return {"ok": True, "incident_time": incident_dt.isoformat(), "generated_at": now.isoformat(), "overall_status": overall_status, "deadlines": deadlines}
 
 
@@ -1111,6 +1219,7 @@ async def agt_bridge(payload: AGTToolCall) -> Dict[str, Any]:
             bdi_score=bdi_score,
             policy_result="blocked",
             session_id=session_id,
+            parent_session_id=payload.parent_session_id,
         )
         raise HTTPException(
             status_code=409,
@@ -1133,6 +1242,7 @@ async def agt_bridge(payload: AGTToolCall) -> Dict[str, Any]:
         bdi_score=bdi_score,
         policy_result="allowed",
         session_id=session_id,
+        parent_session_id=payload.parent_session_id,
     )
     return {
         "ok": True,
@@ -1275,4 +1385,179 @@ async def get_agent(agent_id: str) -> Dict[str, Any]:
         "found": True,
         "registered": True,
         "agent": agent,
+    }
+
+
+class LegalHoldCreateRequest(BaseModel):
+    trigger_type: str = "manual"
+    reason: str
+    severity: str = "HIGH"
+    agent_id: Optional[str] = None
+    session_id: Optional[str] = None
+    event_id: Optional[str] = None
+    framework: Optional[str] = None
+    jurisdiction: Optional[str] = None
+
+
+class LegalHoldReleaseRequest(BaseModel):
+    released_by: str = "dashboard"
+
+
+@app.get("/swarm/detect")
+async def swarm_detect(
+    window_minutes: int = 60,
+    min_cluster_size: int = 3,
+    min_distinct_sessions: int = 2,
+    limit: int = 500,
+) -> Dict[str, Any]:
+    """Swarm Detector — Phase 3 Stage 3."""
+    events = await supabase_audit_client.get_recent_events(limit=limit)
+    return swarm_detector.detect(
+        events,
+        window_minutes=window_minutes,
+        min_cluster_size=min_cluster_size,
+        min_distinct_sessions=min_distinct_sessions,
+    )
+
+
+@app.get("/shadow/score")
+async def shadow_score(
+    agent_self_report: Optional[float] = None,
+    pulse_independent: Optional[float] = None,
+    session_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Shadow Score — Phase 3 Stage 4."""
+    baselined = True
+    if pulse_independent is None and session_id is not None:
+        drift = drift_engine.get_drift(session_id)
+        pulse_independent = float(drift.get("score") or 0.0)
+        baselined = (drift.get("turns_analyzed") or 0) >= 1
+    elif pulse_independent is None:
+        baselined = False
+    result = compute_shadow(agent_self_report, pulse_independent, baselined=baselined)
+    return {"ok": True, "session_id": session_id, **result}
+
+
+@app.get("/topology")
+async def topology(limit: int = 500) -> Dict[str, Any]:
+    """Dashboard Topology — Phase 3 Stage 5."""
+    events = await supabase_audit_client.get_recent_events(limit=limit)
+    agents = await supabase_audit_client.list_agents(limit=500)
+    graph = build_topology(events, agents=agents, drift_lookup=drift_engine.get_drift)
+    return {"ok": True, **graph}
+
+
+@app.get("/alerts")
+def alerts(limit: int = 50) -> Dict[str, Any]:
+    """Unified alert stream + active legal holds — Phase 3 Stage 6."""
+    recent = feed.list(limit=500)
+    alert_events = [e for e in recent if e.get("kind") in {"alert", "shadow", "governance"}][:limit]
+    return {
+        "ok": True,
+        "active_holds": legal_hold_manager.list(status="ACTIVE"),
+        "alerts": alert_events,
+    }
+
+
+@app.get("/legal-hold")
+async def list_holds(status: Optional[str] = None, limit: int = 100, source: str = "memory") -> Dict[str, Any]:
+    """Legal Hold registry — Phase 3 Stage 6. source=memory (live) or db (durable)."""
+    if source == "db":
+        holds = await supabase_audit_client.list_legal_holds(status=status, limit=limit)
+    else:
+        holds = legal_hold_manager.list(status=status, limit=limit)
+    return {"ok": True, "total": len(holds), "holds": holds}
+
+
+@app.get("/legal-hold/{hold_id}")
+def get_hold(hold_id: str) -> Dict[str, Any]:
+    hold = legal_hold_manager.get(hold_id)
+    if hold is None:
+        raise HTTPException(status_code=404, detail=f"Legal hold '{hold_id}' not found")
+    return {"ok": True, "hold": hold}
+
+
+@app.post("/legal-hold")
+async def create_hold(payload: LegalHoldCreateRequest) -> Dict[str, Any]:
+    chain_hash = (
+        supabase_audit_client.get_chain_hash_local(payload.event_id) if payload.event_id else None
+    )
+    hold = legal_hold_manager.create(
+        trigger_type=payload.trigger_type,
+        reason=payload.reason,
+        severity=payload.severity,
+        agent_id=payload.agent_id,
+        session_id=payload.session_id,
+        event_id=payload.event_id,
+        chain_hash=chain_hash,
+        framework=payload.framework,
+        jurisdiction=payload.jurisdiction,
+    )
+    if hold is None:
+        return {"ok": True, "created": False, "message": "An identical ACTIVE hold already exists."}
+    feed.add(PulseEvent(kind="alert", text=payload.reason, data={
+        "decision": "alert", "status_code": 200, "severity": hold["severity"],
+        "trigger_type": hold["trigger_type"], "legal_hold_id": hold["id"],
+    }))
+    await supabase_audit_client.insert_legal_hold(hold)
+    return {"ok": True, "created": True, "hold": hold}
+
+
+@app.post("/legal-hold/{hold_id}/release")
+async def release_hold(hold_id: str, payload: LegalHoldReleaseRequest) -> Dict[str, Any]:
+    hold = legal_hold_manager.release(hold_id, released_by=payload.released_by)
+    if hold is None:
+        raise HTTPException(status_code=404, detail=f"Legal hold '{hold_id}' not found")
+    await supabase_audit_client.release_legal_hold(hold_id, released_by=payload.released_by)
+    return {"ok": True, "hold": hold}
+
+
+@app.get("/session/tree/{session_id}")
+async def session_tree(session_id: str, limit: int = 500) -> Dict[str, Any]:
+    """Session lineage tree — Phase 3 Stage 2 (ancestors + descendants via parent_session_id)."""
+    events = await supabase_audit_client.get_recent_events(limit=limit)
+    by_session: Dict[str, Dict[str, Any]] = {}
+    children: Dict[str, List[str]] = {}
+    for e in events:
+        sid = e.get("session_id")
+        if not sid:
+            continue
+        node = by_session.setdefault(sid, {
+            "session_id": sid, "agent_id": e.get("agent_id"),
+            "parent_session_id": e.get("parent_session_id"), "turns": 0, "blocked": 0,
+        })
+        node["turns"] += 1
+        if e.get("status") == "blocked":
+            node["blocked"] += 1
+        if e.get("parent_session_id") and not node.get("parent_session_id"):
+            node["parent_session_id"] = e.get("parent_session_id")
+    for sid, node in by_session.items():
+        pid = node.get("parent_session_id")
+        if pid:
+            children.setdefault(pid, []).append(sid)
+    ancestors: List[Dict[str, Any]] = []
+    cur = by_session.get(session_id, {}).get("parent_session_id")
+    seen: set = set()
+    while cur and cur in by_session and cur not in seen:
+        seen.add(cur)
+        ancestors.append(by_session[cur])
+        cur = by_session[cur].get("parent_session_id")
+    descendants: List[Dict[str, Any]] = []
+    queue = list(children.get(session_id, []))
+    seen_d: set = set()
+    while queue:
+        sid = queue.pop(0)
+        if sid in seen_d:
+            continue
+        seen_d.add(sid)
+        if sid in by_session:
+            descendants.append(by_session[sid])
+        queue.extend(children.get(sid, []))
+    return {
+        "ok": True,
+        "session_id": session_id,
+        "found": session_id in by_session,
+        "node": by_session.get(session_id),
+        "ancestors": ancestors,
+        "descendants": descendants,
     }
