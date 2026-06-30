@@ -331,7 +331,8 @@ svg.hm{width:100%;height:55px}
         </div>
 
         <div class="inv-sec">
-          <div class="inv-sec-title">⚑ Triggered Regulations (3)</div>
+          <div class="inv-sec-title">⚑ ASEAN Compliance Triggers</div>
+          <div style="font-size:9.5px;color:var(--muted);margin:-5px 0 10px 0;line-height:1.4">Mapped to PDPA Malaysia, Singapore MGF, and Vietnam AI Law — Pulse's ASEAN regulatory specialization.</div>
           <div id="i-regs"></div>
         </div>
 
@@ -470,22 +471,43 @@ function filtered(){
   return r;
 }
 
+/* KPI FIX: the strip now reflects whatever is currently filtered (date range,
+   severity tab, search) instead of always showing all-time totals -- so the
+   numbers at the top always match what's actually visible in the table below. */
+function updateKpis(evs){
+  const tot=evs.length, crits=evs.filter(e=>sev(e)==='critical').length;
+  const risk=evs.filter(e=>(e.data?.entropy??0)>=0.7).length;
+  const avgE=tot?evs.reduce((s,e)=>s+(e.data?.entropy??0),0)/tot:0;
+  document.getElementById('k-total').textContent=tot;
+  document.getElementById('k-total-sub').textContent=crits+' critical in current view';
+  document.getElementById('k-crit').textContent=crits;
+  document.getElementById('k-ent').textContent=avgE.toFixed(2);
+  const kr=document.getElementById('k-risk');
+  kr.textContent=risk; kr.className='kpi-val '+(risk>0?'c-red':'c-green');
+}
+
+function refresh(){
+  const f = filtered();
+  renderRows(f);
+  updateKpis(f);
+}
+
 document.querySelectorAll('.ftab').forEach(t=>t.addEventListener('click',()=>{
   document.querySelectorAll('.ftab').forEach(x=>x.classList.remove('active'));
-  t.classList.add('active'); filter=t.dataset.f; renderRows(filtered());
+  t.classList.add('active'); filter=t.dataset.f; refresh();
 }));
-document.getElementById('srch').addEventListener('input',e=>{search=e.target.value;renderRows(filtered())});
-document.getElementById('date-from').addEventListener('change',e=>{dateFrom=e.target.value;renderRows(filtered())});
-document.getElementById('date-to').addEventListener('change',e=>{dateTo=e.target.value;renderRows(filtered())});
+document.getElementById('srch').addEventListener('input',e=>{search=e.target.value;refresh()});
+document.getElementById('date-from').addEventListener('change',e=>{dateFrom=e.target.value;refresh()});
+document.getElementById('date-to').addEventListener('change',e=>{dateTo=e.target.value;refresh()});
 document.getElementById('date-clear').addEventListener('click',()=>{
   dateFrom=''; dateTo='';
   document.getElementById('date-from').value='';
   document.getElementById('date-to').value='';
-  renderRows(filtered());
+  refresh();
 });
 
 function openInv(idx){
-  selIdx=idx; renderRows(filtered());
+  selIdx=idx; refresh();
   const e=ALL[idx]; if(!e) return;
   const s=sev(e), bd=e.data?.bdi_score??0, en=e.data?.entropy??0;
   const ts=e.created_at?new Date(e.created_at).toLocaleString():'Unknown';
@@ -537,12 +559,15 @@ function openInv(idx){
   document.getElementById('i-tl').innerHTML=tl.map(t=>`<li class="tl-item"><span class="tl-t">${t.t}</span><div class="tl-dot" style="background:${t.c}"></div><span class="tl-text">${t.x}</span></li>`).join('');
 
   const regs=s==='critical'?[
-    {n:'EU AI Act — Article 9',r:'HIGH',d:'High-risk AI systems must have a risk management system established and maintained.',a:'Log incident, notify DPO, initiate risk management review within 72 hours.'},
-    {n:'GDPR — Article 22',r:'HIGH',d:'No solely automated decision-making with significant effects on individuals without human oversight.',a:'Pause automated pipeline. Introduce human-in-the-loop review for flagged decisions.'},
-    {n:'ISO/IEC 42001 — Clause 6.1',r:'HIGH',d:'AI management system must identify and address risks and opportunities.',a:'Update risk register. Reassess AI system objectives against observed drift.'},
+    {n:'PDPA Malaysia',r:'HIGH',d:'Notify PDPC of personal data breach. 24-hour notification window from incident detection.',a:'Export evidence package. Submit to compliance officer immediately.'},
+    {n:'Singapore MGF — Clause 2.5',r:'HIGH',d:'Document and report AI incidents within the MGF 72-hour window.',a:'Export evidence package. Submit to compliance officer.'},
+    {n:'Vietnam AI Law',r:'HIGH',d:'Report AI system incident to the competent authority within 72 hours.',a:'Notify data protection officer. Prepare incident summary.'},
+  ]:s==='elevated'?[
+    {n:'Singapore MGF — Clause 2.1',r:'MED',d:'Ensure senior management oversight of AI decisions at elevated risk.',a:'Escalate to AI governance owner. Log decision rationale.'},
+    {n:'Singapore MGF — Clause 2.3',r:'MED',d:'Monitor AI system operations and log anomalous behaviour.',a:'Review session event chain. Verify no policy boundary crossed.'},
   ]:[
-    {n:'EU AI Act — Article 13',r:'MED',d:'Transparency and providing information to users of AI systems.',a:'Verify audit log completeness and timestamp integrity.'},
-    {n:'SOC2 CC7.2',r:'LOW',d:'System monitoring and logging requirements for security events.',a:'Confirm event is captured in tamper-evident audit chain.'},
+    {n:'PDPA Malaysia',r:'LOW',d:'Routine processing — no breach threshold reached.',a:'No action required. Continue standard logging.'},
+    {n:'ISO/IEC 42001',r:'LOW',d:'Log and assess AI management system activity.',a:'Event recorded to the immutable audit ledger.'},
   ];
   document.getElementById('i-regs').innerHTML=regs.map(r=>`<div class="reg-card"><div class="reg-hdr"><span class="reg-name">${r.n}</span><span class="badge ${r.r==='HIGH'?'critical':r.r==='MED'?'elevated':'stable'}">${r.r}</span></div><div class="reg-desc">${r.d}</div><div class="reg-action">↳ ${r.a}</div></div>`).join('');
 
@@ -560,7 +585,7 @@ function openInv(idx){
 
 function closeInv(){
   document.getElementById('inv').classList.remove('open');
-  selIdx=-1; renderRows(filtered());
+  selIdx=-1; refresh();
 }
 
 
@@ -710,18 +735,8 @@ async function load(){
        which only read Pulse's in-memory feed and went empty on every Render
        free-tier cold start. */
     ALL=(ev.events||[]).map(transformAiEvent);
-    const tot=ALL.length, crits=ALL.filter(e=>sev(e)==='critical').length;
-    const risk=ALL.filter(e=>(e.data?.entropy??0)>=0.7).length;
-    const avgE=tot?ALL.reduce((s,e)=>s+(e.data?.entropy??0),0)/tot:0;
 
-    document.getElementById('k-total').textContent=tot;
-    document.getElementById('k-total-sub').textContent=crits+' critical in last 24h';
-    document.getElementById('k-crit').textContent=crits;
-    document.getElementById('k-ent').textContent=avgE.toFixed(2);
-    const kr=document.getElementById('k-risk');
-    kr.textContent=risk; kr.className='kpi-val '+(risk>0?'c-red':'c-green');
-
-    renderRows(filtered());
+    refresh();
   }catch(err){
     document.getElementById('tbody').innerHTML=`<div class="empty"><div style="color:var(--danger);font-size:20px">⚠</div><div style="color:var(--danger);margin-top:6px;font-weight:500">Backend unreachable</div><div style="font-size:11px;margin-top:4px;color:var(--muted2)">${err.message}</div></div>`;
   }
