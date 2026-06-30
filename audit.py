@@ -88,7 +88,12 @@ class Logger:
         return True
 
 
+# Two independent chains: one for audit_logs (request/response pairs), one for
+# ai_events (the readable per-turn mirror). They are deliberately separate —
+# ai_events being independently chained means it no longer depends on
+# audit_logs to be forensically defensible on its own.
 audit_logger = Logger()
+ai_events_logger = Logger()
 
 
 class SupabaseAuditClient:
@@ -97,10 +102,14 @@ class SupabaseAuditClient:
         url: Optional[str],
         key: Optional[str],
         chain_logger: Optional[Logger] = None,
+        ai_events_chain_logger: Optional[Logger] = None,
     ) -> None:
         self.url = url.rstrip("/") if url else None
         self.key = key
         self._chain_logger = chain_logger if chain_logger is not None else audit_logger
+        self._ai_events_chain_logger = (
+            ai_events_chain_logger if ai_events_chain_logger is not None else ai_events_logger
+        )
 
     @property
     def configured(self) -> bool:
@@ -176,12 +185,12 @@ class SupabaseAuditClient:
         policy_result: str,
         session_id: Optional[str] = None,
         parent_session_id: Optional[str] = None,
+        entropy: Optional[float] = None,
     ) -> bool:
-        if not self.configured:
-            logger.warning("Skipping ai_events insert because Supabase is not configured")
-            return False
-
-        row = {
+        # Hash-chain every row, independent of whether Supabase is reachable,
+        # so the in-process chain stays a complete and continuous record of
+        # everything Pulse has seen this run (build rule: hash-chain every row).
+        chain_payload = {
             "event_id": event_id,
             "timestamp": timestamp,
             "agent_id": agent_id,
@@ -192,6 +201,18 @@ class SupabaseAuditClient:
             "status": policy_result,
             "session_id": session_id,
             "parent_session_id": parent_session_id,
+            "entropy": entropy,
+        }
+        chain_entry = self._ai_events_chain_logger.log_event(chain_payload)
+
+        if not self.configured:
+            logger.warning("Skipping ai_events insert because Supabase is not configured")
+            return False
+
+        row = {
+            **chain_payload,
+            "prev_hash": chain_entry["previous_hash"],
+            "row_hash": chain_entry["hash"],
         }
         return await self._post_row("ai_events", row)
 
@@ -213,7 +234,11 @@ class SupabaseAuditClient:
                     params={
                         "session_id": f"eq.{session_id}",
                         "order": "timestamp.asc",
-                        "select": "event_id,timestamp,agent_id,action,input_text,output_text,bdi_score,status,session_id",
+                        "select": (
+                            "event_id,timestamp,agent_id,action,input_text,output_text,"
+                            "bdi_score,status,session_id,parent_session_id,entropy,"
+                            "prev_hash,row_hash"
+                        ),
                     },
                 )
                 response.raise_for_status()
@@ -320,10 +345,18 @@ class SupabaseAuditClient:
             pass
 
     def get_chain_hash_local(self, event_id: str) -> Optional[str]:
-        """SHA-256 chain hash for an event, read from the in-process chain."""
+        """SHA-256 chain hash for an audit_logs event, read from the in-process chain."""
         for entry in self._chain_logger.chain:
             data = entry.get("data") or {}
             if data.get("id") == event_id:
+                return entry.get("hash")
+        return None
+
+    def get_ai_event_chain_hash_local(self, event_id: str) -> Optional[str]:
+        """SHA-256 chain hash (row_hash) for an ai_events row, read from the in-process chain."""
+        for entry in self._ai_events_chain_logger.chain:
+            data = entry.get("data") or {}
+            if data.get("event_id") == event_id:
                 return entry.get("hash")
         return None
 
@@ -336,7 +369,8 @@ class SupabaseAuditClient:
             "order": "created_at.desc",
             "select": (
                 "event_id,created_at,timestamp,agent_id,action,input_text,"
-                "output_text,bdi_score,status,session_id,parent_session_id"
+                "output_text,bdi_score,status,session_id,parent_session_id,"
+                "entropy,prev_hash,row_hash"
             ),
             "limit": str(limit),
         }
@@ -352,6 +386,26 @@ class SupabaseAuditClient:
                 return response.json() if response.status_code == 200 else []
         except httpx.HTTPError:
             logger.exception("Failed to fetch recent events")
+            return []
+
+    async def get_ai_events_chain(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """Fetch ai_events rows ordered by created_at for chain verification."""
+        if not self.configured:
+            return []
+        try:
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.get(
+                    f"{self.url}/rest/v1/ai_events",
+                    headers={"apikey": self.key or "", "authorization": f"Bearer {self.key}"},
+                    params={
+                        "order": "created_at.asc",
+                        "select": "id,event_id,created_at,agent_id,prev_hash,row_hash",
+                        "limit": str(limit),
+                    },
+                )
+                return response.json() if response.status_code == 200 else []
+        except httpx.HTTPError:
+            logger.exception("Failed to fetch ai_events chain")
             return []
 
     async def insert_legal_hold(self, hold: Dict[str, Any]) -> bool:
