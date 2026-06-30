@@ -91,6 +91,15 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 .th-info:hover .th-tip{display:block}
 .th-tip{display:none;position:absolute;top:18px;left:0;width:230px;background:var(--bg5);border:1px solid var(--border2);border-radius:7px;padding:9px 11px;font-size:10.5px;font-weight:400;color:var(--text);line-height:1.5;text-transform:none;letter-spacing:normal;z-index:20;box-shadow:0 6px 16px rgba(0,0,0,0.45);cursor:default}
 .th-tip strong{color:var(--accent);font-weight:600}
+.badge.unreg{background:rgba(139,92,246,0.12);color:#a78bfa;border:1px solid rgba(139,92,246,0.3)}
+.agent-card{background:var(--bg3);border:1px solid var(--border);border-radius:9px;margin-bottom:8px;overflow:hidden}
+.agent-hdr{display:flex;align-items:center;gap:12px;padding:12px 14px;cursor:pointer;transition:background 0.1s}
+.agent-hdr:hover{background:rgba(0,212,255,0.025)}
+.chevron{color:var(--muted);font-size:11px;flex-shrink:0}
+.agent-body{padding:0 14px 12px 14px;border-top:1px solid var(--border)}
+.sess-hdr{display:grid;grid-template-columns:1fr 80px 80px 90px 90px;gap:10px;padding:10px 0 6px 0;font-size:9px;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);font-weight:600}
+.sess-row{display:grid;grid-template-columns:1fr 80px 80px 90px 90px;gap:10px;padding:8px 0;border-top:1px solid rgba(30,45,69,0.5);align-items:center;font-size:11px}
+.sess-id{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--text)}
 
 /* EVENT TABLE */
 .evt-tbl{background:var(--bg3);border:1px solid var(--border);border-radius:9px;overflow:hidden}
@@ -186,13 +195,13 @@ svg.hm{width:100%;height:55px}
 <!-- SIDEBAR -->
 <div class="sidebar">
   <div class="logo">P</div>
-  <button class="nav-btn active" title="Ledger">
+  <button class="nav-btn active" title="Ledger" data-view="ledger">
     <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
   </button>
   <button class="nav-btn" title="Analytics">
     <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
   </button>
-  <button class="nav-btn" title="Agents">
+  <button class="nav-btn" title="Agents" data-view="agents">
     <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
   </button>
   <button class="nav-btn" title="Circuit Breaker">
@@ -219,7 +228,7 @@ svg.hm{width:100%;height:55px}
   </div>
 
   <div class="content">
-    <div class="ledger">
+    <div class="ledger" id="view-ledger">
 
       <!-- KPIs -->
       <div class="kpi-row">
@@ -291,6 +300,47 @@ svg.hm{width:100%;height:55px}
         </div>
       </div>
 
+    </div>
+
+    <!-- AGENTS VIEW -->
+    <div class="ledger" id="view-agents" style="display:none">
+      <div class="kpi-row">
+        <div class="kpi">
+          <div class="kpi-label">Agents</div>
+          <div class="kpi-val c-blue" id="ag-agents">—</div>
+          <div class="kpi-sub">Seen by Pulse</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Sessions</div>
+          <div class="kpi-val c-blue" id="ag-sessions">—</div>
+          <div class="kpi-sub">Across all agents</div>
+        </div>
+        <div class="kpi kpi-red">
+          <div class="kpi-label">Unregistered</div>
+          <div class="kpi-val c-red" id="ag-unreg">—</div>
+          <div class="kpi-sub">No identity on file</div>
+        </div>
+        <div class="kpi kpi-red">
+          <div class="kpi-label">Critical Sessions</div>
+          <div class="kpi-val c-red" id="ag-critsess">—</div>
+          <div class="kpi-sub">Drift status critical</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Edges</div>
+          <div class="kpi-val c-white" id="ag-edges">—</div>
+          <div class="kpi-sub">Agent → session links</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="tbl-head-row">
+          <div class="section-label">Agent Topology</div>
+          <div class="tools-row">
+            <button class="refresh-btn" onclick="loadAgents()">↻ Refresh</button>
+          </div>
+        </div>
+        <div id="agents-body"><div class="loading"><div class="spin"></div>Loading agent topology…</div></div>
+      </div>
     </div>
 
     <!-- INVESTIGATOR -->
@@ -490,6 +540,109 @@ function refresh(){
   const f = filtered();
   renderRows(f);
   updateKpis(f);
+}
+
+document.querySelectorAll('.nav-btn[data-view]').forEach(b=>b.addEventListener('click',()=>switchView(b.dataset.view)));
+
+function switchView(view){
+  document.querySelectorAll('.nav-btn[data-view]').forEach(b=>b.classList.toggle('active', b.dataset.view===view));
+  document.getElementById('view-ledger').style.display = view==='ledger' ? '' : 'none';
+  document.getElementById('view-agents').style.display = view==='agents' ? '' : 'none';
+  closeInv();
+  if(view==='agents' && !lastTopology) loadAgents();
+}
+
+/* AGENTS VIEW: built straight off the real /topology endpoint (Phase 3 Stage 5)
+   -- no invented graph, no fake data. lastTopology is cached after fetch so
+   expanding/collapsing an agent re-renders from memory instead of refetching;
+   only the explicit Refresh button hits the network again. */
+let lastTopology = null;
+let agentsOpen = new Set();
+
+function bandClass(b){
+  if(b==='critical') return 'critical';
+  if(b==='elevated'||b==='caution') return 'elevated';
+  if(b==='unregistered') return 'unreg';
+  return 'stable';
+}
+
+async function loadAgents(){
+  const box = document.getElementById('agents-body');
+  box.innerHTML = '<div class="loading"><div class="spin"></div>Loading agent topology…</div>';
+  try{
+    lastTopology = await fetch(API+'/topology',{cache:'no-store'}).then(r=>r.json());
+    renderAgents();
+  }catch(err){
+    box.innerHTML = `<div class="empty"><div style="color:var(--danger);font-size:20px">⚠</div><div style="color:var(--danger);margin-top:6px;font-weight:500">Could not load topology</div><div style="font-size:11px;margin-top:4px;color:var(--muted2)">${err.message}</div></div>`;
+  }
+}
+
+function toggleAgent(id){
+  if(agentsOpen.has(id)) agentsOpen.delete(id); else agentsOpen.add(id);
+  renderAgents();
+}
+
+function renderAgents(){
+  const data = lastTopology; if(!data) return;
+  const box = document.getElementById('agents-body');
+  const nodes = data.nodes||[];
+  const agents = nodes.filter(n=>n.type==='agent');
+  const sessions = nodes.filter(n=>n.type==='session');
+  const sum = data.summary||{};
+
+  document.getElementById('ag-agents').textContent = sum.agents??agents.length;
+  document.getElementById('ag-sessions').textContent = sum.sessions??sessions.length;
+  const unreg = document.getElementById('ag-unreg');
+  unreg.textContent = sum.unregistered_agents??0;
+  unreg.className = 'kpi-val '+((sum.unregistered_agents||0)>0?'c-red':'c-green');
+  const crit = document.getElementById('ag-critsess');
+  crit.textContent = sum.critical_sessions??0;
+  crit.className = 'kpi-val '+((sum.critical_sessions||0)>0?'c-red':'c-green');
+  document.getElementById('ag-edges').textContent = sum.edges??(data.edges||[]).length;
+
+  if(!agents.length){
+    box.innerHTML = '<div class="empty"><div class="empty-icon">◎</div><div>No agents seen yet.</div><div style="font-size:11px;margin-top:6px;color:var(--muted2)">Agents appear here the moment they send traffic through /intercept.</div></div>';
+    return;
+  }
+
+  const order = {critical:0, elevated:1, caution:1, unregistered:2, stable:3};
+  const sorted = agents.slice().sort((a,b)=>(order[a.risk_band]??9)-(order[b.risk_band]??9) || (b.events||0)-(a.events||0));
+
+  box.innerHTML = sorted.map(a=>{
+    const aSessions = sessions.filter(s=>s.agent_id===a.agent_id);
+    const blockedRatio = a.events?Math.round((a.blocked/a.events)*100):0;
+    const isOpen = agentsOpen.has(a.agent_id);
+    const sessRows = aSessions.length ? aSessions.map(s=>{
+      const lineage = s.parent_session_id ? `<div style="font-size:9px;color:var(--muted);margin-top:2px">↳ spawned from ${s.parent_session_id}</div>` : '';
+      const ds = s.drift_status||'unknown';
+      return `<div class="sess-row">
+        <div class="sess-id">${s.session_id}${lineage}</div>
+        <div class="mono-val">${s.turns??0} turns</div>
+        <div class="mono-val" style="color:${(s.blocked||0)>0?'var(--danger)':'var(--muted)'}">${s.blocked??0} blocked</div>
+        <div><span class="badge ${ds==='critical'?'critical':ds==='elevated'?'elevated':'stable'}">${ds}</span></div>
+        <div><span class="badge ${bandClass(s.risk_band)}">${s.risk_band||'unknown'}</span></div>
+      </div>`;
+    }).join('') : '<div style="padding:8px 0;color:var(--muted);font-size:11px">No sessions recorded.</div>';
+
+    return `<div class="agent-card">
+      <div class="agent-hdr" onclick="toggleAgent('${a.agent_id}')">
+        <div class="avatar" style="background:rgba(0,212,255,0.12);color:var(--accent)">${(a.agent_id||'??').slice(0,2).toUpperCase()}</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="font-weight:600;font-size:12px">${a.agent_id}</span>
+            <span class="badge ${a.registered?'stable':'unreg'}">${a.registered?'registered':'unregistered'}</span>
+            <span class="badge ${bandClass(a.risk_band)}">${a.risk_band||'unknown'}</span>
+          </div>
+          <div style="font-size:10px;color:var(--muted);margin-top:3px">${a.events??0} events · ${a.blocked??0} blocked (${blockedRatio}%) · ${aSessions.length} session${aSessions.length===1?'':'s'}</div>
+        </div>
+        <div class="chevron">${isOpen?'▾':'▸'}</div>
+      </div>
+      <div class="agent-body" style="display:${isOpen?'block':'none'}">
+        <div class="sess-hdr"><div>Session</div><div>Turns</div><div>Blocked</div><div>Drift</div><div>Risk</div></div>
+        ${sessRows}
+      </div>
+    </div>`;
+  }).join('');
 }
 
 document.querySelectorAll('.ftab').forEach(t=>t.addEventListener('click',()=>{
