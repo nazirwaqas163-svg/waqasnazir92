@@ -1453,6 +1453,14 @@ async def topology(limit: int = 500) -> Dict[str, Any]:
     graph = build_topology(events, agents=agents, drift_lookup=drift_engine.get_drift)
     return {"ok": True, **graph}
 
+@app.get("/ai_events/recent")
+async def ai_events_recent(limit: int = 500) -> Dict[str, Any]:
+    """Durable event feed for the dashboard — reads from Supabase, survives
+    Render free-tier restarts. /events only reads the in-process feed, which
+    wipes on every cold start."""
+    events = await supabase_audit_client.get_recent_events(limit=limit)
+    return {"ok": True, "total": len(events), "events": events}
+
 
 @app.get("/alerts")
 def alerts(limit: int = 50) -> Dict[str, Any]:
