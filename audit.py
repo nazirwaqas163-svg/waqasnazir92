@@ -175,6 +175,7 @@ class SupabaseAuditClient:
         bdi_score: Optional[float],
         policy_result: str,
         session_id: Optional[str] = None,
+        parent_session_id: Optional[str] = None,
     ) -> bool:
         if not self.configured:
             logger.warning("Skipping ai_events insert because Supabase is not configured")
@@ -190,6 +191,7 @@ class SupabaseAuditClient:
             "bdi_score": bdi_score,
             "status": policy_result,
             "session_id": session_id,
+            "parent_session_id": parent_session_id,
         }
         return await self._post_row("ai_events", row)
 
@@ -316,6 +318,92 @@ class SupabaseAuditClient:
                 )
         except Exception:
             pass
+
+    def get_chain_hash_local(self, event_id: str) -> Optional[str]:
+        """SHA-256 chain hash for an event, read from the in-process chain."""
+        for entry in self._chain_logger.chain:
+            data = entry.get("data") or {}
+            if data.get("id") == event_id:
+                return entry.get("hash")
+        return None
+
+    async def get_recent_events(
+        self, limit: int = 500, since_iso: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        if not self.configured:
+            return []
+        params = {
+            "order": "created_at.desc",
+            "select": (
+                "event_id,created_at,timestamp,agent_id,action,input_text,"
+                "output_text,bdi_score,status,session_id,parent_session_id"
+            ),
+            "limit": str(limit),
+        }
+        if since_iso:
+            params["created_at"] = f"gte.{since_iso}"
+        try:
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.get(
+                    f"{self.url}/rest/v1/ai_events",
+                    headers={"apikey": self.key or "", "authorization": f"Bearer {self.key}"},
+                    params=params,
+                )
+                return response.json() if response.status_code == 200 else []
+        except httpx.HTTPError:
+            logger.exception("Failed to fetch recent events")
+            return []
+
+    async def insert_legal_hold(self, hold: Dict[str, Any]) -> bool:
+        if not self.configured:
+            return False
+        row = {
+            k: hold.get(k)
+            for k in (
+                "id", "created_at", "trigger_type", "agent_id", "session_id",
+                "event_id", "chain_hash", "framework", "jurisdiction", "reason",
+                "severity", "status", "evidence",
+            )
+        }
+        return await self._post_row("legal_holds", row)
+
+    async def list_legal_holds(
+        self, status: Optional[str] = None, limit: int = 100
+    ) -> List[Dict[str, Any]]:
+        if not self.configured:
+            return []
+        params = {"order": "created_at.desc", "select": "*", "limit": str(limit)}
+        if status:
+            params["status"] = f"eq.{status.upper()}"
+        try:
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.get(
+                    f"{self.url}/rest/v1/legal_holds",
+                    headers={"apikey": self.key or "", "authorization": f"Bearer {self.key}"},
+                    params=params,
+                )
+                return response.json() if response.status_code == 200 else []
+        except httpx.HTTPError:
+            return []
+
+    async def release_legal_hold(self, hold_id: str, released_by: str = "system") -> bool:
+        if not self.configured:
+            return False
+        try:
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.patch(
+                    f"{self.url}/rest/v1/legal_holds",
+                    headers=self._headers(),
+                    params={"id": f"eq.{hold_id}"},
+                    json={
+                        "status": "RELEASED",
+                        "released_at": datetime.now(timezone.utc).isoformat(),
+                        "released_by": released_by,
+                    },
+                )
+                return response.status_code in (200, 204)
+        except httpx.HTTPError:
+            return False
 
 
 supabase_audit_client = SupabaseAuditClient(SUPABASE_URL, SUPABASE_KEY)
