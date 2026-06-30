@@ -86,6 +86,11 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 .daterange-sep{color:var(--muted);font-size:10px}
 #date-clear{padding:2px 6px;font-size:11px}
 .day-divider{padding:7px 14px;background:var(--bg4);border-bottom:1px solid var(--border);font-size:9px;text-transform:uppercase;letter-spacing:0.09em;color:var(--muted);font-weight:600;position:sticky;top:0;z-index:1}
+.th-info{display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;border-radius:50%;background:var(--bg5);color:var(--muted);font-size:8px;font-weight:700;margin-left:5px;cursor:help;position:relative;text-transform:none;letter-spacing:normal;vertical-align:middle}
+.th-info:hover{color:var(--accent);background:rgba(0,212,255,0.12)}
+.th-info:hover .th-tip{display:block}
+.th-tip{display:none;position:absolute;top:18px;left:0;width:230px;background:var(--bg5);border:1px solid var(--border2);border-radius:7px;padding:9px 11px;font-size:10.5px;font-weight:400;color:var(--text);line-height:1.5;text-transform:none;letter-spacing:normal;z-index:20;box-shadow:0 6px 16px rgba(0,0,0,0.45);cursor:default}
+.th-tip strong{color:var(--accent);font-weight:600}
 
 /* EVENT TABLE */
 .evt-tbl{background:var(--bg3);border:1px solid var(--border);border-radius:9px;overflow:hidden}
@@ -278,8 +283,8 @@ svg.hm{width:100%;height:55px}
             <div>Timestamp / ID</div>
             <div>Actor · Action</div>
             <div>Severity</div>
-            <div>BDI Score</div>
-            <div>Entropy</div>
+            <div>BDI Score<span class="th-info">i<span class="th-tip"><strong>Behavioral Drift Index.</strong> Tracks escalating risk across the whole session — repeated override/bypass language, anomalous turns. This is the primary signal driving governance decisions.</span></span></div>
+            <div>Entropy<span class="th-info">i<span class="th-tip"><strong>Message Entropy.</strong> Character-randomness of this single message — a secondary check. Very short text (e.g. "ack") can score high even when low-risk, so read it alongside BDI and Severity, not alone.</span></span></div>
             <div>Pulse</div>
           </div>
           <div id="tbody"><div class="loading"><div class="spin"></div>Loading events…</div></div>
@@ -721,6 +726,17 @@ async function load(){
     document.getElementById('tbody').innerHTML=`<div class="empty"><div style="color:var(--danger);font-size:20px">⚠</div><div style="color:var(--danger);margin-top:6px;font-weight:500">Backend unreachable</div><div style="font-size:11px;margin-top:4px;color:var(--muted2)">${err.message}</div></div>`;
   }
 }
+
+/* Default view = today only, so the ledger looks fresh every day without
+   touching any stored data. History is never deleted -- clearing the date
+   filter (✕) or picking another date instantly shows any prior day untouched. */
+(function initDefaultToday(){
+  const t = new Date();
+  const todayStr = t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+  dateFrom = todayStr; dateTo = todayStr;
+  document.getElementById('date-from').value = todayStr;
+  document.getElementById('date-to').value = todayStr;
+})();
 
 load(); setInterval(load,10000);
 </script>
