@@ -515,6 +515,7 @@ async def _insert_ai_event_log(
     policy_result: str,
     session_id: Optional[str] = None,
     parent_session_id: Optional[str] = None,
+    entropy: Optional[float] = None,
 ) -> None:
     await supabase_audit_client.insert_ai_event(
         event_id=event_id,
@@ -527,6 +528,7 @@ async def _insert_ai_event_log(
         policy_result=policy_result,
         session_id=session_id,
         parent_session_id=parent_session_id,
+        entropy=entropy,
     )
 
 
@@ -554,6 +556,7 @@ async def _insert_audit_log(
         policy_result=_policy_result(response_payload),
         session_id=_session_id_from_payload(payload),
         parent_session_id=_parent_session_id_from_payload(payload),
+        entropy=pulse.get("entropy"),
     )
 
 
@@ -563,6 +566,7 @@ async def _insert_intercept_logs(
     request_id: str,
     bdi_score: float,
     policy_result: str,
+    entropy: Optional[float] = None,
 ) -> None:
     action = str((payload.metadata or {}).get("operation") or "/intercept")
     event_id = await supabase_audit_client.insert_audit_log(
@@ -586,6 +590,7 @@ async def _insert_intercept_logs(
         policy_result=policy_result,
         session_id=payload.session_id,
         parent_session_id=payload.parent_session_id,
+        entropy=entropy,
     )
 
 
@@ -874,7 +879,7 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
     elif disposition.get("action") != RequestAction.PROCEED.value:
         _record_drop_event(disposition, agent_id=payload.agent_id, bdi_score=bdi_score, entropy=entropy)
         request_id = str(uuid.uuid4())
-        await _insert_intercept_logs(payload, request_id=request_id, bdi_score=bdi_score, policy_result="blocked")
+        await _insert_intercept_logs(payload, request_id=request_id, bdi_score=bdi_score, policy_result="blocked", entropy=entropy)
         holds = await _maybe_open_legal_hold(
             agent_id=payload.agent_id,
             session_id=payload.session_id,
@@ -926,7 +931,7 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
             },
         )
     )
-    await _insert_intercept_logs(payload, request_id=request_id, bdi_score=bdi_score, policy_result="allowed")
+    await _insert_intercept_logs(payload, request_id=request_id, bdi_score=bdi_score, policy_result="allowed", entropy=entropy)
     holds = await _maybe_open_legal_hold(
         agent_id=payload.agent_id,
         session_id=payload.session_id,
@@ -1220,6 +1225,7 @@ async def agt_bridge(payload: AGTToolCall) -> Dict[str, Any]:
             policy_result="blocked",
             session_id=session_id,
             parent_session_id=payload.parent_session_id,
+            entropy=entropy,
         )
         raise HTTPException(
             status_code=409,
@@ -1243,6 +1249,7 @@ async def agt_bridge(payload: AGTToolCall) -> Dict[str, Any]:
         policy_result="allowed",
         session_id=session_id,
         parent_session_id=payload.parent_session_id,
+        entropy=entropy,
     )
     return {
         "ok": True,
@@ -1560,4 +1567,65 @@ async def session_tree(session_id: str, limit: int = 500) -> Dict[str, Any]:
         "node": by_session.get(session_id),
         "ancestors": ancestors,
         "descendants": descendants,
+    }
+
+
+@app.get("/ledger/integrity/ai_events")
+async def ledger_integrity_ai_events(limit: int = 100) -> Dict[str, Any]:
+    """Ledger Integrity Verifier for ai_events — independent SHA-256 hash chain
+    proof, separate from audit_logs. Closes the gap where ai_events was an
+    unchained mirror (prev_hash/row_hash were always null)."""
+    if not supabase_audit_client.configured:
+        raise HTTPException(status_code=503, detail="Supabase not configured")
+    rows = await supabase_audit_client.get_ai_events_chain(limit=limit)
+    total = len(rows)
+    verified = 0
+    broken = 0
+    skipped = 0
+    broken_links = []
+    for i, row in enumerate(rows):
+        row_hash = row.get("row_hash")
+        prev_hash = row.get("prev_hash")
+        if not row_hash or not prev_hash:
+            skipped += 1
+            continue
+        if i > 0:
+            prior_row = rows[i - 1]
+            prior_row_hash = prior_row.get("row_hash")
+            if prior_row_hash and prev_hash != prior_row_hash:
+                broken += 1
+                broken_links.append({
+                    "row_index": i,
+                    "id": row.get("id"),
+                    "event_id": row.get("event_id"),
+                    "created_at": row.get("created_at"),
+                    "expected_prev_hash": prior_row_hash,
+                    "actual_prev_hash": prev_hash,
+                    "tamper_detected": True,
+                })
+            else:
+                verified += 1
+        else:
+            verified += 1
+    integrity_status = "VERIFIED" if broken == 0 else "TAMPERED"
+    return {
+        "ok": True,
+        "table": "ai_events",
+        "integrity_status": integrity_status,
+        "tamper_detected": broken > 0,
+        "algorithm": "SHA-256 hash chain",
+        "verified_at": datetime.now(timezone.utc).isoformat(),
+        "summary": {
+            "total_rows_fetched": total,
+            "verified_links": verified,
+            "broken_links": broken,
+            "skipped_rows": skipped,
+            "coverage_pct": round((verified / max(1, total - skipped)) * 100, 1),
+        },
+        "broken_links": broken_links,
+        "note": (
+            "Rows inserted before this fix shipped will show skipped_rows since "
+            "they have no prev_hash/row_hash. Only rows inserted after this "
+            "deploy are chained."
+        ),
     }
