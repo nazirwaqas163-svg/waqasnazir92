@@ -19,18 +19,12 @@
 }
 body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:13px;overflow:hidden}
 .app{display:flex;height:100vh}
-
-/* SIDEBAR */
 .sidebar{width:52px;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding:14px 0;gap:6px;flex-shrink:0}
 .logo{width:30px;height:30px;background:var(--accent);border-radius:7px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:#000;margin-bottom:12px;cursor:pointer}
 .nav-btn{width:34px;height:34px;border-radius:7px;display:flex;align-items:center;justify-content:center;color:var(--muted);cursor:pointer;transition:all 0.15s;border:none;background:none}
 .nav-btn:hover,.nav-btn.active{background:var(--bg5);color:var(--accent)}
 .nav-btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-
-/* MAIN */
 .main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
-
-/* TOPBAR */
 .topbar{height:46px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 18px;gap:14px;flex-shrink:0}
 .topbar-title{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap}
 .topbar-sub{font-size:11px;color:var(--muted);white-space:nowrap}
@@ -41,16 +35,10 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 .pill.fallback{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-border)}
 .pill.open-cb{background:var(--danger-bg);color:var(--danger);border:1px solid var(--danger-border)}
 #clock{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);white-space:nowrap}
-
-/* CONTENT */
 .content{flex:1;display:flex;overflow:hidden;min-width:0}
-
-/* LEDGER */
 .ledger{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:14px;min-width:0}
 .ledger::-webkit-scrollbar{width:3px}
 .ledger::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
-
-/* KPI */
 .kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
 .kpi{background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:12px 14px;position:relative;overflow:hidden;cursor:default}
 .kpi::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--accent);opacity:0.5}
@@ -59,14 +47,8 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 .kpi.kpi-green::after{background:var(--ok)}
 .kpi-label{font-size:9px;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);font-weight:600;margin-bottom:7px}
 .kpi-val{font-size:22px;font-weight:600;font-family:'JetBrains Mono',monospace;line-height:1;margin-bottom:3px}
-.kpi-val.c-blue{color:var(--accent)}
-.kpi-val.c-red{color:var(--danger)}
-.kpi-val.c-amber{color:var(--warn)}
-.kpi-val.c-green{color:var(--ok)}
-.kpi-val.c-white{color:var(--text)}
+.kpi-val.c-blue{color:var(--accent)}.kpi-val.c-red{color:var(--danger)}.kpi-val.c-amber{color:var(--warn)}.kpi-val.c-green{color:var(--ok)}.kpi-val.c-white{color:var(--text)}
 .kpi-sub{font-size:10px;color:var(--muted)}
-
-/* TABLE HEADER */
 .tbl-head-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;row-gap:8px}
 .section-label{font-size:10px;text-transform:uppercase;letter-spacing:0.09em;color:var(--muted);font-weight:600;display:flex;align-items:center;gap:6px;white-space:nowrap;flex-shrink:0}
 .section-label::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--accent);display:inline-block}
@@ -91,17 +73,6 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 .th-info:hover .th-tip{display:block}
 .th-tip{display:none;position:absolute;top:18px;left:0;width:230px;background:var(--bg5);border:1px solid var(--border2);border-radius:7px;padding:9px 11px;font-size:10.5px;font-weight:400;color:var(--text);line-height:1.5;text-transform:none;letter-spacing:normal;z-index:20;box-shadow:0 6px 16px rgba(0,0,0,0.45);cursor:default}
 .th-tip strong{color:var(--accent);font-weight:600}
-.badge.unreg{background:rgba(139,92,246,0.12);color:#a78bfa;border:1px solid rgba(139,92,246,0.3)}
-.agent-card{background:var(--bg3);border:1px solid var(--border);border-radius:9px;margin-bottom:8px;overflow:hidden}
-.agent-hdr{display:flex;align-items:center;gap:12px;padding:12px 14px;cursor:pointer;transition:background 0.1s}
-.agent-hdr:hover{background:rgba(0,212,255,0.025)}
-.chevron{color:var(--muted);font-size:11px;flex-shrink:0}
-.agent-body{padding:0 14px 12px 14px;border-top:1px solid var(--border)}
-.sess-hdr{display:grid;grid-template-columns:1fr 80px 80px 90px 90px;gap:10px;padding:10px 0 6px 0;font-size:9px;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);font-weight:600}
-.sess-row{display:grid;grid-template-columns:1fr 80px 80px 90px 90px;gap:10px;padding:8px 0;border-top:1px solid rgba(30,45,69,0.5);align-items:center;font-size:11px}
-.sess-id{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--text)}
-
-/* EVENT TABLE */
 .evt-tbl{background:var(--bg3);border:1px solid var(--border);border-radius:9px;overflow:hidden}
 .evt-hdr{display:grid;grid-template-columns:155px 1fr 90px 95px 75px 60px;padding:9px 14px;background:var(--bg4);border-bottom:1px solid var(--border);gap:10px;font-size:9px;text-transform:uppercase;letter-spacing:0.09em;color:var(--muted);font-weight:600}
 .evt-row{display:grid;grid-template-columns:155px 1fr 90px 95px 75px 60px;padding:11px 14px;border-bottom:1px solid var(--border);gap:10px;cursor:pointer;transition:background 0.1s;align-items:center}
@@ -119,6 +90,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 .badge.critical{background:var(--critical-bg);color:var(--critical);border:1px solid var(--critical-border)}
 .badge.elevated{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-border)}
 .badge.stable{background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok-border)}
+.badge.unreg{background:rgba(139,92,246,0.12);color:#a78bfa;border:1px solid rgba(139,92,246,0.3)}
 .bdi-wrap{display:flex;align-items:center;gap:5px}
 .bdi-track{width:45px;height:3px;background:var(--border2);border-radius:2px;overflow:hidden;flex-shrink:0}
 .bdi-fill{height:100%;border-radius:2px}
@@ -132,8 +104,6 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 .loading{display:flex;align-items:center;justify-content:center;gap:8px;padding:32px;color:var(--muted);font-size:12px}
 .spin{width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-
-/* INVESTIGATOR */
 .inv{width:0;background:var(--bg2);border-left:1px solid var(--border);overflow:hidden;flex-shrink:0;transition:width 0.25s ease;display:flex;flex-direction:column}
 .inv.open{width:480px}
 .inv-inner{width:480px;overflow-y:auto;display:flex;flex-direction:column;height:100%}
@@ -141,9 +111,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 .inv-inner::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
 .inv-hdr{padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0;position:relative}
 .inv-sev{font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:3px}
-.inv-sev.critical{color:var(--critical)}
-.inv-sev.elevated{color:var(--warn)}
-.inv-sev.stable{color:var(--ok)}
+.inv-sev.critical{color:var(--critical)}.inv-sev.elevated{color:var(--warn)}.inv-sev.stable{color:var(--ok)}
 .inv-title{font-size:15px;font-weight:600;margin-bottom:6px}
 .inv-meta{display:flex;flex-wrap:wrap;gap:10px}
 .inv-meta span{font-size:10px;color:var(--muted)}
@@ -171,11 +139,9 @@ svg.hm{width:100%;height:55px}
 .reg-name{font-size:11px;font-weight:500}
 .reg-desc{font-size:10px;color:var(--muted);line-height:1.4}
 .reg-action{font-size:10px;color:var(--critical);margin-top:5px;line-height:1.4}
-.sla-item{margin-bottom:10px}
-.sla-item:last-child{margin-bottom:0}
+.sla-item{margin-bottom:10px}.sla-item:last-child{margin-bottom:0}
 .sla-hdr{display:flex;justify-content:space-between;margin-bottom:3px}
-.sla-name{font-size:11px}
-.sla-met{font-size:10px;font-weight:600}
+.sla-name{font-size:11px}.sla-met{font-size:10px;font-weight:600}
 .sla-bar{height:3px;background:var(--border2);border-radius:2px;overflow:hidden}
 .sla-fill{height:100%;border-radius:2px}
 .sla-due{font-size:9px;color:var(--muted);margin-top:2px}
@@ -187,36 +153,71 @@ svg.hm{width:100%;height:55px}
 .act-full:hover{border-color:var(--accent);color:var(--accent)}
 .act-full.act-danger{border-color:rgba(239,68,68,0.3);color:var(--danger);background:var(--danger-bg)}
 .act-full.act-danger:hover{border-color:var(--danger)}
+/* AGENT CARDS */
+.agent-card{background:var(--bg3);border:1px solid var(--border);border-radius:9px;margin-bottom:8px;overflow:hidden}
+.agent-hdr{display:flex;align-items:center;gap:12px;padding:12px 14px;cursor:pointer;transition:background 0.1s}
+.agent-hdr:hover{background:rgba(0,212,255,0.025)}
+.chevron{color:var(--muted);font-size:11px;flex-shrink:0}
+.agent-body{padding:0 14px 12px 14px;border-top:1px solid var(--border)}
+.sess-hdr{display:grid;grid-template-columns:1fr 80px 80px 90px 90px;gap:10px;padding:10px 0 6px 0;font-size:9px;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);font-weight:600}
+.sess-row{display:grid;grid-template-columns:1fr 80px 80px 90px 90px;gap:10px;padding:8px 0;border-top:1px solid rgba(30,45,69,0.5);align-items:center;font-size:11px}
+.sess-id{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--text)}
+/* ANALYTICS */
+.drift-card{background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:12px 14px;margin-bottom:8px}
+.drift-bar-wrap{height:4px;background:var(--border2);border-radius:2px;overflow:hidden;margin-top:6px}
+.drift-bar{height:100%;border-radius:2px}
+/* CIRCUIT BREAKER */
+.cb-state-card{background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:24px;text-align:center;margin-bottom:14px}
+.cb-state-val{font-size:36px;font-weight:700;font-family:'JetBrains Mono',monospace;letter-spacing:0.05em;margin-bottom:8px}
+.cb-btn-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.cb-btn{padding:10px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:none;font-family:'Inter',sans-serif;transition:all 0.12s}
+.cb-btn-open{background:var(--danger-bg);color:var(--danger);border:1px solid var(--danger-border)}
+.cb-btn-open:hover{background:rgba(239,68,68,0.2)}
+.cb-btn-close{background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok-border)}
+.cb-btn-close:hover{background:rgba(16,185,129,0.2)}
+/* COMPLIANCE */
+.compliance-card{background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:14px;margin-bottom:8px}
+.comp-badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:999px;font-size:10px;font-weight:700;letter-spacing:0.05em}
+.comp-badge.cb-active{background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok-border)}
+.comp-badge.cb-warning{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-border)}
+.comp-badge.cb-critical{background:var(--critical-bg);color:var(--critical);border:1px solid var(--critical-border)}
+.comp-badge.cb-breached{background:var(--danger-bg);color:var(--danger);border:1px solid var(--danger-border)}
+.comp-progress{height:4px;background:var(--border2);border-radius:2px;overflow:hidden;margin:8px 0}
+.comp-fill{height:100%;border-radius:2px}
+/* SETTINGS */
+.settings-card{background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:14px;margin-bottom:8px}
+.settings-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(30,45,69,0.4)}
+.settings-row:last-child{border-bottom:none}
+.settings-key{font-size:11px;color:var(--muted)}
+.settings-val{font-size:11px;font-weight:500;font-family:'JetBrains Mono',monospace;text-align:right;max-width:280px}
 </style>
 </head>
 <body>
 <div class="app">
 
-<!-- SIDEBAR -->
 <div class="sidebar">
   <div class="logo">P</div>
   <button class="nav-btn active" title="Ledger" data-view="ledger">
     <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
   </button>
-  <button class="nav-btn" title="Analytics">
+  <button class="nav-btn" title="Analytics" data-view="analytics">
     <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
   </button>
   <button class="nav-btn" title="Agents" data-view="agents">
     <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
   </button>
-  <button class="nav-btn" title="Circuit Breaker">
+  <button class="nav-btn" title="Circuit Breaker" data-view="circuit-breaker">
     <svg viewBox="0 0 24 24"><path d="M18.36 6.64A9 9 0 1 1 5.64 6.64"/><polyline points="13 2 13 8 16 8"/></svg>
   </button>
-  <button class="nav-btn" title="Compliance">
+  <button class="nav-btn" title="Compliance" data-view="compliance">
     <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
   </button>
   <div style="flex:1"></div>
-  <button class="nav-btn" title="Settings">
-    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+  <button class="nav-btn" title="Settings" data-view="settings">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l.06.06a2 2 0 0 1-2.83-2.83l-.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
   </button>
 </div>
 
-<!-- MAIN -->
 <div class="main">
   <div class="topbar">
     <div class="topbar-title">AI Governance Ledger</div>
@@ -228,38 +229,16 @@ svg.hm{width:100%;height:55px}
   </div>
 
   <div class="content">
+
+    <!-- LEDGER VIEW -->
     <div class="ledger" id="view-ledger">
-
-      <!-- KPIs -->
       <div class="kpi-row">
-        <div class="kpi">
-          <div class="kpi-label">Total Events</div>
-          <div class="kpi-val c-blue" id="k-total">—</div>
-          <div class="kpi-sub" id="k-total-sub">loading…</div>
-        </div>
-        <div class="kpi kpi-red">
-          <div class="kpi-label">Critical Alerts</div>
-          <div class="kpi-val c-red" id="k-crit">—</div>
-          <div class="kpi-sub">Requires immediate review</div>
-        </div>
-        <div class="kpi kpi-amber">
-          <div class="kpi-label">Avg Entropy</div>
-          <div class="kpi-val c-amber" id="k-ent">—</div>
-          <div class="kpi-sub">System-wide disorder index</div>
-        </div>
-        <div class="kpi">
-          <div class="kpi-label">High-Risk Events</div>
-          <div class="kpi-val c-white" id="k-risk">—</div>
-          <div class="kpi-sub">Entropy ≥ 70% threshold</div>
-        </div>
-        <div class="kpi kpi-green">
-          <div class="kpi-label">Circuit Breaker</div>
-          <div class="kpi-val c-green" id="k-cb">—</div>
-          <div class="kpi-sub">Failures: <span id="k-fail">0</span></div>
-        </div>
+        <div class="kpi"><div class="kpi-label">Total Events</div><div class="kpi-val c-blue" id="k-total">—</div><div class="kpi-sub" id="k-total-sub">loading…</div></div>
+        <div class="kpi kpi-red"><div class="kpi-label">Critical Alerts</div><div class="kpi-val c-red" id="k-crit">—</div><div class="kpi-sub">Requires immediate review</div></div>
+        <div class="kpi kpi-amber"><div class="kpi-label">Avg Entropy</div><div class="kpi-val c-amber" id="k-ent">—</div><div class="kpi-sub">0.00–1.00 scale</div></div>
+        <div class="kpi"><div class="kpi-label">High-Risk Events</div><div class="kpi-val c-white" id="k-risk">—</div><div class="kpi-sub">Entropy ≥ 0.70</div></div>
+        <div class="kpi kpi-green"><div class="kpi-label">Circuit Breaker</div><div class="kpi-val c-green" id="k-cb">—</div><div class="kpi-sub">Failures: <span id="k-fail">0</span></div></div>
       </div>
-
-      <!-- TABLE -->
       <div>
         <div class="tbl-head-row">
           <div style="display:flex;align-items:center;gap:10px">
@@ -272,10 +251,7 @@ svg.hm{width:100%;height:55px}
             </div>
           </div>
           <div class="tools-row">
-            <div class="search">
-              <span style="color:var(--muted);font-size:12px">⌕</span>
-              <input id="srch" type="text" placeholder="Search events, actors, tags…"/>
-            </div>
+            <div class="search"><span style="color:var(--muted);font-size:12px">⌕</span><input id="srch" type="text" placeholder="Search events, actors, tags…"/></div>
             <div class="daterange">
               <input id="date-from" type="date" title="From date"/>
               <span class="daterange-sep">→</span>
@@ -286,60 +262,85 @@ svg.hm{width:100%;height:55px}
             <button class="refresh-btn" onclick="load()">↻ Refresh</button>
           </div>
         </div>
-
         <div class="evt-tbl">
           <div class="evt-hdr">
             <div>Timestamp / ID</div>
             <div>Actor · Action</div>
             <div>Severity</div>
-            <div>BDI Score<span class="th-info">i<span class="th-tip"><strong>Behavioral Drift Index.</strong> Tracks escalating risk across the whole session — repeated override/bypass language, anomalous turns. This is the primary signal driving governance decisions.</span></span></div>
-            <div>Entropy<span class="th-info">i<span class="th-tip"><strong>Message Entropy.</strong> Character-randomness of this single message — a secondary check. Very short text (e.g. "ack") can score high even when low-risk, so read it alongside BDI and Severity, not alone.</span></span></div>
+            <div>BDI Score<span class="th-info">i<span class="th-tip"><strong>Behavioral Drift Index.</strong> Tracks escalating risk across the whole session — repeated override/bypass language, anomalous turns. Primary signal driving governance decisions.</span></span></div>
+            <div>Entropy<span class="th-info">i<span class="th-tip"><strong>Message Entropy (0.00–1.00).</strong> Character-randomness of this single message — secondary check. Very short text ("ack") can score near 1.00 even when low-risk. Read alongside BDI and Severity.</span></span></div>
             <div>Pulse</div>
           </div>
           <div id="tbody"><div class="loading"><div class="spin"></div>Loading events…</div></div>
         </div>
       </div>
-
     </div>
 
     <!-- AGENTS VIEW -->
     <div class="ledger" id="view-agents" style="display:none">
       <div class="kpi-row">
-        <div class="kpi">
-          <div class="kpi-label">Agents</div>
-          <div class="kpi-val c-blue" id="ag-agents">—</div>
-          <div class="kpi-sub">Seen by Pulse</div>
-        </div>
-        <div class="kpi">
-          <div class="kpi-label">Sessions</div>
-          <div class="kpi-val c-blue" id="ag-sessions">—</div>
-          <div class="kpi-sub">Across all agents</div>
-        </div>
-        <div class="kpi kpi-red">
-          <div class="kpi-label">Unregistered</div>
-          <div class="kpi-val c-red" id="ag-unreg">—</div>
-          <div class="kpi-sub">No identity on file</div>
-        </div>
-        <div class="kpi kpi-red">
-          <div class="kpi-label">Critical Sessions</div>
-          <div class="kpi-val c-red" id="ag-critsess">—</div>
-          <div class="kpi-sub">Drift status critical</div>
-        </div>
-        <div class="kpi">
-          <div class="kpi-label">Edges</div>
-          <div class="kpi-val c-white" id="ag-edges">—</div>
-          <div class="kpi-sub">Agent → session links</div>
-        </div>
+        <div class="kpi"><div class="kpi-label">Agents</div><div class="kpi-val c-blue" id="ag-agents">—</div><div class="kpi-sub">Seen by Pulse</div></div>
+        <div class="kpi"><div class="kpi-label">Sessions</div><div class="kpi-val c-blue" id="ag-sessions">—</div><div class="kpi-sub">Across all agents</div></div>
+        <div class="kpi kpi-red"><div class="kpi-label">Unregistered</div><div class="kpi-val c-red" id="ag-unreg">—</div><div class="kpi-sub">No identity on file</div></div>
+        <div class="kpi kpi-red"><div class="kpi-label">Critical Sessions</div><div class="kpi-val c-red" id="ag-critsess">—</div><div class="kpi-sub">Drift status critical</div></div>
+        <div class="kpi"><div class="kpi-label">Edges</div><div class="kpi-val c-white" id="ag-edges">—</div><div class="kpi-sub">Agent → session links</div></div>
       </div>
-
       <div>
         <div class="tbl-head-row">
           <div class="section-label">Agent Topology</div>
-          <div class="tools-row">
-            <button class="refresh-btn" onclick="loadAgents()">↻ Refresh</button>
-          </div>
+          <div class="tools-row"><button class="refresh-btn" onclick="loadAgents()">↻ Refresh</button></div>
         </div>
         <div id="agents-body"><div class="loading"><div class="spin"></div>Loading agent topology…</div></div>
+      </div>
+    </div>
+
+    <!-- ANALYTICS VIEW -->
+    <div class="ledger" id="view-analytics" style="display:none">
+      <div class="kpi-row">
+        <div class="kpi"><div class="kpi-label">Sessions Tracked</div><div class="kpi-val c-blue" id="an-sessions">—</div><div class="kpi-sub">With drift data</div></div>
+        <div class="kpi kpi-red"><div class="kpi-label">Critical Drift</div><div class="kpi-val c-red" id="an-critical">—</div><div class="kpi-sub">Status: critical</div></div>
+        <div class="kpi kpi-amber"><div class="kpi-label">Elevated Drift</div><div class="kpi-val c-amber" id="an-elevated">—</div><div class="kpi-sub">Status: elevated</div></div>
+        <div class="kpi kpi-green"><div class="kpi-label">Stable</div><div class="kpi-val c-green" id="an-stable">—</div><div class="kpi-sub">Status: stable</div></div>
+        <div class="kpi"><div class="kpi-label">Avg Drift Score</div><div class="kpi-val c-white" id="an-avg">—</div><div class="kpi-sub">Across all sessions</div></div>
+      </div>
+      <div>
+        <div class="tbl-head-row">
+          <div class="section-label">Session Drift Analysis</div>
+          <div class="tools-row"><button class="refresh-btn" onclick="loadAnalytics()">↻ Refresh</button></div>
+        </div>
+        <div id="analytics-body"><div class="loading"><div class="spin"></div>Loading drift analytics…</div></div>
+      </div>
+    </div>
+
+    <!-- CIRCUIT BREAKER VIEW -->
+    <div class="ledger" id="view-circuit-breaker" style="display:none">
+      <div id="cb-body"><div class="loading"><div class="spin"></div>Loading circuit breaker…</div></div>
+    </div>
+
+    <!-- COMPLIANCE VIEW -->
+    <div class="ledger" id="view-compliance" style="display:none">
+      <div>
+        <div class="tbl-head-row">
+          <div class="section-label">ASEAN Compliance Clocks</div>
+          <div class="tools-row">
+            <label style="font-size:10px;color:var(--muted);display:flex;align-items:center;gap:6px">Incident:
+              <input id="incident-time-input" type="datetime-local" style="background:var(--bg4);border:1px solid var(--border);border-radius:5px;padding:3px 7px;color:var(--text);font-size:11px;font-family:'Inter',sans-serif"/>
+            </label>
+            <button class="refresh-btn" onclick="loadCompliance()">↻ Refresh</button>
+          </div>
+        </div>
+        <div id="compliance-body"><div class="loading"><div class="spin"></div>Loading compliance deadlines…</div></div>
+      </div>
+    </div>
+
+    <!-- SETTINGS VIEW -->
+    <div class="ledger" id="view-settings" style="display:none">
+      <div>
+        <div class="tbl-head-row">
+          <div class="section-label">System Configuration</div>
+          <div class="tools-row"><button class="refresh-btn" onclick="loadSettings()">↻ Refresh</button></div>
+        </div>
+        <div id="settings-body"><div class="loading"><div class="spin"></div>Loading system settings…</div></div>
       </div>
     </div>
 
@@ -352,45 +353,40 @@ svg.hm{width:100%;height:55px}
           <div class="inv-meta" id="i-meta"></div>
           <button class="close-btn" onclick="closeInv()">✕</button>
         </div>
-
         <div class="inv-sec">
           <div class="inv-sec-title">◆ Executive Insight</div>
           <div class="tags" id="i-tags"></div>
           <div class="chart-box">
-            <div class="chart-lbl">▼ Heart Monitor — Temporal Logic</div>
+            <div class="chart-lbl" id="hm-lbl">▼ Heart Monitor — Session Entropy History</div>
             <svg class="hm" viewBox="0 0 400 55" preserveAspectRatio="none">
               <polyline id="hm-line" points="" fill="none" stroke="#00d4ff" stroke-width="1.5"/>
               <circle id="hm-dot" cx="400" cy="27" r="3.5" fill="#ef4444"/>
             </svg>
             <div style="display:flex;justify-content:space-between;margin-top:4px">
-              <span style="font-size:9px;color:var(--muted)">← 60 min ago</span>
+              <span style="font-size:9px;color:var(--muted)" id="hm-left">← earliest turn</span>
               <span style="font-size:9px;color:var(--warn)" id="hm-spike"></span>
-              <span style="font-size:9px;color:var(--muted)">Now →</span>
+              <span style="font-size:9px;color:var(--muted)">latest →</span>
             </div>
           </div>
         </div>
-
         <div class="inv-sec">
           <div class="inv-sec-title">◎ Signal-to-Noise — Confidence Logic</div>
           <div class="sig-row">
             <span style="font-size:10px;color:var(--danger);font-weight:600">NOISE</span>
             <span style="font-size:10px;color:var(--ok);font-weight:600">SIGNAL</span>
           </div>
-          <div class="sig-pct" id="i-signal">—%</div>
+          <div class="sig-pct" id="i-signal">—</div>
           <ul class="tl-list" id="i-tl"></ul>
         </div>
-
         <div class="inv-sec">
           <div class="inv-sec-title">⚑ ASEAN Compliance Triggers</div>
           <div style="font-size:9.5px;color:var(--muted);margin:-5px 0 10px 0;line-height:1.4">Mapped to PDPA Malaysia, Singapore MGF, and Vietnam AI Law — Pulse's ASEAN regulatory specialization.</div>
           <div id="i-regs"></div>
         </div>
-
         <div class="inv-sec">
           <div class="inv-sec-title">🏁 SLA Status</div>
           <div id="i-sla"></div>
         </div>
-
         <div class="inv-sec">
           <div class="inv-sec-title">⚡ Recommended Action</div>
           <div class="act-grid">
@@ -405,6 +401,7 @@ svg.hm{width:100%;height:55px}
         </div>
       </div>
     </div>
+
   </div>
 </div>
 </div>
@@ -414,37 +411,25 @@ const API = 'https://pulse-proxy-8dqx.onrender.com';
 let ALL = [], filter = 'all', search = '', selIdx = -1, dateFrom = '', dateTo = '';
 
 function tick(){
-  const n = new Date();
-  document.getElementById('clock').textContent =
-    n.toISOString().replace('T',' ').slice(0,19)+' UTC';
+  document.getElementById('clock').textContent = new Date().toISOString().replace('T',' ').slice(0,19)+' UTC';
 }
 tick(); setInterval(tick,1000);
 
 function sev(e){
-  const en = e.data?.entropy??0, bd = e.data?.bdi_score??0;
+  const en=e.data?.entropy??0, bd=e.data?.bdi_score??0;
   if(en>=0.7||bd>=0.65) return 'critical';
   if(en>=0.4||bd>=0.35) return 'elevated';
   return 'stable';
 }
 function bdiC(v){return v>=0.65?'var(--danger)':v>=0.35?'var(--warn)':'var(--ok)'}
-function entC(v){return v>=0.7?'var(--danger)':v>=0.4?'var(--warn)':'var(--ok)'}
+function entC(v){return v>=0.7?'var(--danger)':v>=0.4?'var(--warn)':'var(--muted)'}
 function pulseClass(s){return s==='critical'?'err':s==='elevated'?'warn':'ok'}
 function pulseIcon(s){return s==='critical'?'✕':s==='elevated'?'!':'✓'}
-
-/* STAGE 1.5 FIX: ALL is newest-first (index 0 = most recent). A ledger ID
-   should read like an incrementing ticket number -- oldest event is #1, each
-   later event gets a higher number, newest gets the highest. Index 0 (newest)
-   therefore maps to ALL.length, and the last index (oldest) maps to 1. */
-function evId(ridx){
-  return 'EV-'+String(ALL.length-ridx).padStart(4,'0');
-}
-
-function sameDay(a,b){
-  return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
-}
+function evId(ridx){return 'EV-'+String(ALL.length-ridx).padStart(4,'0')}
+function sameDay(a,b){return a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate()}
 function dayLabel(d){
-  const now=new Date();
-  const yest=new Date(now); yest.setDate(now.getDate()-1);
+  const now=new Date(), yest=new Date(now);
+  yest.setDate(now.getDate()-1);
   if(sameDay(d,now)) return 'Today — '+d.toLocaleDateString(undefined,{month:'long',day:'numeric',year:'numeric'});
   if(sameDay(d,yest)) return 'Yesterday — '+d.toLocaleDateString(undefined,{month:'long',day:'numeric',year:'numeric'});
   return d.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric',year:'numeric'});
@@ -460,70 +445,43 @@ function avatarFor(k){const c=avatarCfg[k]||{bg:'rgba(100,116,139,0.15)',color:'
 function actorName(k){return{input:'AI Agent',output:'Model Response',governance:'Circuit Breaker',stream_end:'Stream End'}[k]||k}
 function shortText(t){return t?(t.length>65?t.slice(0,65)+'…':t):'(no description)'}
 
-/* STAGE 1 FIX: ai_events rows (durable, Supabase-backed) come back as raw
-   table rows -- event_id, agent_id, action, status, input_text, output_text,
-   bdi_score, entropy, session_id, parent_session_id, created_at, row_hash,
-   prev_hash. Every render function below still expects the old PulseFeed
-   shape {kind, text, data:{entropy,bdi_score}, created_at}, so this adapter
-   maps one shape onto the other instead of rewriting every render path. */
 function transformAiEvent(row){
-  const blocked = row.status === 'blocked';
-  return {
-    kind: blocked ? 'governance' : 'input',
-    text: row.output_text || row.input_text || '',
-    created_at: row.created_at || row.timestamp,
-    data: {
-      entropy: row.entropy ?? 0,
-      bdi_score: row.bdi_score ?? 0,
-      agent_id: row.agent_id || 'unknown'
-    },
-    raw: row
-  };
+  const blocked=row.status==='blocked';
+  return {kind:blocked?'governance':'input', text:row.output_text||row.input_text||'', created_at:row.created_at||row.timestamp, data:{entropy:row.entropy??0, bdi_score:row.bdi_score??0, agent_id:row.agent_id||'unknown'}, raw:row};
 }
 
 function renderRows(evs){
-  const tb = document.getElementById('tbody');
-  document.getElementById('evt-cnt').textContent = `${evs.length} of ${ALL.length} events`;
-  if(!evs.length){
-    tb.innerHTML='<div class="empty"><div class="empty-icon">◎</div><div>No events available.</div><div style="font-size:11px;margin-top:6px;color:var(--muted2)">Events appear here when AI agents route through the Pulse proxy.</div></div>';
-    return;
-  }
-  let html = '';
-  let lastDay = null;
-  evs.forEach((e)=>{
+  const tb=document.getElementById('tbody');
+  document.getElementById('evt-cnt').textContent=`${evs.length} of ${ALL.length} events`;
+  if(!evs.length){tb.innerHTML='<div class="empty"><div class="empty-icon">◎</div><div>No events available.</div><div style="font-size:11px;margin-top:6px;color:var(--muted2)">Events appear here when AI agents route through the Pulse proxy.</div></div>';return;}
+  let html='', lastDay=null;
+  evs.forEach(e=>{
     const s=sev(e), bd=e.data?.bdi_score??0, en=e.data?.entropy??0;
-    const dt = e.created_at?new Date(e.created_at):null;
-    const ts = dt?dt.toLocaleString():'—';
-    const bpct=Math.round(bd*100), epct=Math.round(en*100);
-    const ridx = ALL.indexOf(e);
-    if(dt && (!lastDay || !sameDay(dt,lastDay))){
-      html += `<div class="day-divider">${dayLabel(dt)}</div>`;
-      lastDay = dt;
-    }
-    html += `<div class="evt-row${selIdx===ridx?' selected':''}" onclick="openInv(${ridx})">
+    const dt=e.created_at?new Date(e.created_at):null;
+    const ts=dt?dt.toLocaleString():'—';
+    const bpct=Math.round(bd*100), ridx=ALL.indexOf(e);
+    if(dt&&(!lastDay||!sameDay(dt,lastDay))){html+=`<div class="day-divider">${dayLabel(dt)}</div>`;lastDay=dt;}
+    html+=`<div class="evt-row${selIdx===ridx?' selected':''}" onclick="openInv(${ridx})">
       <div><div class="evt-id"><strong>${evId(ridx)}</strong></div><div class="evt-ts">${ts}</div></div>
       <div class="actor-wrap">${avatarFor(e.kind)}<div style="min-width:0"><div class="actor-name">${actorName(e.kind)}</div><div class="actor-desc">${shortText(e.text)}</div></div></div>
       <div><span class="badge ${s}">${s}</span></div>
       <div class="bdi-wrap"><div class="bdi-track"><div class="bdi-fill" style="width:${bpct}%;background:${bdiC(bd)}"></div></div><span class="mono-val" style="color:${bdiC(bd)}">${bpct}%</span></div>
-      <div class="mono-val" style="color:${entC(en)}">${epct}%</div>
+      <div class="mono-val" style="color:${entC(en)}">${en.toFixed(2)}</div>
       <div><div class="pulse-dot ${pulseClass(s)}">${pulseIcon(s)}</div></div>
     </div>`;
   });
-  tb.innerHTML = html;
+  tb.innerHTML=html;
 }
 
 function filtered(){
   let r=ALL;
   if(filter!=='all') r=r.filter(e=>sev(e)===filter);
   if(search) r=r.filter(e=>{const q=search.toLowerCase();return(e.text||'').toLowerCase().includes(q)||(e.kind||'').includes(q)});
-  if(dateFrom) r=r.filter(e=>e.created_at && e.created_at.slice(0,10)>=dateFrom);
-  if(dateTo) r=r.filter(e=>e.created_at && e.created_at.slice(0,10)<=dateTo);
+  if(dateFrom) r=r.filter(e=>e.created_at&&e.created_at.slice(0,10)>=dateFrom);
+  if(dateTo) r=r.filter(e=>e.created_at&&e.created_at.slice(0,10)<=dateTo);
   return r;
 }
 
-/* KPI FIX: the strip now reflects whatever is currently filtered (date range,
-   severity tab, search) instead of always showing all-time totals -- so the
-   numbers at the top always match what's actually visible in the table below. */
 function updateKpis(evs){
   const tot=evs.length, crits=evs.filter(e=>sev(e)==='critical').length;
   const risk=evs.filter(e=>(e.data?.entropy??0)>=0.7).length;
@@ -531,120 +489,239 @@ function updateKpis(evs){
   document.getElementById('k-total').textContent=tot;
   document.getElementById('k-total-sub').textContent=crits+' critical in current view';
   document.getElementById('k-crit').textContent=crits;
-  document.getElementById('k-ent').textContent=Math.round(avgE*100)+'%';
+  document.getElementById('k-ent').textContent=avgE.toFixed(2);
   const kr=document.getElementById('k-risk');
   kr.textContent=risk; kr.className='kpi-val '+(risk>0?'c-red':'c-green');
 }
 
-function refresh(){
-  const f = filtered();
-  renderRows(f);
-  updateKpis(f);
-}
+function refresh(){const f=filtered();renderRows(f);updateKpis(f);}
 
+/* ── VIEW SWITCHING — all 6 icons wired ── */
 document.querySelectorAll('.nav-btn[data-view]').forEach(b=>b.addEventListener('click',()=>switchView(b.dataset.view)));
 
+const VIEW_LOADERS={
+  'agents':()=>{if(!lastTopology)loadAgents();},
+  'analytics':()=>{if(!lastDrift)loadAnalytics();},
+  'circuit-breaker':()=>loadCircuitBreaker(),
+  'compliance':()=>{if(!lastDeadlines)loadCompliance();},
+  'settings':()=>{if(!lastHealth)loadSettings();}
+};
+
 function switchView(view){
-  document.querySelectorAll('.nav-btn[data-view]').forEach(b=>b.classList.toggle('active', b.dataset.view===view));
-  document.getElementById('view-ledger').style.display = view==='ledger' ? '' : 'none';
-  document.getElementById('view-agents').style.display = view==='agents' ? '' : 'none';
+  document.querySelectorAll('.nav-btn[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===view));
+  ['ledger','agents','analytics','circuit-breaker','compliance','settings'].forEach(v=>{
+    const el=document.getElementById('view-'+v);
+    if(el) el.style.display=v===view?'':'none';
+  });
   closeInv();
-  if(view==='agents' && !lastTopology) loadAgents();
+  if(VIEW_LOADERS[view]) VIEW_LOADERS[view]();
 }
 
-/* AGENTS VIEW: built straight off the real /topology endpoint (Phase 3 Stage 5)
-   -- no invented graph, no fake data. lastTopology is cached after fetch so
-   expanding/collapsing an agent re-renders from memory instead of refetching;
-   only the explicit Refresh button hits the network again. */
-let lastTopology = null;
-let agentsOpen = new Set();
-
-function bandClass(b){
-  if(b==='critical') return 'critical';
-  if(b==='elevated'||b==='caution') return 'elevated';
-  if(b==='unregistered') return 'unreg';
-  return 'stable';
-}
+/* ── AGENTS ── */
+let lastTopology=null, agentsOpen=new Set();
+function bandClass(b){if(b==='critical')return 'critical';if(b==='elevated'||b==='caution')return 'elevated';if(b==='unregistered')return 'unreg';return 'stable';}
 
 async function loadAgents(){
-  const box = document.getElementById('agents-body');
-  box.innerHTML = '<div class="loading"><div class="spin"></div>Loading agent topology…</div>';
-  try{
-    lastTopology = await fetch(API+'/topology',{cache:'no-store'}).then(r=>r.json());
-    renderAgents();
-  }catch(err){
-    box.innerHTML = `<div class="empty"><div style="color:var(--danger);font-size:20px">⚠</div><div style="color:var(--danger);margin-top:6px;font-weight:500">Could not load topology</div><div style="font-size:11px;margin-top:4px;color:var(--muted2)">${err.message}</div></div>`;
-  }
+  const box=document.getElementById('agents-body');
+  box.innerHTML='<div class="loading"><div class="spin"></div>Loading agent topology…</div>';
+  try{lastTopology=await fetch(API+'/topology',{cache:'no-store'}).then(r=>r.json());renderAgents();}
+  catch(err){box.innerHTML=`<div class="empty"><div style="color:var(--danger);font-size:20px">⚠</div><div style="color:var(--danger);margin-top:6px;font-weight:500">Could not load topology</div><div style="font-size:11px;margin-top:4px;color:var(--muted2)">${err.message}</div></div>`;}
 }
 
-function toggleAgent(id){
-  if(agentsOpen.has(id)) agentsOpen.delete(id); else agentsOpen.add(id);
-  renderAgents();
-}
+function toggleAgent(id){if(agentsOpen.has(id))agentsOpen.delete(id);else agentsOpen.add(id);renderAgents();}
 
 function renderAgents(){
-  const data = lastTopology; if(!data) return;
-  const box = document.getElementById('agents-body');
-  const nodes = data.nodes||[];
-  const agents = nodes.filter(n=>n.type==='agent');
-  const sessions = nodes.filter(n=>n.type==='session');
-  const sum = data.summary||{};
-
-  document.getElementById('ag-agents').textContent = sum.agents??agents.length;
-  document.getElementById('ag-sessions').textContent = sum.sessions??sessions.length;
-  const unreg = document.getElementById('ag-unreg');
-  unreg.textContent = sum.unregistered_agents??0;
-  unreg.className = 'kpi-val '+((sum.unregistered_agents||0)>0?'c-red':'c-green');
-  const crit = document.getElementById('ag-critsess');
-  crit.textContent = sum.critical_sessions??0;
-  crit.className = 'kpi-val '+((sum.critical_sessions||0)>0?'c-red':'c-green');
-  document.getElementById('ag-edges').textContent = sum.edges??(data.edges||[]).length;
-
-  if(!agents.length){
-    box.innerHTML = '<div class="empty"><div class="empty-icon">◎</div><div>No agents seen yet.</div><div style="font-size:11px;margin-top:6px;color:var(--muted2)">Agents appear here the moment they send traffic through /intercept.</div></div>';
-    return;
-  }
-
-  const order = {critical:0, elevated:1, caution:1, unregistered:2, stable:3};
-  const sorted = agents.slice().sort((a,b)=>(order[a.risk_band]??9)-(order[b.risk_band]??9) || (b.events||0)-(a.events||0));
-
-  box.innerHTML = sorted.map(a=>{
-    const aSessions = sessions.filter(s=>s.agent_id===a.agent_id);
-    const blockedRatio = a.events?Math.round((a.blocked/a.events)*100):0;
-    const isOpen = agentsOpen.has(a.agent_id);
-    const sessRows = aSessions.length ? aSessions.map(s=>{
-      const lineage = s.parent_session_id ? `<div style="font-size:9px;color:var(--muted);margin-top:2px">↳ spawned from ${s.parent_session_id}</div>` : '';
-      const ds = s.drift_status||'unknown';
-      return `<div class="sess-row">
-        <div class="sess-id">${s.session_id}${lineage}</div>
-        <div class="mono-val">${s.turns??0} turns</div>
-        <div class="mono-val" style="color:${(s.blocked||0)>0?'var(--danger)':'var(--muted)'}">${s.blocked??0} blocked</div>
-        <div><span class="badge ${ds==='critical'?'critical':ds==='elevated'?'elevated':'stable'}">${ds}</span></div>
-        <div><span class="badge ${bandClass(s.risk_band)}">${s.risk_band||'unknown'}</span></div>
-      </div>`;
-    }).join('') : '<div style="padding:8px 0;color:var(--muted);font-size:11px">No sessions recorded.</div>';
-
-    return `<div class="agent-card">
-      <div class="agent-hdr" onclick="toggleAgent('${a.agent_id}')">
-        <div class="avatar" style="background:rgba(0,212,255,0.12);color:var(--accent)">${(a.agent_id||'??').slice(0,2).toUpperCase()}</div>
-        <div style="flex:1;min-width:0">
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-            <span style="font-weight:600;font-size:12px">${a.agent_id}</span>
-            <span class="badge ${a.registered?'stable':'unreg'}">${a.registered?'registered':'unregistered'}</span>
-            <span class="badge ${bandClass(a.risk_band)}">${a.risk_band||'unknown'}</span>
-          </div>
-          <div style="font-size:10px;color:var(--muted);margin-top:3px">${a.events??0} events · ${a.blocked??0} blocked (${blockedRatio}%) · ${aSessions.length} session${aSessions.length===1?'':'s'}</div>
-        </div>
-        <div class="chevron">${isOpen?'▾':'▸'}</div>
-      </div>
-      <div class="agent-body" style="display:${isOpen?'block':'none'}">
-        <div class="sess-hdr"><div>Session</div><div>Turns</div><div>Blocked</div><div>Drift</div><div>Risk</div></div>
-        ${sessRows}
-      </div>
-    </div>`;
+  const data=lastTopology; if(!data) return;
+  const box=document.getElementById('agents-body');
+  const nodes=data.nodes||[], agents=nodes.filter(n=>n.type==='agent'), sessions=nodes.filter(n=>n.type==='session'), sum=data.summary||{};
+  document.getElementById('ag-agents').textContent=sum.agents??agents.length;
+  document.getElementById('ag-sessions').textContent=sum.sessions??sessions.length;
+  const unreg=document.getElementById('ag-unreg'); unreg.textContent=sum.unregistered_agents??0; unreg.className='kpi-val '+((sum.unregistered_agents||0)>0?'c-red':'c-green');
+  const crit=document.getElementById('ag-critsess'); crit.textContent=sum.critical_sessions??0; crit.className='kpi-val '+((sum.critical_sessions||0)>0?'c-red':'c-green');
+  document.getElementById('ag-edges').textContent=sum.edges??(data.edges||[]).length;
+  if(!agents.length){box.innerHTML='<div class="empty"><div class="empty-icon">◎</div><div>No agents seen yet.</div></div>';return;}
+  const order={critical:0,elevated:1,caution:1,unregistered:2,stable:3};
+  const sorted=agents.slice().sort((a,b)=>(order[a.risk_band]??9)-(order[b.risk_band]??9)||(b.events||0)-(a.events||0));
+  box.innerHTML=sorted.map(a=>{
+    const aSessions=sessions.filter(s=>s.agent_id===a.agent_id);
+    const blockedRatio=a.events?Math.round((a.blocked/a.events)*100):0;
+    const isOpen=agentsOpen.has(a.agent_id);
+    const sessRows=aSessions.length?aSessions.map(s=>{
+      const lineage=s.parent_session_id?`<div style="font-size:9px;color:var(--muted);margin-top:2px">↳ spawned from ${s.parent_session_id}</div>`:'';
+      const ds=s.drift_status||'unknown';
+      return `<div class="sess-row"><div class="sess-id">${s.session_id}${lineage}</div><div class="mono-val">${s.turns??0} turns</div><div class="mono-val" style="color:${(s.blocked||0)>0?'var(--danger)':'var(--muted)'}">${s.blocked??0} blocked</div><div><span class="badge ${ds==='critical'?'critical':ds==='elevated'?'elevated':'stable'}">${ds}</span></div><div><span class="badge ${bandClass(s.risk_band)}">${s.risk_band||'unknown'}</span></div></div>`;
+    }).join(''):'<div style="padding:8px 0;color:var(--muted);font-size:11px">No sessions recorded.</div>';
+    return `<div class="agent-card"><div class="agent-hdr" onclick="toggleAgent('${a.agent_id}')"><div class="avatar" style="background:rgba(0,212,255,0.12);color:var(--accent)">${(a.agent_id||'??').slice(0,2).toUpperCase()}</div><div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-weight:600;font-size:12px">${a.agent_id}</span><span class="badge ${a.registered?'stable':'unreg'}">${a.registered?'registered':'unregistered'}</span><span class="badge ${bandClass(a.risk_band)}">${a.risk_band||'unknown'}</span></div><div style="font-size:10px;color:var(--muted);margin-top:3px">${a.events??0} events · ${a.blocked??0} blocked (${blockedRatio}%) · ${aSessions.length} session${aSessions.length===1?'':'s'}</div></div><div class="chevron">${isOpen?'▾':'▸'}</div></div><div class="agent-body" style="display:${isOpen?'block':'none'}"><div class="sess-hdr"><div>Session</div><div>Turns</div><div>Blocked</div><div>Drift</div><div>Risk</div></div>${sessRows}</div></div>`;
   }).join('');
 }
 
+/* ── ANALYTICS ── */
+let lastDrift=null;
+
+async function loadAnalytics(){
+  const box=document.getElementById('analytics-body');
+  box.innerHTML='<div class="loading"><div class="spin"></div>Loading drift analytics…</div>';
+  try{lastDrift=await fetch(API+'/drift',{cache:'no-store'}).then(r=>r.json());renderAnalytics();}
+  catch(err){box.innerHTML=`<div class="empty"><div style="color:var(--danger);font-size:20px">⚠</div><div style="color:var(--danger);margin-top:6px;font-weight:500">Could not load analytics</div><div style="font-size:11px;margin-top:4px;color:var(--muted2)">${err.message}</div></div>`;}
+}
+
+function renderAnalytics(){
+  const data=lastDrift; if(!data) return;
+  const box=document.getElementById('analytics-body');
+  const sessions=data.sessions||[], driftMap=data.drift||{};
+  if(!sessions.length){
+    ['an-sessions','an-critical','an-elevated','an-stable','an-avg'].forEach(id=>document.getElementById(id).textContent='0');
+    box.innerHTML='<div class="empty"><div class="empty-icon">◎</div><div>No drift sessions tracked yet.</div><div style="font-size:11px;margin-top:6px;color:var(--muted2)">Sessions appear here after agents send traffic through /intercept.</div></div>';
+    return;
+  }
+  const entries=sessions.map(sid=>({sid,d:driftMap[sid]||{}}));
+  const critical=entries.filter(e=>e.d.status==='critical').length;
+  const elevated=entries.filter(e=>e.d.status==='elevated').length;
+  const stable=entries.filter(e=>e.d.status==='stable').length;
+  const avgScore=entries.reduce((a,e)=>a+(e.d.score||0),0)/entries.length;
+  document.getElementById('an-sessions').textContent=sessions.length;
+  const critEl=document.getElementById('an-critical'); critEl.textContent=critical; critEl.className='kpi-val '+(critical>0?'c-red':'c-green');
+  const elevEl=document.getElementById('an-elevated'); elevEl.textContent=elevated; elevEl.className='kpi-val '+(elevated>0?'c-amber':'c-green');
+  document.getElementById('an-stable').textContent=stable;
+  document.getElementById('an-avg').textContent=avgScore.toFixed(2);
+  const statusOrder={critical:0,elevated:1,stable:2};
+  const sorted=entries.slice().sort((a,b)=>(statusOrder[a.d.status]??9)-(statusOrder[b.d.status]??9)||(b.d.score||0)-(a.d.score||0));
+  box.innerHTML=sorted.map(({sid,d})=>{
+    const sc=d.score||0, st=d.status||'unknown', turns=d.turns_analyzed||0;
+    const bc=st==='critical'?'var(--danger)':st==='elevated'?'var(--warn)':'var(--ok)';
+    return `<div class="drift-card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text)">${sid}</span><div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;font-family:'JetBrains Mono',monospace;color:${bc}">${sc.toFixed(2)}</span><span class="badge ${st==='critical'?'critical':st==='elevated'?'elevated':'stable'}">${st}</span></div></div><div style="font-size:10px;color:var(--muted);margin-bottom:6px">${turns} turn${turns===1?'':'s'} analyzed</div><div class="drift-bar-wrap"><div class="drift-bar" style="width:${Math.round(sc*100)}%;background:${bc}"></div></div></div>`;
+  }).join('');
+}
+
+/* ── CIRCUIT BREAKER ── */
+let lastCbStatus=null;
+
+async function loadCircuitBreaker(){
+  const box=document.getElementById('cb-body');
+  box.innerHTML='<div class="loading"><div class="spin"></div>Loading circuit breaker status…</div>';
+  try{lastCbStatus=await fetch(API+'/circuit-breaker/status',{cache:'no-store'}).then(r=>r.json());renderCircuitBreaker();}
+  catch(err){box.innerHTML=`<div class="empty"><div style="color:var(--danger);font-size:20px">⚠</div><div style="color:var(--danger);margin-top:6px;font-weight:500">Could not load circuit breaker</div><div style="font-size:11px;margin-top:4px;color:var(--muted2)">${err.message}</div></div>`;}
+}
+
+function renderCircuitBreaker(){
+  const d=lastCbStatus; if(!d) return;
+  const box=document.getElementById('cb-body');
+  const state=d.state||'unknown';
+  const sc=state==='closed'?'var(--ok)':state==='open'?'var(--danger)':'var(--warn)';
+  const lf=d.last_failure, le=d.last_event;
+  box.innerHTML=`
+    <div class="cb-state-card">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin-bottom:10px">Circuit Breaker State</div>
+      <div class="cb-state-val" style="color:${sc}">${state.toUpperCase()}</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:14px">${state==='closed'?'Requests flowing normally.':state==='open'?'All requests blocked. Reset manually when ready.':'Testing — limited requests allowed.'}</div>
+      <div style="display:flex;justify-content:center;gap:20px;font-size:10px;color:var(--muted)">
+        <span>Failures: <strong style="color:var(--text)">${d.failure_count??0}</strong></span>
+        <span>Allows requests: <strong style="color:${d.allows_requests?'var(--ok)':'var(--danger)'}">${d.allows_requests?'Yes':'No'}</strong></span>
+      </div>
+    </div>
+    <div class="cb-btn-row">
+      <button class="cb-btn cb-btn-open" onclick="cbManualOpen()">⚡ Open — Block All Requests</button>
+      <button class="cb-btn cb-btn-close" onclick="cbManualClose()">✓ Reset to Closed</button>
+    </div>
+    ${lf?`<div class="settings-card"><div class="inv-sec-title" style="margin-bottom:8px">◎ Last Failure</div><div class="settings-row"><span class="settings-key">Reason</span><span class="settings-val" style="color:var(--warn)">${lf.reason||'—'}</span></div><div class="settings-row"><span class="settings-key">BDI Score</span><span class="settings-val">${((lf.bdi_score||0)*100).toFixed(0)}%</span></div><div class="settings-row"><span class="settings-key">Entropy</span><span class="settings-val">${(lf.entropy||0).toFixed(2)}</span></div></div>`:''}
+    ${le?`<div class="settings-card"><div class="inv-sec-title" style="margin-bottom:8px">◎ Last Event</div><div class="settings-row"><span class="settings-key">State</span><span class="settings-val" style="color:${sc}">${le.state||'—'}</span></div><div class="settings-row"><span class="settings-key">Reason</span><span class="settings-val">${le.reason||'—'}</span></div><div class="settings-row"><span class="settings-key">Timestamp</span><span class="settings-val">${le.timestamp?new Date(le.timestamp).toLocaleString():'—'}</span></div></div>`:''}
+  `;
+}
+
+async function cbManualOpen(){
+  if(!confirm('Open the circuit breaker and block ALL agent requests?')) return;
+  try{await fetch(API+'/circuit-breaker/open',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reason:'Manual open from dashboard',bdi_score:1.0,entropy:0.0})});loadCircuitBreaker();load();}
+  catch(err){alert('Failed: '+err.message);}
+}
+
+async function cbManualClose(){
+  if(!confirm('Reset the circuit breaker to CLOSED and allow requests?')) return;
+  try{await fetch(API+'/circuit-breaker/close',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reason:'Manual reset from dashboard',bdi_score:0.0,entropy:0.0})});loadCircuitBreaker();load();}
+  catch(err){alert('Failed: '+err.message);}
+}
+
+/* ── COMPLIANCE ── */
+let lastDeadlines=null;
+
+async function loadCompliance(){
+  const box=document.getElementById('compliance-body');
+  box.innerHTML='<div class="loading"><div class="spin"></div>Loading compliance deadlines…</div>';
+  try{
+    const incidentInput=document.getElementById('incident-time-input').value;
+    let url=API+'/compliance/deadlines?auto_hold=false';
+    if(incidentInput) url+='&incident_time='+encodeURIComponent(new Date(incidentInput).toISOString());
+    lastDeadlines=await fetch(url,{cache:'no-store'}).then(r=>r.json());
+    renderCompliance();
+  }catch(err){box.innerHTML=`<div class="empty"><div style="color:var(--danger);font-size:20px">⚠</div><div style="color:var(--danger);margin-top:6px;font-weight:500">Could not load deadlines</div><div style="font-size:11px;margin-top:4px;color:var(--muted2)">${err.message}</div></div>`;}
+}
+
+function renderCompliance(){
+  const data=lastDeadlines; if(!data) return;
+  const box=document.getElementById('compliance-body');
+  const deadlines=data.deadlines||[], overall=data.overall_status||'NOMINAL';
+  const oc=overall==='BREACHED'?'var(--danger)':overall==='CRITICAL'?'var(--critical)':overall==='WARNING'?'var(--warn)':'var(--ok)';
+  box.innerHTML=`
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:12px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:9px">
+      <span style="font-size:10px;text-transform:uppercase;letter-spacing:0.09em;color:var(--muted)">Overall Status</span>
+      <span style="font-size:14px;font-weight:700;color:${oc}">${overall}</span>
+      <span style="font-size:10px;color:var(--muted);margin-left:auto">Incident: ${new Date(data.incident_time).toLocaleString()}</span>
+    </div>
+    ${deadlines.map(d=>{
+      const st=d.status||'ACTIVE';
+      const bc=st==='BREACHED'?'var(--danger)':st==='CRITICAL'?'var(--critical)':st==='WARNING'?'var(--warn)':'var(--ok)';
+      const badgeC=st==='BREACHED'?'cb-breached':st==='CRITICAL'?'cb-critical':st==='WARNING'?'cb-warning':'cb-active';
+      const pct=Math.min(100,Math.round((d.elapsed_hours/d.window_hours)*100));
+      const hrs=d.hours_remaining;
+      const timeLeft=d.breached?'BREACHED':hrs<1?Math.round(hrs*60)+'m remaining':hrs.toFixed(1)+'h remaining';
+      return `<div class="compliance-card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><div><div style="font-size:12px;font-weight:600">${d.framework}</div><div style="font-size:10px;color:var(--muted);margin-top:2px">${d.jurisdiction} · ${d.window_hours}hr window</div></div><div style="text-align:right"><span class="comp-badge ${badgeC}">${st}</span><div style="font-size:10px;color:${bc};margin-top:4px;font-family:'JetBrains Mono',monospace">${timeLeft}</div></div></div><div style="font-size:10px;color:var(--muted);margin-bottom:8px;line-height:1.4">${d.obligation}</div><div class="comp-progress"><div class="comp-fill" style="width:${pct}%;background:${bc}"></div></div><div style="display:flex;justify-content:space-between;margin-top:4px;font-size:9px;color:var(--muted2)"><span>Elapsed: ${d.elapsed_hours.toFixed(1)}h</span><span>Window: ${d.window_hours}h</span></div></div>`;
+    }).join('')}
+  `;
+}
+
+/* ── SETTINGS ── */
+let lastHealth=null;
+
+async function loadSettings(){
+  const box=document.getElementById('settings-body');
+  box.innerHTML='<div class="loading"><div class="spin"></div>Loading system settings…</div>';
+  try{lastHealth=await fetch(API+'/health',{cache:'no-store'}).then(r=>r.json());renderSettings();}
+  catch(err){box.innerHTML=`<div class="empty"><div style="color:var(--danger);font-size:20px">⚠</div><div style="color:var(--danger);margin-top:6px;font-weight:500">Could not load settings</div><div style="font-size:11px;margin-top:4px;color:var(--muted2)">${err.message}</div></div>`;}
+}
+
+function renderSettings(){
+  const h=lastHealth; if(!h) return;
+  const box=document.getElementById('settings-body');
+  const cb=h.circuit_breaker||{};
+  box.innerHTML=`
+    <div class="settings-card">
+      <div class="inv-sec-title" style="margin-bottom:8px">◎ Service</div>
+      <div class="settings-row"><span class="settings-key">Service</span><span class="settings-val">${h.service||'pulse-proxy'}</span></div>
+      <div class="settings-row"><span class="settings-key">Status</span><span class="settings-val" style="color:${h.ok?'var(--ok)':'var(--danger)'}">${h.ok?'HEALTHY':'UNREACHABLE'}</span></div>
+      <div class="settings-row"><span class="settings-key">Backend</span><span class="settings-val" style="font-size:10px">${API}</span></div>
+    </div>
+    <div class="settings-card">
+      <div class="inv-sec-title" style="margin-bottom:8px">◎ Pulse Configuration</div>
+      <div class="settings-row"><span class="settings-key">Shadow Mode</span><span class="settings-val" style="color:${h.shadow_mode?'var(--warn)':'var(--ok)'}">${h.shadow_mode?'ENABLED — log only, not blocking':'DISABLED — full enforcement'}</span></div>
+      <div class="settings-row"><span class="settings-key">Synthesis Engine</span><span class="settings-val" style="color:${h.synthesis_enabled?'var(--ok)':'var(--muted)'}">${h.synthesis_enabled?'ENABLED':'DISABLED'}</span></div>
+      <div class="settings-row"><span class="settings-key">Upstream LLM</span><span class="settings-val" style="color:${h.upstream_configured?'var(--ok)':'var(--muted)'}">${h.upstream_configured?'CONFIGURED':'Not configured — baseline fallback'}</span></div>
+      <div class="settings-row"><span class="settings-key">Events in feed</span><span class="settings-val">${h.events??0}</span></div>
+    </div>
+    <div class="settings-card">
+      <div class="inv-sec-title" style="margin-bottom:8px">◎ Circuit Breaker</div>
+      <div class="settings-row"><span class="settings-key">State</span><span class="settings-val" style="color:${cb.state==='closed'?'var(--ok)':cb.state==='open'?'var(--danger)':'var(--warn)'}">${(cb.state||'unknown').toUpperCase()}</span></div>
+      <div class="settings-row"><span class="settings-key">Allows Requests</span><span class="settings-val" style="color:${cb.allows_requests?'var(--ok)':'var(--danger)'}">${cb.allows_requests?'Yes':'No'}</span></div>
+    </div>
+    <div class="settings-card">
+      <div class="inv-sec-title" style="margin-bottom:8px">◎ Quick Links</div>
+      <div class="settings-row"><span class="settings-key">Ledger Integrity</span><a href="${API}/ledger/integrity" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">audit_logs chain →</a></div>
+      <div class="settings-row"><span class="settings-key">AI Events Integrity</span><a href="${API}/ledger/integrity/ai_events" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">ai_events chain →</a></div>
+      <div class="settings-row"><span class="settings-key">Swarm Detector</span><a href="${API}/swarm/detect" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">run detection →</a></div>
+      <div class="settings-row"><span class="settings-key">Active Legal Holds</span><a href="${API}/legal-hold?source=db" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">view holds →</a></div>
+    </div>
+  `;
+}
+
+/* ── EVENT LISTENERS ── */
 document.querySelectorAll('.ftab').forEach(t=>t.addEventListener('click',()=>{
   document.querySelectorAll('.ftab').forEach(x=>x.classList.remove('active'));
   t.classList.add('active'); filter=t.dataset.f; refresh();
@@ -659,46 +736,31 @@ document.getElementById('date-clear').addEventListener('click',()=>{
   refresh();
 });
 
+/* ── INVESTIGATOR ── */
 function openInv(idx){
   selIdx=idx; refresh();
   const e=ALL[idx]; if(!e) return;
   const s=sev(e), bd=e.data?.bdi_score??0, en=e.data?.entropy??0;
   const ts=e.created_at?new Date(e.created_at).toLocaleString():'Unknown';
-
   const si=document.getElementById('i-sev');
   si.textContent=s.toUpperCase(); si.className='inv-sev '+s;
   document.getElementById('i-title').textContent=`Investigator: ${evId(idx)}`;
   document.getElementById('i-meta').innerHTML=`
     <span>Agent: <strong>${e.data?.agent_id||'unknown'}</strong></span>
     <span>Triggered: <strong>${ts}</strong></span>
-    <span>Entropy: <strong style="color:${entC(en)}">${Math.round(en*100)}%</strong></span>`;
-
+    <span>Entropy: <strong style="color:${entC(en)}">${en.toFixed(2)}</strong></span>`;
   const tags=['#'+e.kind];
   if(en>=0.7) tags.push('#high-entropy');
   if(bd>=0.65) tags.push('#bdi-critical');
   if(s==='critical') tags.push('#auto-isolated');
   if(e.kind==='governance') tags.push('#circuit-breaker');
   document.getElementById('i-tags').innerHTML=tags.map(t=>`<span class="tag">${t}</span>`).join('');
-
-  const pts=[];
-  for(let i=0;i<22;i++){
-    const x=i*(400/21);
-    const base=27, wave=Math.sin(i*0.7+en*8)*12+Math.sin(i*1.3)*5;
-    const y=Math.max(4,Math.min(51,base-wave+(Math.random()-0.5)*4));
-    pts.push(`${x.toFixed(1)},${y.toFixed(1)}`);
-  }
-  const lp=pts[pts.length-1].split(',');
-  document.getElementById('hm-line').setAttribute('points',pts.join(' '));
-  document.getElementById('hm-dot').setAttribute('cx',lp[0]);
-  document.getElementById('hm-dot').setAttribute('cy',lp[1]);
-  if(s==='critical') document.getElementById('hm-spike').textContent='▼ Event Spike: '+ts.slice(11,19);
-
+  loadHeartMonitor(e);
   const sig=Math.round((1-en)*100);
   const sp=document.getElementById('i-signal');
   sp.textContent=sig+'%'; sp.style.color=sig>60?'var(--ok)':sig>30?'var(--warn)':'var(--danger)';
-
   const tl=[
-    {t:'T+0',c:'#10b981',x:'System Normal — Entropy stable at '+(Math.max(0,en-0.25)).toFixed(2)},
+    {t:'T+0',c:'#10b981',x:'System Normal — Entropy baseline at '+(Math.max(0,en-0.25)).toFixed(2)},
     {t:'T+1',c:'#f59e0b',x:'Anomaly Detected — Output distribution shifted from baseline'},
     {t:'T+2',c:'#f59e0b',x:'Confidence Dropping — Token probability collapse '+Math.round(en*90)+'%'},
   ];
@@ -710,7 +772,6 @@ function openInv(idx){
     tl.push({t:'T+3',c:'#10b981',x:'Recovery Complete — Stable state restored. Incident report generated.'});
   }
   document.getElementById('i-tl').innerHTML=tl.map(t=>`<li class="tl-item"><span class="tl-t">${t.t}</span><div class="tl-dot" style="background:${t.c}"></div><span class="tl-text">${t.x}</span></li>`).join('');
-
   const regs=s==='critical'?[
     {n:'PDPA Malaysia',r:'HIGH',d:'Notify PDPC of personal data breach. 24-hour notification window from incident detection.',a:'Export evidence package. Submit to compliance officer immediately.'},
     {n:'Singapore MGF — Clause 2.5',r:'HIGH',d:'Document and report AI incidents within the MGF 72-hour window.',a:'Export evidence package. Submit to compliance officer.'},
@@ -723,17 +784,46 @@ function openInv(idx){
     {n:'ISO/IEC 42001',r:'LOW',d:'Log and assess AI management system activity.',a:'Event recorded to the immutable audit ledger.'},
   ];
   document.getElementById('i-regs').innerHTML=regs.map(r=>`<div class="reg-card"><div class="reg-hdr"><span class="reg-name">${r.n}</span><span class="badge ${r.r==='HIGH'?'critical':r.r==='MED'?'elevated':'stable'}">${r.r}</span></div><div class="reg-desc">${r.d}</div><div class="reg-action">↳ ${r.a}</div></div>`).join('');
-
   const now=new Date();
-  const d1=new Date(now.getTime()+86400000).toLocaleString();
-  const d3=new Date(now.getTime()+259200000).toLocaleString();
-  const d7=new Date(now.getTime()+604800000).toLocaleString();
   document.getElementById('i-sla').innerHTML=`
-    <div class="sla-item"><div class="sla-hdr"><span class="sla-name">Acknowledge</span><span class="sla-met" style="color:var(--ok)">Met</span></div><div class="sla-bar"><div class="sla-fill" style="width:100%;background:var(--ok)"></div></div><div class="sla-due">Due: ${d1}</div></div>
-    <div class="sla-item"><div class="sla-hdr"><span class="sla-name">Resolve</span><span class="sla-met" style="color:var(--ok)">Met</span></div><div class="sla-bar"><div class="sla-fill" style="width:100%;background:var(--ok)"></div></div><div class="sla-due">Due: ${d3}</div></div>
-    <div class="sla-item"><div class="sla-hdr"><span class="sla-name">Report</span><span class="sla-met" style="color:var(--warn)">Pending</span></div><div class="sla-bar"><div class="sla-fill" style="width:35%;background:var(--warn)"></div></div><div class="sla-due">Due: ${d7}</div></div>`;
-
+    <div class="sla-item"><div class="sla-hdr"><span class="sla-name">Acknowledge</span><span class="sla-met" style="color:var(--ok)">Met</span></div><div class="sla-bar"><div class="sla-fill" style="width:100%;background:var(--ok)"></div></div><div class="sla-due">Due: ${new Date(now.getTime()+86400000).toLocaleString()}</div></div>
+    <div class="sla-item"><div class="sla-hdr"><span class="sla-name">Resolve</span><span class="sla-met" style="color:var(--ok)">Met</span></div><div class="sla-bar"><div class="sla-fill" style="width:100%;background:var(--ok)"></div></div><div class="sla-due">Due: ${new Date(now.getTime()+259200000).toLocaleString()}</div></div>
+    <div class="sla-item"><div class="sla-hdr"><span class="sla-name">Report</span><span class="sla-met" style="color:var(--warn)">Pending</span></div><div class="sla-bar"><div class="sla-fill" style="width:35%;background:var(--warn)"></div></div><div class="sla-due">Due: ${new Date(now.getTime()+604800000).toLocaleString()}</div></div>`;
   document.getElementById('inv').classList.add('open');
+}
+
+/* Heart Monitor — real /session/lineage data */
+async function loadHeartMonitor(e){
+  const sessionId=e.raw?.session_id, en=e.data?.entropy??0, s=sev(e);
+  if(!sessionId){renderFlatHM(en,s);return;}
+  try{
+    const data=await fetch(API+'/session/lineage/'+encodeURIComponent(sessionId),{cache:'no-store'}).then(r=>r.json());
+    const lineage=data.lineage||[];
+    const entropies=lineage.map(t=>t.entropy??0);
+    if(entropies.length<2){renderFlatHM(en,s);return;}
+    const pts=entropies.map((v,i)=>{
+      const x=(i/(entropies.length-1))*400;
+      const y=4+(1-v)*47;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    });
+    document.getElementById('hm-line').setAttribute('points',pts.join(' '));
+    const last=pts[pts.length-1].split(',');
+    document.getElementById('hm-dot').setAttribute('cx',last[0]);
+    document.getElementById('hm-dot').setAttribute('cy',last[1]);
+    document.getElementById('hm-left').textContent='← turn 1';
+    const peak=Math.max(...entropies);
+    document.getElementById('hm-spike').textContent=entropies.length+' turns · peak entropy '+peak.toFixed(2);
+  }catch(err){renderFlatHM(en,s);}
+}
+
+function renderFlatHM(en,s){
+  const y=(4+(1-en)*47).toFixed(1);
+  const pts=Array.from({length:22},(_,i)=>`${(i*400/21).toFixed(1)},${y}`);
+  document.getElementById('hm-line').setAttribute('points',pts.join(' '));
+  document.getElementById('hm-dot').setAttribute('cx','400');
+  document.getElementById('hm-dot').setAttribute('cy',y);
+  document.getElementById('hm-left').textContent='← no session history';
+  document.getElementById('hm-spike').textContent=s==='critical'?'▼ Single high-entropy event':'';
 }
 
 function closeInv(){
@@ -741,54 +831,26 @@ function closeInv(){
   selIdx=-1; refresh();
 }
 
-/* REMEDIATE: the one action button wired to a real backend write -- creates
-   a genuine, persisted legal hold (Phase 3 Stage 6) tied to this specific
-   event. Distinct from the automatic holds that fire on critical drift or
-   swarm detection -- this one means "a human reviewed this and flagged it."
-   Writes are permanent (no delete), so this confirms before firing. */
+/* REMEDIATE */
 async function remediateEvent(){
-  if(selIdx<0){ alert('Select an event first.'); return; }
-  const e = ALL[selIdx];
-  const id = evId(selIdx);
-  const ok = confirm(
-    'Create a permanent legal hold for '+id+'?\n\n'+
-    'This writes an immutable forensic record (agent, session, reason, timestamp) '+
-    'that cannot be deleted -- the same protection your audit ledger already guarantees.'
-  );
-  if(!ok) return;
-  const btn = document.querySelector('.act-full.act-danger');
-  const orig = btn.textContent;
-  btn.disabled = true; btn.textContent = '⚡ Creating hold…';
+  if(selIdx<0){alert('Select an event first.');return;}
+  const e=ALL[selIdx], id=evId(selIdx);
+  if(!confirm('Create a permanent legal hold for '+id+'?\n\nThis writes an immutable forensic record that cannot be deleted — the same protection your audit ledger already guarantees.')) return;
+  const btn=document.querySelector('.act-full.act-danger');
+  const orig=btn.textContent;
+  btn.disabled=true; btn.textContent='⚡ Creating hold…';
   try{
-    const sevMap = {critical:'CRITICAL', elevated:'HIGH', stable:'MEDIUM'};
-    const s = sev(e);
-    const res = await fetch(API+'/legal-hold', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({
-        trigger_type:'manual',
-        reason:'Manually remediated via dashboard — '+id,
-        severity: sevMap[s]||'HIGH',
-        agent_id: e.data?.agent_id || null,
-        session_id: e.raw?.session_id || null,
-        event_id: e.raw?.event_id || null
-      })
-    });
-    const data = await res.json();
-    if(data.created===false){
-      alert('No new hold created — an active hold already exists for this session.');
-    } else if(data.hold){
-      alert('Legal hold created for '+id+'.\nHold ID: '+data.hold.id+'\nStatus: ACTIVE — visible via /legal-hold.');
-    } else {
-      alert('Hold request sent, but the response was unexpected. Check /legal-hold to confirm it landed.');
-    }
-  }catch(err){
-    alert('Could not create legal hold: '+err.message);
-  }
-  btn.disabled = false; btn.textContent = orig;
+    const sevMap={critical:'CRITICAL',elevated:'HIGH',stable:'MEDIUM'};
+    const res=await fetch(API+'/legal-hold',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({trigger_type:'manual',reason:'Manually remediated via dashboard — '+id,severity:sevMap[sev(e)]||'HIGH',agent_id:e.data?.agent_id||null,session_id:e.raw?.session_id||null,event_id:e.raw?.event_id||null})});
+    const data=await res.json();
+    if(data.created===false) alert('No new hold created — an active hold already exists for this session.');
+    else if(data.hold) alert('Legal hold created for '+id+'.\nHold ID: '+data.hold.id+'\nStatus: ACTIVE');
+    else alert('Hold request sent. Check /legal-hold to confirm.');
+  }catch(err){alert('Could not create legal hold: '+err.message);}
+  btn.disabled=false; btn.textContent=orig;
 }
 
-
+/* REPLAY */
 async function replayEventChain(){
   var btn=document.getElementById('btn-replay');
   btn.disabled=true; btn.textContent='▷ Replaying…'; closeInv();
@@ -796,8 +858,7 @@ async function replayEventChain(){
   for(var i=0;i<evs.length;i++){
     await new Promise(function(r){setTimeout(r,380)});
     var e=evs[i], ridx=ALL.indexOf(e), s=sev(e), bd=e.data&&e.data.bdi_score||0, en=e.data&&e.data.entropy||0;
-    var ts=e.created_at?new Date(e.created_at).toLocaleString():'—';
-    var bpct=Math.round(bd*100), epct=Math.round(en*100);
+    var ts=e.created_at?new Date(e.created_at).toLocaleString():'—', bpct=Math.round(bd*100);
     var row=document.createElement('div'); row.className='evt-row';
     row.style.background='rgba(0,212,255,0.09)';
     row.setAttribute('onclick','openInv('+ridx+')');
@@ -805,7 +866,7 @@ async function replayEventChain(){
       '<div class="actor-wrap">'+avatarFor(e.kind)+'<div style="min-width:0"><div class="actor-name">'+actorName(e.kind)+'</div><div class="actor-desc">'+shortText(e.text)+'</div></div></div>'+
       '<div><span class="badge '+s+'">'+s+'</span></div>'+
       '<div class="bdi-wrap"><div class="bdi-track"><div class="bdi-fill" style="width:'+bpct+'%;background:'+bdiC(bd)+'"></div></div><span class="mono-val" style="color:'+bdiC(bd)+'">'+bpct+'%</span></div>'+
-      '<div class="mono-val" style="color:'+entC(en)+'">'+epct+'%</div>'+
+      '<div class="mono-val" style="color:'+entC(en)+'">'+en.toFixed(2)+'</div>'+
       '<div><div class="pulse-dot '+pulseClass(s)+'">'+pulseIcon(s)+'</div></div>';
     tb.appendChild(row);
     (function(rr){setTimeout(function(){rr.style.background=''},600)})(row);
@@ -813,9 +874,9 @@ async function replayEventChain(){
   btn.disabled=false; btn.textContent='▷ Replay Event Chain';
 }
 
+/* EXPORT */
 async function exportEvidencePackage(){
-  var btn=document.getElementById('btn-export');
-  btn.disabled=true; btn.textContent='↓ Exporting…';
+  var btn=document.getElementById('btn-export'); btn.disabled=true; btn.textContent='↓ Exporting…';
   try{
     var e=selIdx>=0?ALL[selIdx]:null;
     var results=await Promise.all([
@@ -823,93 +884,38 @@ async function exportEvidencePackage(){
       fetch(API+'/circuit-breaker/status',{cache:'no-store'}).then(function(r){return r.json()}),
       fetch(API+'/ai_events/recent',{cache:'no-store'}).then(function(r){return r.json()})
     ]);
-    var pkg={
-      exported_at:new Date().toISOString(),
-      governance_version:'pulse-v1-beta',
-      jurisdiction:'ASEAN — PDPA Malaysia (24hr) / Singapore MGF (72hr) / Vietnam AI Law (72hr)',
-      selected_event:e?Object.assign({event_id:evId(selIdx),severity:sev(e)},e):null,
-      health:results[0], circuit_breaker:results[1],
-      all_events:results[2].events||[], total_events:(results[2].events||[]).length
-    };
+    var pkg={exported_at:new Date().toISOString(),governance_version:'pulse-v1-beta',jurisdiction:'ASEAN — PDPA Malaysia (24hr) / Singapore MGF (72hr) / Vietnam AI Law (72hr)',selected_event:e?Object.assign({event_id:evId(selIdx),severity:sev(e)},e):null,health:results[0],circuit_breaker:results[1],all_events:results[2].events||[],total_events:(results[2].events||[]).length};
     var blob=new Blob([JSON.stringify(pkg,null,2)],{type:'application/json'});
     var url=URL.createObjectURL(blob); var a=document.createElement('a');
-    a.href=url; a.download='pulse-evidence-'+new Date().toISOString().replace(/[:.]/g,'-')+'.json';
-    a.click(); URL.revokeObjectURL(url);
-  }catch(err){alert('Export failed: '+err.message)}
+    a.href=url; a.download='pulse-evidence-'+new Date().toISOString().replace(/[:.]/g,'-')+'.json'; a.click(); URL.revokeObjectURL(url);
+  }catch(err){alert('Export failed: '+err.message);}
   btn.disabled=false; btn.textContent='↓ Export Evidence Package';
 }
 
+/* INCIDENT REPORT */
 async function generateIncidentReport(){
-  var btn=document.getElementById('btn-report');
-  btn.disabled=true; btn.textContent='☰ Generating…';
+  var btn=document.getElementById('btn-report'); btn.disabled=true; btn.textContent='☰ Generating…';
   try{
-    var e=selIdx>=0?ALL[selIdx]:null;
-    var s=e?sev(e):'n/a', bd=e&&e.data&&e.data.bdi_score||0, en=e&&e.data&&e.data.entropy||0;
-    var ts=e&&e.created_at?new Date(e.created_at).toLocaleString():'Unknown';
-    var now=new Date().toISOString();
+    var e=selIdx>=0?ALL[selIdx]:null, s=e?sev(e):'n/a', bd=e&&e.data&&e.data.bdi_score||0, en=e&&e.data&&e.data.entropy||0;
+    var ts=e&&e.created_at?new Date(e.created_at).toLocaleString():'Unknown', now=new Date().toISOString();
     var health={ok:'?'}, cb={state:'?',failure_count:0};
-    try{
-      var r2=await Promise.all([
-        fetch(API+'/health',{cache:'no-store'}).then(function(r){return r.json()}),
-        fetch(API+'/circuit-breaker/status',{cache:'no-store'}).then(function(r){return r.json()})
-      ]);
-      health=r2[0]; cb=r2[1];
-    }catch(_){}
-    var L=[];
-    L.push('PULSE AI GOVERNANCE INCIDENT REPORT');
-    L.push('=====================================');
-    L.push('Generated:    '+now);
-    L.push('Jurisdiction: ASEAN (PDPA Malaysia 24hr / Singapore MGF 72hr / Vietnam AI Law 72hr)');
-    L.push('');
-    L.push('SYSTEM STATUS'); L.push('-------------');
-    L.push('Health:          '+(health.ok===true?'HEALTHY':'UNKNOWN'));
-    L.push('Circuit Breaker: '+(cb.state||'unknown').toUpperCase());
-    L.push('Failures:        '+(cb.failure_count||0));
-    L.push('');
+    try{var r2=await Promise.all([fetch(API+'/health',{cache:'no-store'}).then(function(r){return r.json()}),fetch(API+'/circuit-breaker/status',{cache:'no-store'}).then(function(r){return r.json()})]);health=r2[0];cb=r2[1];}catch(_){}
+    var L=['PULSE AI GOVERNANCE INCIDENT REPORT','=====================================','Generated:    '+now,'Jurisdiction: ASEAN (PDPA Malaysia 24hr / Singapore MGF 72hr / Vietnam AI Law 72hr)','','SYSTEM STATUS','-------------','Health:          '+(health.ok===true?'HEALTHY':'UNKNOWN'),'Circuit Breaker: '+(cb.state||'unknown').toUpperCase(),'Failures:        '+(cb.failure_count||0),''];
     if(e){
-      L.push('SELECTED EVENT'); L.push('--------------');
-      L.push('Event ID:  '+evId(selIdx));
-      L.push('Severity:  '+s.toUpperCase());
-      L.push('Triggered: '+ts);
-      L.push('Kind:      '+(e.kind||'unknown'));
-      L.push('BDI Score: '+Math.round(bd*100)+'%');
-      L.push('Entropy:   '+Math.round(en*100)+'%');
-      L.push('Text:      '+(e.text||'(none)'));
-      L.push('');
-      if(s==='critical'){
-        L.push('REQUIRED ACTIONS (CRITICAL EVENT)'); L.push('---------------------------------');
-        L.push('PDPA Malaysia:   Notify PDPC within 24 hours');
-        L.push('Singapore MGF:   File incident report within 72 hours');
-        L.push('Vietnam AI Law:  Notify competent authority within 72 hours');
-        L.push('Internal:        Pause automated pipeline, activate HITL review');
-        L.push('');
-      }
-    } else {
-      L.push('NOTE: No event selected. Select an event in the investigator for per-event detail.');
-      L.push('');
-    }
-    L.push('ALL EVENTS SUMMARY'); L.push('------------------');
-    L.push('Total:    '+ALL.length);
-    L.push('Critical: '+ALL.filter(function(x){return sev(x)==='critical'}).length);
-    L.push('Elevated: '+ALL.filter(function(x){return sev(x)==='elevated'}).length);
-    L.push('Stable:   '+ALL.filter(function(x){return sev(x)==='stable'}).length);
-    L.push('');
-    L.push('EVENT TIMELINE'); L.push('--------------');
-    ALL.forEach(function(x,i){
-      var xt=x.created_at?new Date(x.created_at).toLocaleString():'?';
-      L.push('['+String(i+1)+'] '+xt+' | '+sev(x).toUpperCase()+' | '+x.kind+' | '+(x.text||'').substring(0,55));
-    });
-    L.push(''); L.push('=====================================');
-    L.push('Pulse — Immutable Compliance for ASEAN AI Governance');
-    L.push('Built by Waqas Nazir');
+      L.push('SELECTED EVENT','——————————','Event ID:  '+evId(selIdx),'Severity:  '+s.toUpperCase(),'Triggered: '+ts,'Kind:      '+(e.kind||'unknown'),'BDI Score: '+Math.round(bd*100)+'%','Entropy:   '+en.toFixed(2),'Text:      '+(e.text||'(none)'),'');
+      if(s==='critical') L.push('REQUIRED ACTIONS (CRITICAL)','——————————————————','PDPA Malaysia:   Notify PDPC within 24 hours','Singapore MGF:   File incident report within 72 hours','Vietnam AI Law:  Notify competent authority within 72 hours','Internal:        Pause automated pipeline, activate HITL review','');
+    } else L.push('NOTE: No event selected.','');
+    L.push('ALL EVENTS SUMMARY','——————————','Total:    '+ALL.length,'Critical: '+ALL.filter(function(x){return sev(x)==='critical'}).length,'Elevated: '+ALL.filter(function(x){return sev(x)==='elevated'}).length,'Stable:   '+ALL.filter(function(x){return sev(x)==='stable'}).length,'','EVENT TIMELINE','——————————');
+    ALL.forEach(function(x,i){var xt=x.created_at?new Date(x.created_at).toLocaleString():'?';L.push('['+evId(ALL.length-1-i)+'] '+xt+' | '+sev(x).toUpperCase()+' | '+x.kind+' | '+(x.text||'').substring(0,55));});
+    L.push('','=====================================','Pulse — Immutable Compliance for ASEAN AI Governance','Built by Waqas Nazir');
     var blob=new Blob([L.join('\n')],{type:'text/plain'});
     var url=URL.createObjectURL(blob); var a=document.createElement('a');
-    a.href=url; a.download='pulse-incident-report-'+now.replace(/[:.]/g,'-')+'.txt';
-    a.click(); URL.revokeObjectURL(url);
-  }catch(err){alert('Report generation failed: '+err.message)}
+    a.href=url; a.download='pulse-incident-report-'+now.replace(/[:.]/g,'-')+'.txt'; a.click(); URL.revokeObjectURL(url);
+  }catch(err){alert('Report generation failed: '+err.message);}
   btn.disabled=false; btn.textContent='☰ Generate Full Incident Report';
 }
 
+/* MAIN LOAD */
 async function load(){
   try{
     const [h,cb,ev]=await Promise.all([
@@ -917,40 +923,28 @@ async function load(){
       fetch(API+'/circuit-breaker/status',{cache:'no-store'}).then(r=>r.json()),
       fetch(API+'/ai_events/recent',{cache:'no-store'}).then(r=>r.json())
     ]);
-    const state=cb.state||h.circuit_breaker?.state||'unknown';
-    const fails=cb.failure_count??0;
-    const pill=document.getElementById('status-pill');
-    const ptxt=document.getElementById('status-text');
+    const state=cb.state||h.circuit_breaker?.state||'unknown', fails=cb.failure_count??0;
+    const pill=document.getElementById('status-pill'), ptxt=document.getElementById('status-text');
     if(state==='open'){pill.className='pill open-cb';ptxt.textContent='CIRCUIT OPEN';}
     else if(state==='half-open'){pill.className='pill fallback';ptxt.textContent='FALLBACK';}
     else{pill.className='pill live';ptxt.textContent='Systems Nominal';}
-
     const cbEl=document.getElementById('k-cb');
     cbEl.textContent=state.toUpperCase();
     cbEl.className='kpi-val '+(state==='closed'?'c-green':state==='open'?'c-red':'c-amber');
     document.getElementById('k-fail').textContent=fails;
-
-    /* STAGE 1 FIX: durable feed from Supabase via /ai_events/recent, already
-       ordered newest-first by the backend -- replaces the old /events call,
-       which only read Pulse's in-memory feed and went empty on every Render
-       free-tier cold start. */
     ALL=(ev.events||[]).map(transformAiEvent);
-
     refresh();
   }catch(err){
     document.getElementById('tbody').innerHTML=`<div class="empty"><div style="color:var(--danger);font-size:20px">⚠</div><div style="color:var(--danger);margin-top:6px;font-weight:500">Backend unreachable</div><div style="font-size:11px;margin-top:4px;color:var(--muted2)">${err.message}</div></div>`;
   }
 }
 
-/* Default view = today only, so the ledger looks fresh every day without
-   touching any stored data. History is never deleted -- clearing the date
-   filter (✕) or picking another date instantly shows any prior day untouched. */
 (function initDefaultToday(){
-  const t = new Date();
-  const todayStr = t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
-  dateFrom = todayStr; dateTo = todayStr;
-  document.getElementById('date-from').value = todayStr;
-  document.getElementById('date-to').value = todayStr;
+  const t=new Date();
+  const s=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+  dateFrom=s; dateTo=s;
+  document.getElementById('date-from').value=s;
+  document.getElementById('date-to').value=s;
 })();
 
 load(); setInterval(load,10000);
