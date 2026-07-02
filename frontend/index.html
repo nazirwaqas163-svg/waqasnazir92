@@ -496,7 +496,7 @@ function updateKpis(evs){
 
 function refresh(){const f=filtered();renderRows(f);updateKpis(f);}
 
-/* ── VIEW SWITCHING — all 6 icons wired ── */
+/* ── VIEW SWITCHING ── */
 document.querySelectorAll('.nav-btn[data-view]').forEach(b=>b.addEventListener('click',()=>switchView(b.dataset.view)));
 
 const VIEW_LOADERS={
@@ -515,6 +515,16 @@ function switchView(view){
   });
   closeInv();
   if(VIEW_LOADERS[view]) VIEW_LOADERS[view]();
+}
+
+/* ── PASSPORT DOWNLOAD ── */
+async function downloadPassport(agentId){
+  const url=API+'/agents/'+encodeURIComponent(agentId)+'/passport?format=pdf';
+  const a=document.createElement('a');
+  a.href=url;
+  a.download='pulse-passport-'+agentId+'.pdf';
+  a.target='_blank';
+  a.click();
 }
 
 /* ── AGENTS ── */
@@ -551,18 +561,34 @@ function renderAgents(){
       const ds=s.drift_status||'unknown';
       return `<div class="sess-row"><div class="sess-id">${s.session_id}${lineage}</div><div class="mono-val">${s.turns??0} turns</div><div class="mono-val" style="color:${(s.blocked||0)>0?'var(--danger)':'var(--muted)'}">${s.blocked??0} blocked</div><div><span class="badge ${ds==='critical'?'critical':ds==='elevated'?'elevated':'stable'}">${ds}</span></div><div><span class="badge ${bandClass(s.risk_band)}">${s.risk_band||'unknown'}</span></div></div>`;
     }).join(''):'<div style="padding:8px 0;color:var(--muted);font-size:11px">No sessions recorded.</div>';
-    return `<div class="agent-card"><div class="agent-hdr" onclick="toggleAgent('${a.agent_id}')"><div class="avatar" style="background:rgba(0,212,255,0.12);color:var(--accent)">${(a.agent_id||'??').slice(0,2).toUpperCase()}</div><div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-weight:600;font-size:12px">${a.agent_id}</span><span class="badge ${a.registered?'stable':'unreg'}">${a.registered?'registered':'unregistered'}</span><span class="badge ${bandClass(a.risk_band)}">${a.risk_band||'unknown'}</span></div><div style="font-size:10px;color:var(--muted);margin-top:3px">${a.events??0} events · ${a.blocked??0} blocked (${blockedRatio}%) · ${aSessions.length} session${aSessions.length===1?'':'s'}</div></div><div class="chevron">${isOpen?'▾':'▸'}</div></div><div class="agent-body" style="display:${isOpen?'block':'none'}"><div class="sess-hdr"><div>Session</div><div>Turns</div><div>Blocked</div><div>Drift</div><div>Risk</div></div>${sessRows}</div></div>`;
+    return `<div class="agent-card"><div class="agent-hdr" onclick="toggleAgent('${a.agent_id}')"><div class="avatar" style="background:rgba(0,212,255,0.12);color:var(--accent)">${(a.agent_id||'??').slice(0,2).toUpperCase()}</div><div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-weight:600;font-size:12px">${a.agent_id}</span><span class="badge ${a.registered?'stable':'unreg'}">${a.registered?'registered':'unregistered'}</span><span class="badge ${bandClass(a.risk_band)}">${a.risk_band||'unknown'}</span></div><div style="font-size:10px;color:var(--muted);margin-top:3px">${a.events??0} events · ${a.blocked??0} blocked (${blockedRatio}%) · ${aSessions.length} session${aSessions.length===1?'':'s'}</div></div><div class="chevron">${isOpen?'▾':'▸'}</div><button onclick="event.stopPropagation();downloadPassport('${a.agent_id}')" style="background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.2);color:var(--accent);border-radius:5px;padding:3px 8px;font-size:9px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:'Inter',sans-serif">⬇ Passport</button></div><div class="agent-body" style="display:${isOpen?'block':'none'}"><div class="sess-hdr"><div>Session</div><div>Turns</div><div>Blocked</div><div>Drift</div><div>Risk</div></div>${sessRows}</div></div>`;
   }).join('');
 }
 
-/* ── ANALYTICS ── */
+/* ── ANALYTICS — fixed: reads from /ai_events/recent not /drift ── */
 let lastDrift=null;
 
 async function loadAnalytics(){
   const box=document.getElementById('analytics-body');
   box.innerHTML='<div class="loading"><div class="spin"></div>Loading drift analytics…</div>';
-  try{lastDrift=await fetch(API+'/drift',{cache:'no-store'}).then(r=>r.json());renderAnalytics();}
-  catch(err){box.innerHTML=`<div class="empty"><div style="color:var(--danger);font-size:20px">⚠</div><div style="color:var(--danger);margin-top:6px;font-weight:500">Could not load analytics</div><div style="font-size:11px;margin-top:4px;color:var(--muted2)">${err.message}</div></div>`;}
+  try{
+    const evData=await fetch(API+'/ai_events/recent',{cache:'no-store'}).then(r=>r.json());
+    const events=evData.events||[];
+    const sessionMap={};
+    events.forEach(e=>{
+      const sid=e.session_id; if(!sid) return;
+      const en=e.entropy??0;
+      if(!sessionMap[sid]) sessionMap[sid]={score:0,status:'stable',turns_analyzed:0};
+      sessionMap[sid].turns_analyzed++;
+      if(en>sessionMap[sid].score) sessionMap[sid].score=en;
+    });
+    Object.keys(sessionMap).forEach(sid=>{
+      const sc=sessionMap[sid].score;
+      sessionMap[sid].status=sc>=0.7?'critical':sc>=0.4?'elevated':'stable';
+    });
+    lastDrift={sessions:Object.keys(sessionMap),drift:sessionMap};
+    renderAnalytics();
+  }catch(err){box.innerHTML=`<div class="empty"><div style="color:var(--danger);font-size:20px">⚠</div><div style="color:var(--danger);margin-top:6px;font-weight:500">Could not load analytics</div><div style="font-size:11px;margin-top:4px;color:var(--muted2)">${err.message}</div></div>`;}
 }
 
 function renderAnalytics(){
@@ -792,7 +818,7 @@ function openInv(idx){
   document.getElementById('inv').classList.add('open');
 }
 
-/* Heart Monitor — real /session/lineage data */
+/* Heart Monitor */
 async function loadHeartMonitor(e){
   const sessionId=e.raw?.session_id, en=e.data?.entropy??0, s=sev(e);
   if(!sessionId){renderFlatHM(en,s);return;}
