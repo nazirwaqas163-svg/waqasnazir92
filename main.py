@@ -28,7 +28,7 @@ from refusal import detect_refusal
 from synthesis_engine import forensic_auditor, synthesis_runner
 from drift import drift_engine
 from swarm import swarm_detector
-from shadow import compute_shadow
+from shadow import compute_shadow, compute_trust_divergence
 from topology import build_topology
 from legal_hold import legal_hold_manager, evaluate_triggers
 
@@ -53,6 +53,42 @@ AMOUNT_PATTERN = re.compile(
     r"(?:\$|usd\s*)\s*(\d[\d,]*(?:\.\d+)?)|(\d[\d,]*(?:\.\d+)?)\s*(?:usd|dollars?)",
     re.IGNORECASE,
 )
+
+# ---------------------------------------------------------------------------
+# Agent Registry Cache — avoids a Supabase round-trip on every /intercept call.
+# TTL: 60 seconds. Invalidated on register. Thread-safe for single-process use.
+# ---------------------------------------------------------------------------
+_agent_cache: Dict[str, Dict[str, Any]] = {}   # agent_id -> {"found": bool, "ts": float}
+AGENT_CACHE_TTL = 60.0  # seconds
+
+
+def _cache_get(agent_id: str) -> Optional[Dict[str, Any]]:
+    entry = _agent_cache.get(agent_id)
+    if entry is None:
+        return None
+    if time.monotonic() - entry["ts"] > AGENT_CACHE_TTL:
+        _agent_cache.pop(agent_id, None)
+        return None
+    return entry
+
+
+def _cache_set(agent_id: str, found: bool) -> None:
+    _agent_cache[agent_id] = {"found": found, "ts": time.monotonic()}
+
+
+def _cache_invalidate(agent_id: str) -> None:
+    _agent_cache.pop(agent_id, None)
+
+
+async def _is_agent_registered(agent_id: str) -> bool:
+    """Returns True if agent is in registry. Uses cache, falls back to Supabase."""
+    cached = _cache_get(agent_id)
+    if cached is not None:
+        return cached["found"]
+    agent_info = await supabase_audit_client.get_agent(agent_id=agent_id)
+    found = bool(agent_info and agent_info.get("found"))
+    _cache_set(agent_id, found)
+    return found
 
 
 @asynccontextmanager
@@ -860,7 +896,32 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
 
     drift_score = float(drift_result.get("score") or 0.0)
     baselined = (drift_result.get("turns_analyzed") or 0) >= 1
-    shadow = compute_shadow(payload.self_reported_risk, drift_score, baselined=baselined)
+
+    # ------------------------------------------------------------------
+    # Shadow Score v2 — canonical composite (Phase 3 Stage 4)
+    # Uses agent registry cache to avoid Supabase round-trip per request.
+    # ------------------------------------------------------------------
+    is_registered = await _is_agent_registered(payload.agent_id)
+    unregistered = 0.0 if is_registered else 1.0
+
+    # unauthorized_spawn: 0.0 if parent_session_id supplied, 1.0 if not.
+    # When lineage (Stage 2) is not baselined yet, we still compute the score
+    # but note that unauthorized_spawn defaults to 1.0 for any rootless session.
+    has_parent = bool(payload.parent_session_id and payload.parent_session_id.strip())
+    unauthorized_spawn = 0.0 if has_parent else 1.0
+
+    shadow = compute_shadow(
+        unregistered=unregistered,
+        unauthorized_spawn=unauthorized_spawn,
+        scope_violation=None,
+        baselined=baselined,
+        scope_measurable=False,
+    )
+
+    # Trust Divergence — separate dual-channel signal (kept alongside Shadow v2)
+    trust_divergence = compute_trust_divergence(
+        payload.self_reported_risk, drift_score, baselined=baselined
+    )
 
     entropy = (
         float(payload.entropy)
@@ -895,6 +956,7 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
                 "state": disposition.get("state"),
                 "action": disposition.get("action"),
                 "shadow": shadow,
+                "trust_divergence": trust_divergence,
                 "legal_holds": [h["id"] for h in holds],
             },
         )
@@ -946,6 +1008,7 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
         "request_id": request_id,
         "drift": drift_result,
         "shadow": shadow,
+        "trust_divergence": trust_divergence,
         "legal_holds": [h["id"] for h in holds],
     }
 
@@ -958,6 +1021,7 @@ def reset() -> Dict[str, Any]:
     circuit_breaker.close(reason="manual reset", bdi_score=0.0, entropy=0.0)
     drift_engine.reset()
     legal_hold_manager.reset()
+    _agent_cache.clear()
     return {"ok": True}
 
 
@@ -1357,6 +1421,8 @@ async def register_agent(payload: AgentRegisterRequest) -> Dict[str, Any]:
         if reason == "agent_id_already_registered":
             raise HTTPException(status_code=409, detail=f"Agent '{payload.agent_id}' is already registered.")
         raise HTTPException(status_code=500, detail=f"Registration failed: {reason}")
+    # Invalidate cache so next /intercept call fetches fresh registry status
+    _cache_invalidate(payload.agent_id)
     return {
         "ok": True,
         "message": f"Agent '{payload.agent_id}' registered successfully.",
@@ -1429,20 +1495,50 @@ async def swarm_detect(
 
 @app.get("/shadow/score")
 async def shadow_score(
-    agent_self_report: Optional[float] = None,
-    pulse_independent: Optional[float] = None,
+    agent_id: Optional[str] = None,
     session_id: Optional[str] = None,
+    agent_self_report: Optional[float] = None,
 ) -> Dict[str, Any]:
-    """Shadow Score — Phase 3 Stage 4."""
-    baselined = True
-    if pulse_independent is None and session_id is not None:
+    """Shadow Score v2 — Phase 3 Stage 4. Canonical composite formula."""
+    # Resolve registration status via cache
+    is_registered = False
+    if agent_id:
+        is_registered = await _is_agent_registered(agent_id)
+    unregistered = 0.0 if is_registered else 1.0
+
+    # Resolve lineage and drift baseline
+    unauthorized_spawn = 1.0
+    baselined = False
+    if session_id:
         drift = drift_engine.get_drift(session_id)
-        pulse_independent = float(drift.get("score") or 0.0)
         baselined = (drift.get("turns_analyzed") or 0) >= 1
-    elif pulse_independent is None:
-        baselined = False
-    result = compute_shadow(agent_self_report, pulse_independent, baselined=baselined)
-    return {"ok": True, "session_id": session_id, **result}
+        events = await supabase_audit_client.get_recent_events(limit=100)
+        session_events = [e for e in events if e.get("session_id") == session_id]
+        has_parent = any(e.get("parent_session_id") for e in session_events)
+        unauthorized_spawn = 0.0 if has_parent else 1.0
+
+    shadow = compute_shadow(
+        unregistered=unregistered,
+        unauthorized_spawn=unauthorized_spawn,
+        scope_violation=None,
+        baselined=baselined,
+        scope_measurable=False,
+    )
+
+    # Trust divergence alongside if self_report provided
+    trust_div = None
+    if agent_self_report is not None and session_id:
+        drift = drift_engine.get_drift(session_id)
+        pulse_score = float(drift.get("score") or 0.0)
+        trust_div = compute_trust_divergence(agent_self_report, pulse_score, baselined=baselined)
+
+    return {
+        "ok": True,
+        "agent_id": agent_id,
+        "session_id": session_id,
+        "shadow_score_v2": shadow,
+        "trust_divergence": trust_div,
+    }
 
 
 @app.get("/topology")
@@ -1452,6 +1548,7 @@ async def topology(limit: int = 500) -> Dict[str, Any]:
     agents = await supabase_audit_client.list_agents(limit=500)
     graph = build_topology(events, agents=agents, drift_lookup=drift_engine.get_drift)
     return {"ok": True, **graph}
+
 
 @app.get("/ai_events/recent")
 async def ai_events_recent(limit: int = 500) -> Dict[str, Any]:
@@ -1580,9 +1677,7 @@ async def session_tree(session_id: str, limit: int = 500) -> Dict[str, Any]:
 
 @app.get("/ledger/integrity/ai_events")
 async def ledger_integrity_ai_events(limit: int = 100) -> Dict[str, Any]:
-    """Ledger Integrity Verifier for ai_events — independent SHA-256 hash chain
-    proof, separate from audit_logs. Closes the gap where ai_events was an
-    unchained mirror (prev_hash/row_hash were always null)."""
+    """Ledger Integrity Verifier for ai_events — independent SHA-256 hash chain proof."""
     if not supabase_audit_client.configured:
         raise HTTPException(status_code=503, detail="Supabase not configured")
     rows = await supabase_audit_client.get_ai_events_chain(limit=limit)
