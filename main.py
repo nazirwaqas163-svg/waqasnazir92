@@ -1049,6 +1049,41 @@ def list_drift_sessions() -> Dict[str, Any]:
     return {"ok": True, "sessions": sessions, "drift": {sid: drift_engine.get_drift(sid) for sid in sessions}}
 
 
+# ---------------------------------------------------------------------------
+# NEW ENDPOINT: /drift/recent — Phase 3 False Positive Fix
+# Returns last N sessions with ACTUAL drift engine scores (not raw entropy).
+# Replaces Analytics page reliance on raw entropy from /ai_events/recent.
+# ---------------------------------------------------------------------------
+@app.get("/drift/recent")
+async def get_recent_drift_scores(limit: int = 50) -> Dict[str, Any]:
+    """Return last N sessions with ACTUAL drift engine scores (not raw entropy).
+    Used by Analytics page to correctly display behavioural drift, not character entropy.
+    Fixes false positive: demo-normal-001 was scoring 0.94 CRITICAL due to raw entropy.
+    """
+    try:
+        events = await supabase_audit_client.get_recent_events(limit=limit)
+        result = []
+        seen_sessions: set = set()
+        for e in events:
+            session_id = e.get("session_id")
+            if not session_id or session_id in seen_sessions:
+                continue
+            seen_sessions.add(session_id)
+            drift = drift_engine.get_drift(session_id)
+            result.append({
+                "session_id": session_id,
+                "agent_id": e.get("agent_id"),
+                "drift_score": float(drift.get("score", 0.0)),
+                "drift_status": drift.get("status", "unknown"),
+                "turns_analyzed": drift.get("turns_analyzed", 0),
+                "turn_number": e.get("turn_number", 0),
+                "timestamp": e.get("created_at"),
+            })
+        return {"ok": True, "total": len(result), "sessions": result}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 @app.get("/synthesis/report")
 def synthesis_report() -> Dict[str, Any]:
     report = synthesis_runner.last_report
@@ -1098,6 +1133,7 @@ async def compliance_deadlines(incident_time: Optional[str] = None, auto_hold: b
         incident_dt = now
     deadlines = []
     for fw in ASEAN_FRAMEWORKS:
+        from datetime import timedelta
         deadline_dt = incident_dt + timedelta(hours=fw["window_hours"])
         seconds_remaining = (deadline_dt - now).total_seconds()
         hours_remaining = seconds_remaining / 3600
@@ -1745,6 +1781,7 @@ async def ledger_integrity_ai_events(limit: int = 100) -> Dict[str, Any]:
             "deploy are chained."
         ),
     }
+
 
 @app.get("/agents/{agent_id}/passport")
 async def agent_passport(
