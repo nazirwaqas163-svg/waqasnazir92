@@ -25,6 +25,7 @@ from policy_engine import PolicyEvaluation, evaluate_tool_call
 from pulse_feed import PulseEvent, PulseFeed
 from session_store import session_store
 from refusal import detect_refusal
+from passport import assemble_passport, render_pdf
 from synthesis_engine import forensic_auditor, synthesis_runner
 from drift import drift_engine
 from swarm import swarm_detector
@@ -1732,3 +1733,104 @@ async def ledger_integrity_ai_events(limit: int = 100) -> Dict[str, Any]:
             "deploy are chained."
         ),
     }
+@app.get("/agents/{agent_id}/passport")
+async def agent_passport(
+    agent_id: str,
+    format: str = "json",
+    session_id: Optional[str] = None,
+) -> Any:
+    """
+    Pulse Passport PP-1 — signed compliance identity document per agent.
+    format=json  → returns full passport as JSON (default)
+    format=pdf   → returns downloadable signed PDF
+    """
+    from datetime import timedelta
+
+    # 1. Agent Identity
+    agent = await supabase_audit_client.get_agent(agent_id=agent_id)
+
+    # 2. Session events for this agent
+    events = await supabase_audit_client.get_recent_events(limit=500)
+    agent_events = [e for e in events if e.get("agent_id") == agent_id]
+
+    # 3. Drift
+    if session_id:
+        drift = drift_engine.get_drift(session_id)
+    else:
+        session_counts: Dict[str, int] = {}
+        for e in agent_events:
+            sid = e.get("session_id")
+            if sid:
+                session_counts[sid] = session_counts.get(sid, 0) + 1
+        best_session = max(session_counts, key=session_counts.get) if session_counts else None
+        drift = drift_engine.get_drift(best_session) if best_session else {}
+
+    # 4. Shadow Score v2
+    is_registered = await _is_agent_registered(agent_id)
+    unregistered = 0.0 if is_registered else 1.0
+    has_parent = any(e.get("parent_session_id") for e in agent_events)
+    unauthorized_spawn = 0.0 if has_parent else 1.0
+    baselined = (drift.get("turns_analyzed") or 0) >= 1
+    shadow = compute_shadow(
+        unregistered=unregistered,
+        unauthorized_spawn=unauthorized_spawn,
+        scope_violation=None,
+        baselined=baselined,
+        scope_measurable=False,
+    )
+
+    # 5. ASEAN Compliance deadlines
+    now = datetime.now(timezone.utc)
+    ASEAN_FRAMEWORKS = [
+        {"framework": "PDPA Malaysia", "obligation": "Notify PDPC of personal data breach", "window_hours": 24, "jurisdiction": "MY"},
+        {"framework": "Singapore Model AI Governance Framework", "obligation": "Incident review and corrective action", "window_hours": 72, "jurisdiction": "SG"},
+        {"framework": "Vietnam AI Law", "obligation": "Report AI system incident to authority", "window_hours": 72, "jurisdiction": "VN"},
+        {"framework": "ISO/IEC 42001", "obligation": "Log and assess AI management system incident", "window_hours": 168, "jurisdiction": "INTL"},
+    ]
+    deadlines = []
+    for fw in ASEAN_FRAMEWORKS:
+        deadlines.append({
+            "framework": fw["framework"],
+            "jurisdiction": fw["jurisdiction"],
+            "obligation": fw["obligation"],
+            "window_hours": fw["window_hours"],
+            "hours_remaining": float(fw["window_hours"]),
+            "status": "ACTIVE",
+            "breached": False,
+        })
+
+    # 6. Legal holds
+    all_holds = legal_hold_manager.list(status="ACTIVE")
+    agent_holds = [h for h in all_holds if h.get("agent_id") == agent_id]
+    db_holds = await supabase_audit_client.list_legal_holds(status="ACTIVE", limit=100)
+    db_agent_holds = [h for h in db_holds if h.get("agent_id") == agent_id]
+    hold_map = {h["id"]: h for h in agent_holds}
+    for h in db_agent_holds:
+        hold_map.setdefault(h["id"], h)
+    merged_holds = list(hold_map.values())
+
+    # Assemble
+    passport = assemble_passport(
+        agent_id=agent_id,
+        agent=agent,
+        events=agent_events,
+        drift=drift,
+        shadow=shadow,
+        deadlines=deadlines,
+        holds=merged_holds,
+    )
+
+    if format.lower() == "pdf":
+        try:
+            pdf_bytes = render_pdf(passport)
+        except RuntimeError as exc:
+            raise HTTPException(status_code=501, detail=str(exc))
+        from fastapi.responses import Response as FastAPIResponse
+        filename = f"pulse-passport-{agent_id}.pdf"
+        return FastAPIResponse(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    return {"ok": True, "passport": passport}
