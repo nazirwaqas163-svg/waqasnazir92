@@ -5,7 +5,6 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, Optional
 
-
 @dataclass
 class SessionState:
     session_id: str
@@ -18,7 +17,6 @@ class SessionState:
     def record_turn(self, input_text: str, output_text: str) -> float:
         self.turn_count += 1
         self.last_seen = datetime.now(timezone.utc).isoformat()
-
         text = input_text or ""
         if text:
             freq: dict[str, int] = {}
@@ -33,11 +31,9 @@ class SessionState:
             normalized_entropy = entropy / max_entropy if max_entropy > 0 else 0.0
         else:
             normalized_entropy = 0.0
-
         risk_keywords = ["override","ignore","bypass","disable","delete","drop","admin","root","execute","sudo","hack","inject","exfiltrate","leak","steal","exploit"]
         keyword_bonus = 0.15 if any(k in input_text.lower() for k in risk_keywords) else 0.0
         length_bonus = 0.02 if len(output_text) > 500 else 0.0
-
         increment = (normalized_entropy * 0.6) + keyword_bonus + length_bonus
         self.bdi_score = min(1.0, self.bdi_score + increment)
         return self.bdi_score
@@ -61,6 +57,25 @@ class SessionStore:
             if session_id not in self._sessions:
                 self._sessions[session_id] = SessionState(session_id=session_id, agent_id=agent_id)
             return self._sessions[session_id].record_turn(input_text, output_text)
+
+    def active_sessions_for_agent(self, agent_id: str, window_seconds: int = 300) -> list[str]:
+        """Return session_ids for agent active within the last window_seconds.
+        Used for lightweight sync swarm detection inside /intercept."""
+        now = datetime.now(timezone.utc)
+        result = []
+        with self._lock:
+            for sid, state in self._sessions.items():
+                if state.agent_id != agent_id:
+                    continue
+                try:
+                    last = datetime.fromisoformat(state.last_seen)
+                    if last.tzinfo is None:
+                        last = last.replace(tzinfo=timezone.utc)
+                    if (now - last).total_seconds() <= window_seconds:
+                        result.append(sid)
+                except ValueError:
+                    pass
+        return result
 
     def reset(self):
         with self._lock:
