@@ -31,6 +31,7 @@ from swarm import swarm_detector
 from shadow import compute_shadow, compute_trust_divergence
 from topology import build_topology
 from legal_hold import legal_hold_manager, evaluate_triggers
+from passport import assemble_passport, render_pdf
 
 APP_NAME = "pulse-proxy"
 SYNTHESIS_ENABLED = os.getenv("PULSE_SYNTHESIS_ENABLED", "true").lower() in {"1", "true", "yes"}
