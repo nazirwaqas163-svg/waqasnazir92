@@ -62,7 +62,6 @@ AMOUNT_PATTERN = re.compile(
 _agent_cache: Dict[str, Dict[str, Any]] = {}   # agent_id -> {"found": bool, "ts": float}
 AGENT_CACHE_TTL = 60.0  # seconds
 
-
 def _cache_get(agent_id: str) -> Optional[Dict[str, Any]]:
     entry = _agent_cache.get(agent_id)
     if entry is None:
@@ -72,14 +71,11 @@ def _cache_get(agent_id: str) -> Optional[Dict[str, Any]]:
         return None
     return entry
 
-
 def _cache_set(agent_id: str, found: bool) -> None:
     _agent_cache[agent_id] = {"found": found, "ts": time.monotonic()}
 
-
 def _cache_invalidate(agent_id: str) -> None:
     _agent_cache.pop(agent_id, None)
-
 
 async def _is_agent_registered(agent_id: str) -> bool:
     """Returns True if agent is in registry. Uses cache, falls back to Supabase."""
@@ -91,7 +87,6 @@ async def _is_agent_registered(agent_id: str) -> bool:
     _cache_set(agent_id, found)
     return found
 
-
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     if SYNTHESIS_ENABLED:
@@ -99,7 +94,6 @@ async def lifespan(_app: FastAPI):
     yield
     if SYNTHESIS_ENABLED:
         synthesis_runner.stop()
-
 
 app = FastAPI(title=APP_NAME, version="0.1.0", lifespan=lifespan)
 app.add_middleware(
@@ -113,7 +107,6 @@ app.add_middleware(
 feed = PulseFeed(max_events=int(os.getenv("PULSE_FEED_LIMIT", "500")))
 bdi_state = BDIState()
 circuit_breaker = CircuitBreakerMiddleware(agent_cooldown_seconds=AGENT_COOLDOWN_SECONDS)
-
 
 def _emit_circuit_breaker_event(event: object) -> None:
     if not hasattr(event, "state"):
@@ -138,9 +131,7 @@ def _emit_circuit_breaker_event(event: object) -> None:
         )
     )
 
-
 circuit_breaker.register_listener(_emit_circuit_breaker_event)
-
 
 class ChatProxyRequest(BaseModel):
     model: str = Field(default="gpt-4o-mini")
@@ -153,7 +144,6 @@ class ChatProxyRequest(BaseModel):
     class Config:
         extra = "allow"
 
-
 class PulseToolCallRequest(BaseModel):
     operation: str
     agent_id: Optional[str] = None
@@ -162,18 +152,15 @@ class PulseToolCallRequest(BaseModel):
     class Config:
         extra = "allow"
 
-
 class CircuitBreakerOpenRequest(BaseModel):
     reason: str = Field(default="Manual kill switch activated from dashboard")
     bdi_score: float = Field(default=1.0, ge=0.0, le=1.0)
     entropy: float = Field(default=0.0, ge=0.0, le=1.0)
 
-
 class CircuitBreakerCloseRequest(BaseModel):
     reason: str = Field(default="Manual reset from dashboard")
     bdi_score: float = Field(default=0.0, ge=0.0, le=1.0)
     entropy: float = Field(default=0.0, ge=0.0, le=1.0)
-
 
 class InterceptRequest(BaseModel):
     agent_id: str
@@ -185,7 +172,6 @@ class InterceptRequest(BaseModel):
     bdi_score: Optional[float] = None
     entropy: Optional[float] = None
     self_reported_risk: Optional[float] = None
-
 
 class AGTToolCall(BaseModel):
     tool_name: str
@@ -200,7 +186,6 @@ class AGTToolCall(BaseModel):
     class Config:
         extra = "allow"
 
-
 class AgentRegisterRequest(BaseModel):
     agent_id: str
     name: str = ""
@@ -211,7 +196,6 @@ class AgentRegisterRequest(BaseModel):
 
     class Config:
         extra = "allow"
-
 
 def _dropped_response(disposition: Dict[str, Any]) -> Response:
     retry_after = str(int(max(1, disposition.get("cooldown_seconds_remaining", 30))))
@@ -227,7 +211,6 @@ def _dropped_response(disposition: Dict[str, Any]) -> Response:
             "Retry-After": retry_after,
         },
     )
-
 
 def _record_shadow_event(
     disposition: Dict[str, Any],
@@ -253,7 +236,6 @@ def _record_shadow_event(
         )
     )
 
-
 def _record_drop_event(disposition: Dict[str, Any], *, agent_id: Optional[str], bdi_score: float, entropy: float) -> None:
     feed.add(
         PulseEvent(
@@ -274,7 +256,6 @@ def _record_drop_event(disposition: Dict[str, Any], *, agent_id: Optional[str], 
         )
     )
 
-
 def _auth_headers(request: Request) -> Dict[str, str]:
     headers = {"content-type": "application/json"}
     incoming_auth = request.headers.get("authorization")
@@ -284,14 +265,12 @@ def _auth_headers(request: Request) -> Dict[str, str]:
         headers["authorization"] = f"Bearer {UPSTREAM_API_KEY}"
     return headers
 
-
 def _messages_text(messages: List[Dict[str, Any]]) -> str:
     parts: List[str] = []
     for message in messages:
         role = message.get("role", "unknown")
         parts.append(f"{role}: {extract_text(message.get('content', ''))}")
     return "\n".join(parts).strip()
-
 
 def _to_decimal(value: Any) -> Optional[Decimal]:
     if isinstance(value, bool):
@@ -307,7 +286,6 @@ def _to_decimal(value: Any) -> Optional[Decimal]:
         except InvalidOperation:
             return None
     return None
-
 
 def _financial_amounts_from_payload(value: Any, key_path: str = "") -> List[Decimal]:
     amounts: List[Decimal] = []
@@ -326,7 +304,6 @@ def _financial_amounts_from_payload(value: Any, key_path: str = "") -> List[Deci
             amounts.append(amount)
     return amounts
 
-
 def _financial_amounts_from_text(text: str) -> List[Decimal]:
     amounts: List[Decimal] = []
     for match in AMOUNT_PATTERN.finditer(text):
@@ -336,11 +313,9 @@ def _financial_amounts_from_text(text: str) -> List[Decimal]:
             amounts.append(amount)
     return amounts
 
-
 def _is_financial_text(text: str) -> bool:
     lowered = text.lower()
     return any(keyword in lowered for keyword in FINANCIAL_KEYWORDS)
-
 
 def _calculate_shannon_entropy(text: str) -> float:
     text = text or ""
@@ -357,7 +332,6 @@ def _calculate_shannon_entropy(text: str) -> float:
     max_entropy = __import__("math").log2(len(frequencies)) if frequencies else 1.0
     normalized_entropy = entropy / max_entropy if max_entropy > 0 else 0.0
     return min(1.0, max(0.0, normalized_entropy))
-
 
 def _normalized_bdi_score(bdi_snapshot: dict[str, object]) -> float:
     beliefs = bdi_snapshot.get("beliefs") or {}
@@ -380,7 +354,6 @@ def _normalized_bdi_score(bdi_snapshot: dict[str, object]) -> float:
     )
     return min(1.0, max(0.0, score))
 
-
 def _should_block_financial_transaction(payload: ChatProxyRequest) -> bool:
     payload_dict = payload.model_dump(exclude_none=True)
     prompt_text = _messages_text(payload.messages)
@@ -389,14 +362,12 @@ def _should_block_financial_transaction(payload: ChatProxyRequest) -> bool:
         amounts.extend(_financial_amounts_from_text(prompt_text))
     return any(amount > FINANCIAL_TRANSACTION_LIMIT for amount in amounts)
 
-
 def _enforce_financial_circuit_breaker(payload: ChatProxyRequest) -> None:
     if _should_block_financial_transaction(payload):
         raise HTTPException(
             status_code=403,
             detail="Forbidden: financial transactions over $5,000 are blocked by the governance circuit breaker.",
         )
-
 
 def _record_input(payload: ChatProxyRequest) -> Dict[str, Any]:
     prompt_text = _messages_text(payload.messages)
@@ -417,7 +388,6 @@ def _record_input(payload: ChatProxyRequest) -> Dict[str, Any]:
     }
     feed.add(PulseEvent(kind="input", text=prompt_text, data=pulse))
     return pulse
-
 
 def _record_output(request_id: str, response_json: Dict[str, Any]) -> None:
     text = ""
@@ -440,16 +410,13 @@ def _record_output(request_id: str, response_json: Dict[str, Any]) -> None:
         )
     )
 
-
 def _extra_payload_fields(payload: ChatProxyRequest) -> Dict[str, Any]:
     return getattr(payload, "model_extra", None) or {}
-
 
 def _agent_id(payload: ChatProxyRequest, request: Request) -> Optional[str]:
     extra_fields = _extra_payload_fields(payload)
     value = extra_fields.get("agent_id") or request.headers.get("x-agent-id")
     return str(value) if value is not None else None
-
 
 def _payload_override(value: Any) -> Optional[float]:
     if value is None:
@@ -458,7 +425,6 @@ def _payload_override(value: Any) -> Optional[float]:
         return float(value)
     except (TypeError, ValueError):
         return None
-
 
 def _effective_bdi_score(payload: ChatProxyRequest, pulse: Dict[str, Any]) -> float:
     override = _payload_override(payload.bdi_score)
@@ -470,7 +436,6 @@ def _effective_bdi_score(payload: ChatProxyRequest, pulse: Dict[str, Any]) -> fl
         return override
     return float(pulse.get("bdi_score") or 0.0)
 
-
 def _effective_entropy(payload: ChatProxyRequest, prompt_text: str) -> float:
     override = _payload_override(payload.entropy)
     if override is not None:
@@ -480,7 +445,6 @@ def _effective_entropy(payload: ChatProxyRequest, prompt_text: str) -> float:
     if override is not None:
         return override
     return _calculate_shannon_entropy(prompt_text)
-
 
 def _enforce_policy(operation: str | None, agent_id: Optional[str] = None) -> PolicyEvaluation:
     evaluation = evaluate_tool_call(operation)
@@ -500,25 +464,21 @@ def _enforce_policy(operation: str | None, agent_id: Optional[str] = None) -> Po
         )
     return evaluation
 
-
 def _session_id_from_payload(payload: ChatProxyRequest) -> Optional[str]:
     extra_fields = _extra_payload_fields(payload)
     value = extra_fields.get("session_id")
     return str(value) if value is not None else None
-
 
 def _parent_session_id_from_payload(payload: ChatProxyRequest) -> Optional[str]:
     extra_fields = _extra_payload_fields(payload)
     value = extra_fields.get("parent_session_id")
     return str(value) if value is not None else None
 
-
 def _request_action(payload: ChatProxyRequest, request: Request) -> str:
     extra_fields = _extra_payload_fields(payload)
     if extra_fields.get("operation") is not None:
         return str(extra_fields["operation"])
     return request.url.path
-
 
 def _extract_output_text(response_payload: Dict[str, Any]) -> str:
     if response_payload.get("dropped"):
@@ -533,13 +493,11 @@ def _extract_output_text(response_payload: Dict[str, Any]) -> str:
         return str(response_payload["detail"])
     return ""
 
-
 def _policy_result(response_payload: Dict[str, Any]) -> str:
     status_code = response_payload.get("status_code", 200)
     if response_payload.get("dropped") or status_code >= 400:
         return "blocked"
     return "allowed"
-
 
 async def _insert_ai_event_log(
     *,
@@ -568,7 +526,6 @@ async def _insert_ai_event_log(
         entropy=entropy,
     )
 
-
 async def _insert_audit_log(
     payload: ChatProxyRequest,
     request: Request,
@@ -595,7 +552,6 @@ async def _insert_audit_log(
         parent_session_id=_parent_session_id_from_payload(payload),
         entropy=pulse.get("entropy"),
     )
-
 
 async def _insert_intercept_logs(
     payload: InterceptRequest,
@@ -629,7 +585,6 @@ async def _insert_intercept_logs(
         parent_session_id=payload.parent_session_id,
         entropy=entropy,
     )
-
 
 async def _maybe_open_legal_hold(
     *,
@@ -684,7 +639,6 @@ async def _maybe_open_legal_hold(
         opened.append(hold)
     return opened
 
-
 def _fallback_completion(payload: ChatProxyRequest, pulse: Dict[str, Any]) -> Dict[str, Any]:
     content = baseline_reply(payload.messages)
     now = int(time.time())
@@ -705,7 +659,6 @@ def _fallback_completion(payload: ChatProxyRequest, pulse: Dict[str, Any]) -> Di
     }
     _record_output(pulse["request_id"], response)
     return response
-
 
 def _gate_or_drop(
     payload: ChatProxyRequest,
@@ -730,7 +683,6 @@ def _gate_or_drop(
         return _dropped_response(disposition)
     return None
 
-
 @app.get("/health")
 def health() -> Dict[str, Any]:
     cb_snapshot = circuit_breaker.status()
@@ -748,11 +700,9 @@ def health() -> Dict[str, Any]:
         },
     }
 
-
 @app.get("/circuit-breaker/status")
 def circuit_breaker_status() -> dict[str, object]:
     return circuit_breaker.status()
-
 
 @app.post("/circuit-breaker/open")
 def circuit_breaker_open(payload: CircuitBreakerOpenRequest) -> dict[str, object]:
@@ -761,17 +711,14 @@ def circuit_breaker_open(payload: CircuitBreakerOpenRequest) -> dict[str, object
         circuit_breaker.last_failure["manual"] = True
     return {"ok": True, "message": "Circuit breaker manually opened", "status_code": 503, **circuit_breaker.status()}
 
-
 @app.post("/circuit-breaker/close")
 def circuit_breaker_close(payload: CircuitBreakerCloseRequest) -> dict[str, object]:
     circuit_breaker.close(reason=payload.reason, bdi_score=payload.bdi_score, entropy=payload.entropy)
     return {"ok": True, "message": "Circuit breaker reset to closed", "status_code": 200, **circuit_breaker.status()}
 
-
 @app.get("/pulse")
 def pulse(limit: int = 50) -> Dict[str, Any]:
     return {"events": feed.list(limit=limit)}
-
 
 @app.post("/pulse")
 def pulse_tool_call(payload: PulseToolCallRequest, request: Request):
@@ -801,16 +748,13 @@ def pulse_tool_call(payload: PulseToolCallRequest, request: Request):
     feed.add(event)
     return {"ok": True, "policy": evaluation.to_dict(), "event": asdict(event)}
 
-
 @app.get("/events")
 def events() -> Dict[str, Any]:
     return {"events": feed.list(limit=50)}
 
-
 @app.get("/pulse/bdi")
 def pulse_bdi() -> Dict[str, Any]:
     return bdi_state.snapshot()
-
 
 @app.post("/v1/chat/completions")
 async def chat_completions(payload: ChatProxyRequest, request: Request):
@@ -873,7 +817,6 @@ async def chat_completions(payload: ChatProxyRequest, request: Request):
     await _insert_audit_log(payload, request, pulse, response_json)
     return JSONResponse(response_json)
 
-
 @app.post("/intercept")
 async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
     """SDK hook: record agent input/output and apply circuit-breaker governance."""
@@ -898,11 +841,32 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
     drift_score = float(drift_result.get("score") or 0.0)
     baselined = (drift_result.get("turns_analyzed") or 0) >= 1
     # Phase 4 Stage 1 — Exfiltration Signal Correlation
-        components = drift_result.get("components") or {}
-        token_collapse = float(components.get("token_collapse", 0.0))
-        input_anomaly = float(components.get("input_anomaly", 0.0))
-        exfiltration_risk_score = round((token_collapse * 0.5) + (input_anomaly * 0.5), 4)
-        exfiltration_alert = exfiltration_risk_score > 0.65
+    components = drift_result.get("components") or {}
+    token_collapse = float(components.get("token_collapse", 0.0))
+    input_anomaly = float(components.get("input_anomaly", 0.0))
+    # Weight input_anomaly higher: exfiltration is primarily an input/output semantic signal.
+    exfiltration_risk_score = round((token_collapse * 0.25) + (input_anomaly * 0.75), 4)
+    exfiltration_alert = exfiltration_risk_score > 0.65
+    if exfiltration_alert:
+        feed.add(
+            PulseEvent(
+                kind="alert",
+                text="Exfiltration risk detected",
+                data={
+                    "decision": "alert",
+                    "status_code": 200,
+                    "severity": "HIGH",
+                    "trigger_type": "exfiltration",
+                    "risk_score": exfiltration_risk_score,
+                    "agent_id": payload.agent_id,
+                    "session_id": payload.session_id,
+                    "components": {
+                        "token_collapse": token_collapse,
+                        "input_anomaly": input_anomaly,
+                    },
+                },
+            )
+        )
 
     # ------------------------------------------------------------------
     # Shadow Score v2 — canonical composite (Phase 3 Stage 4)
@@ -1031,15 +995,14 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
         },
         "legal_holds": [h["id"] for h in holds],
         "exfiltration": {
-                "risk_score": exfiltration_risk_score,
-                "alert": exfiltration_alert,
-                "components": {
-                    "token_collapse": token_collapse,
-                    "input_anomaly": input_anomaly,
-                },
+            "risk_score": exfiltration_risk_score,
+            "alert": exfiltration_alert,
+            "components": {
+                "token_collapse": token_collapse,
+                "input_anomaly": input_anomaly,
             },
+        },
     }
-
 
 @app.post("/pulse/reset")
 def reset() -> Dict[str, Any]:
@@ -1051,10 +1014,6 @@ def reset() -> Dict[str, Any]:
     legal_hold_manager.reset()
     _agent_cache.clear()
     return {"ok": True}
-
-
-
-
 
 # ---------------------------------------------------------------------------
 # NEW ENDPOINT: /drift/recent — Phase 3 False Positive Fix
@@ -1095,12 +1054,10 @@ async def get_recent_drift_scores(limit: int = 50) -> Dict[str, Any]:
 def get_drift(session_id: str) -> Dict[str, Any]:
     return {"ok": True, "session_id": session_id, "drift": drift_engine.get_drift(session_id)}
 
-
 @app.get("/drift")
 def list_drift_sessions() -> Dict[str, Any]:
     sessions = drift_engine.session_ids()
     return {"ok": True, "sessions": sessions, "drift": {sid: drift_engine.get_drift(sid) for sid in sessions}}
-
 
 @app.get("/synthesis/report")
 def synthesis_report() -> Dict[str, Any]:
@@ -1109,12 +1066,10 @@ def synthesis_report() -> Dict[str, Any]:
         report = forensic_auditor.generate_pattern_report()
     return {"ok": True, "report": report}
 
-
 @app.post("/synthesis/run")
 def synthesis_run_now() -> Dict[str, Any]:
     report = synthesis_runner.run_once()
     return {"ok": True, "report": report}
-
 
 @app.get("/compliance/export", response_model=None)
 def compliance_export(format: str = "json") -> Union[Dict[str, Any], Response]:
@@ -1123,11 +1078,9 @@ def compliance_export(format: str = "json") -> Union[Dict[str, Any], Response]:
         return PlainTextResponse(compliance_store.export_markdown(), media_type="text/markdown")
     return {"ok": True, "report": compliance_store.export_report()}
 
-
 @app.get("/compliance/events")
 def compliance_events(limit: int = 100) -> Dict[str, Any]:
     return {"ok": True, "events": compliance_store.list_blocked(limit=limit)}
-
 
 @app.get("/compliance/deadlines")
 async def compliance_deadlines(incident_time: Optional[str] = None, auto_hold: bool = True) -> Dict[str, Any]:
@@ -1205,7 +1158,6 @@ async def compliance_deadlines(incident_time: Optional[str] = None, auto_hold: b
                 await supabase_audit_client.insert_legal_hold(hold)
     return {"ok": True, "incident_time": incident_dt.isoformat(), "generated_at": now.isoformat(), "overall_status": overall_status, "deadlines": deadlines}
 
-
 @app.get("/compliance/mgf")
 def compliance_mgf(
     entropy: Optional[float] = None,
@@ -1232,7 +1184,6 @@ def compliance_mgf(
     elif any(c["priority"] == "HIGH" for c in triggered):
         overall_priority = "HIGH"
     return {"ok": True, "framework": "Singapore Model AI Governance Framework", "jurisdiction": "SG", "evaluated_at": datetime.now(timezone.utc).isoformat(), "inputs": {"entropy": effective_entropy, "severity": effective_severity, "session_id": session_id}, "overall_priority": overall_priority, "clauses_triggered": len(triggered), "triggered_clauses": triggered}
-
 
 @app.get("/session/lineage/{session_id}")
 async def session_lineage(session_id: str) -> Dict[str, Any]:
@@ -1274,7 +1225,6 @@ async def session_lineage(session_id: str) -> Dict[str, Any]:
         "last_event": events[-1].get("timestamp"),
     }
     return {"ok": True, "session_id": session_id, "found": True, "summary": summary, "lineage": lineage}
-
 
 @app.get("/trust/score")
 async def trust_score(
@@ -1324,7 +1274,6 @@ async def trust_score(
         "weights": {"entropy": W_ENTROPY, "bdi": W_BDI, "drift": W_DRIFT, "compliance": W_COMPLIANCE},
         "inputs": {"entropy": eff_entropy, "bdi_score": eff_bdi, "drift_status": eff_drift, "blocked_turns": blocked_turns, "total_turns": total_turns},
     }
-
 
 @app.post("/agt/bridge")
 async def agt_bridge(payload: AGTToolCall) -> Dict[str, Any]:
@@ -1392,7 +1341,6 @@ async def agt_bridge(payload: AGTToolCall) -> Dict[str, Any]:
         "session_id": session_id,
         "governance": {"bdi_score": bdi_score, "entropy": entropy, "drift": drift_result, "circuit_breaker": disposition.get("state", "closed")},
     }
-
 
 @app.get("/ledger/integrity")
 async def ledger_integrity(limit: int = 100) -> Dict[str, Any]:
@@ -1471,7 +1419,6 @@ async def ledger_integrity(limit: int = 100) -> Dict[str, Any]:
         },
     }
 
-
 @app.post("/agents/register")
 async def register_agent(payload: AgentRegisterRequest) -> Dict[str, Any]:
     """Agent Identity Registry — Phase 3 Stage 1. Register an agent identity."""
@@ -1496,7 +1443,6 @@ async def register_agent(payload: AgentRegisterRequest) -> Dict[str, Any]:
         "agent": result.get("agent"),
     }
 
-
 @app.get("/agents")
 async def list_agents(limit: int = 100) -> Dict[str, Any]:
     """Agent Identity Registry — list all registered agents."""
@@ -1506,7 +1452,6 @@ async def list_agents(limit: int = 100) -> Dict[str, Any]:
         "total": len(agents),
         "agents": agents,
     }
-
 
 @app.get("/agents/{agent_id}")
 async def get_agent(agent_id: str) -> Dict[str, Any]:
@@ -1527,7 +1472,6 @@ async def get_agent(agent_id: str) -> Dict[str, Any]:
         "agent": agent,
     }
 
-
 class LegalHoldCreateRequest(BaseModel):
     trigger_type: str = "manual"
     reason: str
@@ -1538,10 +1482,8 @@ class LegalHoldCreateRequest(BaseModel):
     framework: Optional[str] = None
     jurisdiction: Optional[str] = None
 
-
 class LegalHoldReleaseRequest(BaseModel):
     released_by: str = "dashboard"
-
 
 @app.get("/swarm/detect")
 async def swarm_detect(
@@ -1558,7 +1500,6 @@ async def swarm_detect(
         min_cluster_size=min_cluster_size,
         min_distinct_sessions=min_distinct_sessions,
     )
-
 
 @app.get("/shadow/score")
 async def shadow_score(
@@ -1607,7 +1548,6 @@ async def shadow_score(
         "trust_divergence": trust_div,
     }
 
-
 @app.get("/topology")
 async def topology(limit: int = 500) -> Dict[str, Any]:
     """Dashboard Topology — Phase 3 Stage 5."""
@@ -1616,7 +1556,6 @@ async def topology(limit: int = 500) -> Dict[str, Any]:
     graph = build_topology(events, agents=agents, drift_lookup=drift_engine.get_drift)
     return {"ok": True, **graph}
 
-
 @app.get("/ai_events/recent")
 async def ai_events_recent(limit: int = 500) -> Dict[str, Any]:
     """Durable event feed for the dashboard — reads from Supabase, survives
@@ -1624,7 +1563,6 @@ async def ai_events_recent(limit: int = 500) -> Dict[str, Any]:
     wipes on every cold start."""
     events = await supabase_audit_client.get_recent_events(limit=limit)
     return {"ok": True, "total": len(events), "events": events}
-
 
 @app.get("/alerts")
 def alerts(limit: int = 50) -> Dict[str, Any]:
@@ -1637,7 +1575,6 @@ def alerts(limit: int = 50) -> Dict[str, Any]:
         "alerts": alert_events,
     }
 
-
 @app.get("/legal-hold")
 async def list_holds(status: Optional[str] = None, limit: int = 100, source: str = "memory") -> Dict[str, Any]:
     """Legal Hold registry — Phase 3 Stage 6. source=memory (live) or db (durable)."""
@@ -1647,14 +1584,12 @@ async def list_holds(status: Optional[str] = None, limit: int = 100, source: str
         holds = legal_hold_manager.list(status=status, limit=limit)
     return {"ok": True, "total": len(holds), "holds": holds}
 
-
 @app.get("/legal-hold/{hold_id}")
 def get_hold(hold_id: str) -> Dict[str, Any]:
     hold = legal_hold_manager.get(hold_id)
     if hold is None:
         raise HTTPException(status_code=404, detail=f"Legal hold '{hold_id}' not found")
     return {"ok": True, "hold": hold}
-
 
 @app.post("/legal-hold")
 async def create_hold(payload: LegalHoldCreateRequest) -> Dict[str, Any]:
@@ -1681,7 +1616,6 @@ async def create_hold(payload: LegalHoldCreateRequest) -> Dict[str, Any]:
     await supabase_audit_client.insert_legal_hold(hold)
     return {"ok": True, "created": True, "hold": hold}
 
-
 @app.post("/legal-hold/{hold_id}/release")
 async def release_hold(hold_id: str, payload: LegalHoldReleaseRequest) -> Dict[str, Any]:
     hold = legal_hold_manager.release(hold_id, released_by=payload.released_by)
@@ -1689,7 +1623,6 @@ async def release_hold(hold_id: str, payload: LegalHoldReleaseRequest) -> Dict[s
         raise HTTPException(status_code=404, detail=f"Legal hold '{hold_id}' not found")
     await supabase_audit_client.release_legal_hold(hold_id, released_by=payload.released_by)
     return {"ok": True, "hold": hold}
-
 
 @app.get("/session/tree/{session_id}")
 async def session_tree(session_id: str, limit: int = 500) -> Dict[str, Any]:
@@ -1740,7 +1673,6 @@ async def session_tree(session_id: str, limit: int = 500) -> Dict[str, Any]:
         "ancestors": ancestors,
         "descendants": descendants,
     }
-
 
 @app.get("/ledger/integrity/ai_events")
 async def ledger_integrity_ai_events(limit: int = 100) -> Dict[str, Any]:
@@ -1799,7 +1731,6 @@ async def ledger_integrity_ai_events(limit: int = 100) -> Dict[str, Any]:
             "deploy are chained."
         ),
     }
-
 
 @app.get("/agents/{agent_id}/passport")
 async def agent_passport(
