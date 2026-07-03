@@ -40,6 +40,7 @@ UPSTREAM_CHAT_URL = os.getenv("PULSE_UPSTREAM_CHAT_URL", "https://api.openai.com
 UPSTREAM_API_KEY = os.getenv("OPENAI_API_KEY") or os.getenv("PULSE_UPSTREAM_API_KEY")
 UPSTREAM_TIMEOUT = float(os.getenv("PULSE_UPSTREAM_TIMEOUT", "120"))
 AGENT_COOLDOWN_SECONDS = float(os.getenv("PULSE_AGENT_COOLDOWN_SECONDS", "30"))
+BASELINE_MIN_TURNS = int(os.getenv("PULSE_BASELINE_MIN_TURNS", "5"))
 FINANCIAL_TRANSACTION_LIMIT = Decimal("5000")
 FINANCIAL_KEYWORDS = {
     "budget", "charge", "contract", "cost", "expense", "financial", "invoice",
@@ -61,10 +62,6 @@ AMOUNT_PATTERN = re.compile(
 # ---------------------------------------------------------------------------
 _agent_cache: Dict[str, Dict[str, Any]] = {}   # agent_id -> {"found": bool, "ts": float}
 AGENT_CACHE_TTL = 60.0  # seconds
-# Phase 4 Stage 2 — Data Access Anomaly Baseline (in-memory)
-_agent_baseline: Dict[str, Dict[str, Any]] = {}
-BASELINE_WINDOW = 20  # first N sessions set the baseline
-ANOMALY_THRESHOLD = 2.5  # deviation multiplier to flag anomaly
 
 def _cache_get(agent_id: str) -> Optional[Dict[str, Any]]:
     entry = _agent_cache.get(agent_id)
@@ -824,14 +821,18 @@ async def chat_completions(payload: ChatProxyRequest, request: Request):
 @app.post("/intercept")
 async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
     """SDK hook: record agent input/output and apply circuit-breaker governance."""
+    if not payload.session_id:
+        # Avoid polluting a global default baseline across unrelated runs.
+        payload.session_id = f"{payload.agent_id}:{uuid.uuid4()}"
+
     bdi_score = session_store.record_turn(
-        payload.session_id or "default",
+        payload.session_id,
         payload.agent_id or "unknown",
         payload.input_text,
         payload.output_text,
     )
     drift_result = drift_engine.record_turn(
-        session_id=payload.session_id or "default",
+        session_id=payload.session_id,
         input_text=payload.input_text,
         output_text=payload.output_text,
     )
@@ -843,7 +844,7 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
         )
 
     drift_score = float(drift_result.get("score") or 0.0)
-    baselined = (drift_result.get("turns_analyzed") or 0) >= 1
+    baselined = (drift_result.get("turns_analyzed") or 0) >= BASELINE_MIN_TURNS
     # Phase 4 Stage 1 — Exfiltration Signal Correlation
     components = drift_result.get("components") or {}
     token_collapse = float(components.get("token_collapse", 0.0))
@@ -851,18 +852,6 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
     # Weight input_anomaly higher: exfiltration is primarily an input/output semantic signal.
     exfiltration_risk_score = round((token_collapse * 0.25) + (input_anomaly * 0.75), 4)
     exfiltration_alert = exfiltration_risk_score > 0.65
-    # Phase 4 Stage 2 — Data Access Anomaly Baseline
-        _agent_turns = _agent_baseline.get(payload.agent_id, {})
-        _session_counts = _agent_turns.get("session_counts", [])
-        _current_turns = drift_result.get("turns_analyzed", 0)
-        _session_counts.append(_current_turns)
-        _baselined_s2 = len(_session_counts) > BASELINE_WINDOW
-        if _baselined_s2:
-            _avg_turns = sum(_session_counts[:BASELINE_WINDOW]) / BASELINE_WINDOW
-            _data_access_anomaly = _current_turns > (_avg_turns * ANOMALY_THRESHOLD)
-        else:
-            _data_access_anomaly = False
-        _agent_baseline[payload.agent_id] = {"session_counts": _session_counts}
     if exfiltration_alert:
         feed.add(
             PulseEvent(
@@ -1016,13 +1005,6 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
             "components": {
                 "token_collapse": token_collapse,
                 "input_anomaly": input_anomaly,
-            },
-            "data_access_anomaly": {
-                "flagged": _data_access_anomaly,
-                "baselined": _baselined_s2,
-                "current_turns": _current_turns,
-                "sessions_recorded": len(_session_counts),
-                "baseline_window": BASELINE_WINDOW,
             },
         },
     }
@@ -1542,7 +1524,7 @@ async def shadow_score(
     baselined = False
     if session_id:
         drift = drift_engine.get_drift(session_id)
-        baselined = (drift.get("turns_analyzed") or 0) >= 1
+        baselined = (drift.get("turns_analyzed") or 0) >= BASELINE_MIN_TURNS
         events = await supabase_audit_client.get_recent_events(limit=100)
         session_events = [e for e in events if e.get("session_id") == session_id]
         has_parent = any(e.get("parent_session_id") for e in session_events)
@@ -1792,7 +1774,7 @@ async def agent_passport(
     unregistered = 0.0 if is_registered else 1.0
     has_parent = any(e.get("parent_session_id") for e in agent_events)
     unauthorized_spawn = 0.0 if has_parent else 1.0
-    baselined = (drift.get("turns_analyzed") or 0) >= 1
+    baselined = (drift.get("turns_analyzed") or 0) >= BASELINE_MIN_TURNS
     shadow = compute_shadow(
         unregistered=unregistered,
         unauthorized_spawn=unauthorized_spawn,
