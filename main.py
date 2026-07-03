@@ -61,6 +61,10 @@ AMOUNT_PATTERN = re.compile(
 # ---------------------------------------------------------------------------
 _agent_cache: Dict[str, Dict[str, Any]] = {}   # agent_id -> {"found": bool, "ts": float}
 AGENT_CACHE_TTL = 60.0  # seconds
+# Phase 4 Stage 2 — Data Access Anomaly Baseline (in-memory)
+_agent_baseline: Dict[str, Dict[str, Any]] = {}
+BASELINE_WINDOW = 20  # first N sessions set the baseline
+ANOMALY_THRESHOLD = 2.5  # deviation multiplier to flag anomaly
 
 def _cache_get(agent_id: str) -> Optional[Dict[str, Any]]:
     entry = _agent_cache.get(agent_id)
@@ -847,6 +851,18 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
     # Weight input_anomaly higher: exfiltration is primarily an input/output semantic signal.
     exfiltration_risk_score = round((token_collapse * 0.25) + (input_anomaly * 0.75), 4)
     exfiltration_alert = exfiltration_risk_score > 0.65
+    # Phase 4 Stage 2 — Data Access Anomaly Baseline
+        _agent_turns = _agent_baseline.get(payload.agent_id, {})
+        _session_counts = _agent_turns.get("session_counts", [])
+        _current_turns = drift_result.get("turns_analyzed", 0)
+        _session_counts.append(_current_turns)
+        _baselined_s2 = len(_session_counts) > BASELINE_WINDOW
+        if _baselined_s2:
+            _avg_turns = sum(_session_counts[:BASELINE_WINDOW]) / BASELINE_WINDOW
+            _data_access_anomaly = _current_turns > (_avg_turns * ANOMALY_THRESHOLD)
+        else:
+            _data_access_anomaly = False
+        _agent_baseline[payload.agent_id] = {"session_counts": _session_counts}
     if exfiltration_alert:
         feed.add(
             PulseEvent(
@@ -1000,6 +1016,13 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
             "components": {
                 "token_collapse": token_collapse,
                 "input_anomaly": input_anomaly,
+            },
+            "data_access_anomaly": {
+                "flagged": _data_access_anomaly,
+                "baselined": _baselined_s2,
+                "current_turns": _current_turns,
+                "sessions_recorded": len(_session_counts),
+                "baseline_window": BASELINE_WINDOW,
             },
         },
     }
