@@ -1038,15 +1038,7 @@ def reset() -> Dict[str, Any]:
     return {"ok": True}
 
 
-@app.get("/drift/{session_id}")
-def get_drift(session_id: str) -> Dict[str, Any]:
-    return {"ok": True, "session_id": session_id, "drift": drift_engine.get_drift(session_id)}
 
-
-@app.get("/drift")
-def list_drift_sessions() -> Dict[str, Any]:
-    sessions = drift_engine.session_ids()
-    return {"ok": True, "sessions": sessions, "drift": {sid: drift_engine.get_drift(sid) for sid in sessions}}
 
 
 # ---------------------------------------------------------------------------
@@ -1082,6 +1074,17 @@ async def get_recent_drift_scores(limit: int = 50) -> Dict[str, Any]:
         return {"ok": True, "total": len(result), "sessions": result}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
+
+        
+@app.get("/drift/{session_id}")
+def get_drift(session_id: str) -> Dict[str, Any]:
+    return {"ok": True, "session_id": session_id, "drift": drift_engine.get_drift(session_id)}
+
+
+@app.get("/drift")
+def list_drift_sessions() -> Dict[str, Any]:
+    sessions = drift_engine.session_ids()
+    return {"ok": True, "sessions": sessions, "drift": {sid: drift_engine.get_drift(sid) for sid in sessions}}
 
 
 @app.get("/synthesis/report")
