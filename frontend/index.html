@@ -91,6 +91,8 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 .badge.elevated{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-border)}
 .badge.stable{background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok-border)}
 .badge.unreg{background:rgba(139,92,246,0.12);color:#a78bfa;border:1px solid rgba(139,92,246,0.3)}
+.badge.exfiltration{background:rgba(255,107,53,0.15);color:var(--critical);border:1px solid var(--critical-border)}
+.tag.exfiltration{background:rgba(255,107,53,0.12);border-color:rgba(255,107,53,0.35);color:var(--critical)}
 .bdi-wrap{display:flex;align-items:center;gap:5px}
 .bdi-track{width:45px;height:3px;background:var(--border2);border-radius:2px;overflow:hidden;flex-shrink:0}
 .bdi-fill{height:100%;border-radius:2px}
@@ -221,7 +223,7 @@ svg.hm{width:100%;height:55px}
 <div class="main">
   <div class="topbar">
     <div class="topbar-title">AI Governance Ledger</div>
-    <div class="topbar-sub">Real-time entropy monitoring · Executive incident intelligence</div>
+    <div class="topbar-sub">Real-time drift & exfiltration monitoring · Executive incident intelligence</div>
     <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
       <span class="pill live" id="status-pill"><span class="pill-dot"></span><span id="status-text">Systems Nominal</span></span>
       <span id="clock"></span>
@@ -236,7 +238,7 @@ svg.hm{width:100%;height:55px}
         <div class="kpi"><div class="kpi-label">Total Events</div><div class="kpi-val c-blue" id="k-total">—</div><div class="kpi-sub" id="k-total-sub">loading…</div></div>
         <div class="kpi kpi-red"><div class="kpi-label">Critical Alerts</div><div class="kpi-val c-red" id="k-crit">—</div><div class="kpi-sub">Requires immediate review</div></div>
         <div class="kpi kpi-amber"><div class="kpi-label">Avg Entropy</div><div class="kpi-val c-amber" id="k-ent">—</div><div class="kpi-sub">0.00–1.00 scale</div></div>
-        <div class="kpi"><div class="kpi-label">High-Risk Events</div><div class="kpi-val c-white" id="k-risk">—</div><div class="kpi-sub">Entropy ≥ 0.70</div></div>
+        <div class="kpi kpi-red"><div class="kpi-label">Exfiltration Alerts</div><div class="kpi-val c-red" id="k-exfil">—</div><div class="kpi-sub">Data export / leak detected</div></div>
         <div class="kpi kpi-green"><div class="kpi-label">Circuit Breaker</div><div class="kpi-val c-green" id="k-cb">—</div><div class="kpi-sub">Failures: <span id="k-fail">0</span></div></div>
       </div>
       <div>
@@ -248,6 +250,7 @@ svg.hm{width:100%;height:55px}
               <div class="ftab" data-f="critical">Critical</div>
               <div class="ftab" data-f="elevated">Elevated</div>
               <div class="ftab" data-f="stable">Stable</div>
+              <div class="ftab" data-f="exfiltration">Exfiltration</div>
             </div>
           </div>
           <div class="tools-row">
@@ -369,6 +372,10 @@ svg.hm{width:100%;height:55px}
             </div>
           </div>
         </div>
+        <div class="inv-sec" id="i-exfil-sec" style="display:none">
+          <div class="inv-sec-title">⬡ Exfiltration Signal</div>
+          <div id="i-exfil-body"></div>
+        </div>
         <div class="inv-sec">
           <div class="inv-sec-title">◎ Signal-to-Noise — Confidence Logic</div>
           <div class="sig-row">
@@ -408,7 +415,7 @@ svg.hm{width:100%;height:55px}
 
 <script>
 const API = 'https://pulse-proxy-8dqx.onrender.com';
-let ALL = [], filter = 'all', search = '', selIdx = -1, dateFrom = '', dateTo = '';
+let ALL = [], EXFIL_ALERTS = [], filter = 'all', search = '', selIdx = -1, dateFrom = '', dateTo = '';
 
 function tick(){
   document.getElementById('clock').textContent = new Date().toISOString().replace('T',' ').slice(0,19)+' UTC';
@@ -439,15 +446,59 @@ const avatarCfg={
   input:{bg:'rgba(14,165,233,0.15)',color:'#0ea5e9',label:'AI'},
   output:{bg:'rgba(139,92,246,0.15)',color:'#8b5cf6',label:'SY'},
   governance:{bg:'rgba(239,68,68,0.15)',color:'#ef4444',label:'CB'},
-  stream_end:{bg:'rgba(100,116,139,0.15)',color:'#64748b',label:'ST'}
+  stream_end:{bg:'rgba(100,116,139,0.15)',color:'#64748b',label:'ST'},
+  exfiltration:{bg:'rgba(255,107,53,0.15)',color:'#ff6b35',label:'XF'}
 };
 function avatarFor(k){const c=avatarCfg[k]||{bg:'rgba(100,116,139,0.15)',color:'#64748b',label:'??'};return `<div class="avatar" style="background:${c.bg};color:${c.color}">${c.label}</div>`}
-function actorName(k){return{input:'AI Agent',output:'Model Response',governance:'Circuit Breaker',stream_end:'Stream End'}[k]||k}
+function actorName(k){return{input:'AI Agent',output:'Model Response',governance:'Circuit Breaker',stream_end:'Stream End',exfiltration:'Data Exfiltration'}[k]||k}
 function shortText(t){return t?(t.length>65?t.slice(0,65)+'…':t):'(no description)'}
+
+function exfiltrationHeuristic(text){
+  const t=(text||'').toLowerCase();
+  return (t.includes('export')&&(t.includes('external')||t.includes('endpoint')||t.includes('exfiltrat')))||
+    t.includes('data exfiltration')||(t.includes('leak')&&t.includes('customer'))||
+    (t.includes('pricing table')&&t.includes('endpoint'));
+}
+
+function isExfiltration(e){
+  return !!(e.data?.exfiltration?.alert||e.data?.exfiltration_alert);
+}
+
+function attachExfiltration(events, alerts){
+  const exfilAlerts=(alerts||[]).filter(a=>a.kind==='alert'&&a.data?.trigger_type==='exfiltration');
+  return events.map(ev=>{
+    const agent=ev.data?.agent_id||ev.raw?.agent_id;
+    const session=ev.raw?.session_id;
+    const evTime=ev.created_at?new Date(ev.created_at).getTime():0;
+    let match=exfilAlerts.find(a=>{
+      const ad=a.data||{};
+      if(ad.agent_id&&agent&&ad.agent_id!==agent) return false;
+      if(ad.session_id&&session&&ad.session_id!==session) return false;
+      if(a.created_at&&evTime){
+        const dt=Math.abs(new Date(a.created_at).getTime()-evTime);
+        if(dt>120000) return false;
+      }
+      return true;
+    });
+    const heuristic=exfiltrationHeuristic(ev.text);
+    const alert=!!(match||heuristic);
+    const risk=match?.data?.risk_score??(heuristic?0.7:null);
+    const components=match?.data?.components||{};
+    ev.data=Object.assign({},ev.data,{
+      exfiltration:{alert,risk_score:risk,components,source:match?'api':'heuristic'},
+      exfiltration_alert:alert
+    });
+    if(alert) ev.kind='exfiltration';
+    return ev;
+  });
+}
 
 function transformAiEvent(row){
   const blocked=row.status==='blocked';
-  return {kind:blocked?'governance':'input', text:row.output_text||row.input_text||'', created_at:row.created_at||row.timestamp, data:{entropy:row.entropy??0, bdi_score:row.bdi_score??0, agent_id:row.agent_id||'unknown'}, raw:row};
+  const text=row.output_text||row.input_text||'';
+  return {kind:blocked?'governance':'input', text, created_at:row.created_at||row.timestamp,
+    data:{entropy:row.entropy??0, bdi_score:row.bdi_score??0, agent_id:row.agent_id||'unknown', session_id:row.session_id||null},
+    raw:row};
 }
 
 function renderRows(evs){
@@ -464,7 +515,7 @@ function renderRows(evs){
     html+=`<div class="evt-row${selIdx===ridx?' selected':''}" onclick="openInv(${ridx})">
       <div><div class="evt-id"><strong>${evId(ridx)}</strong></div><div class="evt-ts">${ts}</div></div>
       <div class="actor-wrap">${avatarFor(e.kind)}<div style="min-width:0"><div class="actor-name">${actorName(e.kind)}</div><div class="actor-desc">${shortText(e.text)}</div></div></div>
-      <div><span class="badge ${s}">${s}</span></div>
+      <div style="display:flex;flex-direction:column;gap:3px"><span class="badge ${s}">${s}</span>${isExfiltration(e)?'<span class="badge exfiltration">exfiltration</span>':''}</div>
       <div class="bdi-wrap"><div class="bdi-track"><div class="bdi-fill" style="width:${bpct}%;background:${bdiC(bd)}"></div></div><span class="mono-val" style="color:${bdiC(bd)}">${bpct}%</span></div>
       <div class="mono-val" style="color:${entC(en)}">${en.toFixed(2)}</div>
       <div><div class="pulse-dot ${pulseClass(s)}">${pulseIcon(s)}</div></div>
@@ -475,8 +526,9 @@ function renderRows(evs){
 
 function filtered(){
   let r=ALL;
-  if(filter!=='all') r=r.filter(e=>sev(e)===filter);
-  if(search) r=r.filter(e=>{const q=search.toLowerCase();return(e.text||'').toLowerCase().includes(q)||(e.kind||'').includes(q)});
+  if(filter==='exfiltration') r=r.filter(e=>isExfiltration(e));
+  else if(filter!=='all') r=r.filter(e=>sev(e)===filter);
+  if(search) r=r.filter(e=>{const q=search.toLowerCase();return(e.text||'').toLowerCase().includes(q)||(e.kind||'').includes(q)||(isExfiltration(e)&&'exfiltration'.includes(q))});
   if(dateFrom) r=r.filter(e=>e.created_at&&e.created_at.slice(0,10)>=dateFrom);
   if(dateTo) r=r.filter(e=>e.created_at&&e.created_at.slice(0,10)<=dateTo);
   return r;
@@ -484,14 +536,14 @@ function filtered(){
 
 function updateKpis(evs){
   const tot=evs.length, crits=evs.filter(e=>sev(e)==='critical').length;
-  const risk=evs.filter(e=>(e.data?.entropy??0)>=0.7).length;
+  const exfils=evs.filter(e=>isExfiltration(e)).length;
   const avgE=tot?evs.reduce((s,e)=>s+(e.data?.entropy??0),0)/tot:0;
   document.getElementById('k-total').textContent=tot;
-  document.getElementById('k-total-sub').textContent=crits+' critical in current view';
+  document.getElementById('k-total-sub').textContent=crits+' critical · '+exfils+' exfiltration';
   document.getElementById('k-crit').textContent=crits;
   document.getElementById('k-ent').textContent=avgE.toFixed(2);
-  const kr=document.getElementById('k-risk');
-  kr.textContent=risk; kr.className='kpi-val '+(risk>0?'c-red':'c-green');
+  const ke=document.getElementById('k-exfil');
+  ke.textContent=exfils; ke.className='kpi-val '+(exfils>0?'c-red':'c-green');
 }
 
 function refresh(){const f=filtered();renderRows(f);updateKpis(f);}
@@ -565,28 +617,20 @@ function renderAgents(){
   }).join('');
 }
 
-/* ── ANALYTICS — fixed: reads from /ai_events/recent not /drift ── */
+/* ── ANALYTICS — uses /drift/recent (actual drift engine scores) ── */
 let lastDrift=null;
 
 async function loadAnalytics(){
   const box=document.getElementById('analytics-body');
   box.innerHTML='<div class="loading"><div class="spin"></div>Loading drift analytics…</div>';
   try{
-    const evData=await fetch(API+'/ai_events/recent',{cache:'no-store'}).then(r=>r.json());
-    const events=evData.events||[];
-    const sessionMap={};
-    events.forEach(e=>{
-      const sid=e.session_id; if(!sid) return;
-      const en=e.entropy??0;
-      if(!sessionMap[sid]) sessionMap[sid]={score:0,status:'stable',turns_analyzed:0};
-      sessionMap[sid].turns_analyzed++;
-      if(en>sessionMap[sid].score) sessionMap[sid].score=en;
+    const driftData=await fetch(API+'/drift/recent?limit=100',{cache:'no-store'}).then(r=>r.json());
+    const sessions=driftData.sessions||[];
+    const driftMap={};
+    sessions.forEach(s=>{
+      driftMap[s.session_id]={score:s.drift_score??0,status:s.drift_status||'unknown',turns_analyzed:s.turns_analyzed??0,agent_id:s.agent_id};
     });
-    Object.keys(sessionMap).forEach(sid=>{
-      const sc=sessionMap[sid].score;
-      sessionMap[sid].status=sc>=0.7?'critical':sc>=0.4?'elevated':'stable';
-    });
-    lastDrift={sessions:Object.keys(sessionMap),drift:sessionMap};
+    lastDrift={sessions:Object.keys(driftMap),drift:driftMap};
     renderAnalytics();
   }catch(err){box.innerHTML=`<div class="empty"><div style="color:var(--danger);font-size:20px">⚠</div><div style="color:var(--danger);margin-top:6px;font-weight:500">Could not load analytics</div><div style="font-size:11px;margin-top:4px;color:var(--muted2)">${err.message}</div></div>`;}
 }
@@ -780,7 +824,25 @@ function openInv(idx){
   if(bd>=0.65) tags.push('#bdi-critical');
   if(s==='critical') tags.push('#auto-isolated');
   if(e.kind==='governance') tags.push('#circuit-breaker');
-  document.getElementById('i-tags').innerHTML=tags.map(t=>`<span class="tag">${t}</span>`).join('');
+  if(isExfiltration(e)) tags.push('#exfiltration');
+  document.getElementById('i-tags').innerHTML=tags.map(t=>{
+    const cls=t==='#exfiltration'?'tag exfiltration':'tag';
+    return `<span class="${cls}">${t}</span>`;
+  }).join('');
+  const exfilSec=document.getElementById('i-exfil-sec'), exfilBody=document.getElementById('i-exfil-body');
+  if(isExfiltration(e)){
+    const ex=e.data.exfiltration||{};
+    const comp=ex.components||{};
+    exfilSec.style.display='block';
+    exfilBody.innerHTML=`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <span class="badge exfiltration">EXFILTRATION DETECTED</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--critical)">risk ${(ex.risk_score??0).toFixed(2)}</span>
+      </div>
+      <div style="font-size:10px;color:var(--muted);line-height:1.5;margin-bottom:8px">Agent output matches data-export / external-endpoint exfiltration pattern. Source: ${ex.source||'api'}.</div>
+      <div class="settings-row"><span class="settings-key">Input anomaly</span><span class="settings-val">${(comp.input_anomaly??0).toFixed(2)}</span></div>
+      <div class="settings-row"><span class="settings-key">Token collapse</span><span class="settings-val">${(comp.token_collapse??0).toFixed(2)}</span></div>`;
+  } else { exfilSec.style.display='none'; exfilBody.innerHTML=''; }
   loadHeartMonitor(e);
   const sig=Math.round((1-en)*100);
   const sp=document.getElementById('i-signal');
@@ -798,7 +860,11 @@ function openInv(idx){
     tl.push({t:'T+3',c:'#10b981',x:'Recovery Complete — Stable state restored. Incident report generated.'});
   }
   document.getElementById('i-tl').innerHTML=tl.map(t=>`<li class="tl-item"><span class="tl-t">${t.t}</span><div class="tl-dot" style="background:${t.c}"></div><span class="tl-text">${t.x}</span></li>`).join('');
-  const regs=s==='critical'?[
+  const regs=isExfiltration(e)?[
+    {n:'PDPA Malaysia — Data Breach',r:'HIGH',d:'Personal / customer data exported to external endpoint. 24-hour PDPC notification window.',a:'Isolate agent. Export evidence package. Notify DPO immediately.'},
+    {n:'Singapore MGF — Clause 2.5',r:'HIGH',d:'AI incident involving unauthorized data disclosure.',a:'File incident report within 72 hours.'},
+    {n:'Vietnam AI Law',r:'HIGH',d:'Report AI system incident involving data leakage to competent authority.',a:'Prepare incident summary. Notify compliance officer.'},
+  ]:s==='critical'?[
     {n:'PDPA Malaysia',r:'HIGH',d:'Notify PDPC of personal data breach. 24-hour notification window from incident detection.',a:'Export evidence package. Submit to compliance officer immediately.'},
     {n:'Singapore MGF — Clause 2.5',r:'HIGH',d:'Document and report AI incidents within the MGF 72-hour window.',a:'Export evidence package. Submit to compliance officer.'},
     {n:'Vietnam AI Law',r:'HIGH',d:'Report AI system incident to the competent authority within 72 hours.',a:'Notify data protection officer. Prepare incident summary.'},
@@ -908,9 +974,10 @@ async function exportEvidencePackage(){
     var results=await Promise.all([
       fetch(API+'/health',{cache:'no-store'}).then(function(r){return r.json()}),
       fetch(API+'/circuit-breaker/status',{cache:'no-store'}).then(function(r){return r.json()}),
-      fetch(API+'/ai_events/recent',{cache:'no-store'}).then(function(r){return r.json()})
+      fetch(API+'/ai_events/recent?limit=500',{cache:'no-store'}).then(function(r){return r.json()}),
+      fetch(API+'/alerts?limit=100',{cache:'no-store'}).then(function(r){return r.json()}).catch(function(){return {alerts:[]}})
     ]);
-    var pkg={exported_at:new Date().toISOString(),governance_version:'pulse-v1-beta',jurisdiction:'ASEAN — PDPA Malaysia (24hr) / Singapore MGF (72hr) / Vietnam AI Law (72hr)',selected_event:e?Object.assign({event_id:evId(selIdx),severity:sev(e)},e):null,health:results[0],circuit_breaker:results[1],all_events:results[2].events||[],total_events:(results[2].events||[]).length};
+    var pkg={exported_at:new Date().toISOString(),governance_version:'pulse-v1-beta',jurisdiction:'ASEAN — PDPA Malaysia (24hr) / Singapore MGF (72hr) / Vietnam AI Law (72hr)',selected_event:e?Object.assign({event_id:evId(selIdx),severity:sev(e),exfiltration:isExfiltration(e)},e):null,health:results[0],circuit_breaker:results[1],all_events:results[2].events||[],exfiltration_alerts:results[3].alerts||[],total_events:(results[2].events||[]).length};
     var blob=new Blob([JSON.stringify(pkg,null,2)],{type:'application/json'});
     var url=URL.createObjectURL(blob); var a=document.createElement('a');
     a.href=url; a.download='pulse-evidence-'+new Date().toISOString().replace(/[:.]/g,'-')+'.json'; a.click(); URL.revokeObjectURL(url);
@@ -928,10 +995,11 @@ async function generateIncidentReport(){
     try{var r2=await Promise.all([fetch(API+'/health',{cache:'no-store'}).then(function(r){return r.json()}),fetch(API+'/circuit-breaker/status',{cache:'no-store'}).then(function(r){return r.json()})]);health=r2[0];cb=r2[1];}catch(_){}
     var L=['PULSE AI GOVERNANCE INCIDENT REPORT','=====================================','Generated:    '+now,'Jurisdiction: ASEAN (PDPA Malaysia 24hr / Singapore MGF 72hr / Vietnam AI Law 72hr)','','SYSTEM STATUS','-------------','Health:          '+(health.ok===true?'HEALTHY':'UNKNOWN'),'Circuit Breaker: '+(cb.state||'unknown').toUpperCase(),'Failures:        '+(cb.failure_count||0),''];
     if(e){
-      L.push('SELECTED EVENT','——————————','Event ID:  '+evId(selIdx),'Severity:  '+s.toUpperCase(),'Triggered: '+ts,'Kind:      '+(e.kind||'unknown'),'BDI Score: '+Math.round(bd*100)+'%','Entropy:   '+en.toFixed(2),'Text:      '+(e.text||'(none)'),'');
-      if(s==='critical') L.push('REQUIRED ACTIONS (CRITICAL)','——————————————————','PDPA Malaysia:   Notify PDPC within 24 hours','Singapore MGF:   File incident report within 72 hours','Vietnam AI Law:  Notify competent authority within 72 hours','Internal:        Pause automated pipeline, activate HITL review','');
+      L.push('SELECTED EVENT','——————————','Event ID:  '+evId(selIdx),'Severity:  '+s.toUpperCase(),'Triggered: '+ts,'Kind:      '+(e.kind||'unknown'),'BDI Score: '+Math.round(bd*100)+'%','Entropy:   '+en.toFixed(2),'Exfiltration: '+(isExfiltration(e)?'YES — risk '+((e.data&&e.data.exfiltration&&e.data.exfiltration.risk_score)||'?'):'No'),'Text:      '+(e.text||'(none)'),'');
+      if(isExfiltration(e)) L.push('REQUIRED ACTIONS (EXFILTRATION)','——————————————————————','PDPA Malaysia:   Notify PDPC within 24 hours — data breach','Singapore MGF:   File incident report within 72 hours','Vietnam AI Law:  Notify competent authority within 72 hours','Internal:        Isolate agent, revoke API keys, activate HITL review','');
+      else if(s==='critical') L.push('REQUIRED ACTIONS (CRITICAL)','——————————————————','PDPA Malaysia:   Notify PDPC within 24 hours','Singapore MGF:   File incident report within 72 hours','Vietnam AI Law:  Notify competent authority within 72 hours','Internal:        Pause automated pipeline, activate HITL review','');
     } else L.push('NOTE: No event selected.','');
-    L.push('ALL EVENTS SUMMARY','——————————','Total:    '+ALL.length,'Critical: '+ALL.filter(function(x){return sev(x)==='critical'}).length,'Elevated: '+ALL.filter(function(x){return sev(x)==='elevated'}).length,'Stable:   '+ALL.filter(function(x){return sev(x)==='stable'}).length,'','EVENT TIMELINE','——————————');
+    L.push('ALL EVENTS SUMMARY','——————————','Total:    '+ALL.length,'Critical: '+ALL.filter(function(x){return sev(x)==='critical'}).length,'Exfiltration: '+ALL.filter(function(x){return isExfiltration(x)}).length,'Elevated: '+ALL.filter(function(x){return sev(x)==='elevated'}).length,'Stable:   '+ALL.filter(function(x){return sev(x)==='stable'}).length,'','EVENT TIMELINE','——————————');
     ALL.forEach(function(x,i){var xt=x.created_at?new Date(x.created_at).toLocaleString():'?';L.push('['+evId(ALL.length-1-i)+'] '+xt+' | '+sev(x).toUpperCase()+' | '+x.kind+' | '+(x.text||'').substring(0,55));});
     L.push('','=====================================','Pulse — Immutable Compliance for ASEAN AI Governance','Built by Waqas Nazir');
     var blob=new Blob([L.join('\n')],{type:'text/plain'});
@@ -944,10 +1012,11 @@ async function generateIncidentReport(){
 /* MAIN LOAD */
 async function load(){
   try{
-    const [h,cb,ev]=await Promise.all([
+    const [h,cb,ev,alertsRes]=await Promise.all([
       fetch(API+'/health',{cache:'no-store'}).then(r=>r.json()),
       fetch(API+'/circuit-breaker/status',{cache:'no-store'}).then(r=>r.json()),
-      fetch(API+'/ai_events/recent',{cache:'no-store'}).then(r=>r.json())
+      fetch(API+'/ai_events/recent?limit=500',{cache:'no-store'}).then(r=>r.json()),
+      fetch(API+'/alerts?limit=100',{cache:'no-store'}).then(r=>r.json()).catch(()=>({alerts:[]}))
     ]);
     const state=cb.state||h.circuit_breaker?.state||'unknown', fails=cb.failure_count??0;
     const pill=document.getElementById('status-pill'), ptxt=document.getElementById('status-text');
@@ -958,20 +1027,13 @@ async function load(){
     cbEl.textContent=state.toUpperCase();
     cbEl.className='kpi-val '+(state==='closed'?'c-green':state==='open'?'c-red':'c-amber');
     document.getElementById('k-fail').textContent=fails;
-    ALL=(ev.events||[]).map(transformAiEvent);
+    EXFIL_ALERTS=alertsRes.alerts||[];
+    ALL=attachExfiltration((ev.events||[]).map(transformAiEvent), EXFIL_ALERTS);
     refresh();
   }catch(err){
     document.getElementById('tbody').innerHTML=`<div class="empty"><div style="color:var(--danger);font-size:20px">⚠</div><div style="color:var(--danger);margin-top:6px;font-weight:500">Backend unreachable</div><div style="font-size:11px;margin-top:4px;color:var(--muted2)">${err.message}</div></div>`;
   }
 }
-
-(function initDefaultToday(){
-  const t=new Date();
-  const s=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
-  dateFrom=s; dateTo=s;
-  document.getElementById('date-from').value=s;
-  document.getElementById('date-to').value=s;
-})();
 
 load(); setInterval(load,10000);
 </script>
