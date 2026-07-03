@@ -897,6 +897,12 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
 
     drift_score = float(drift_result.get("score") or 0.0)
     baselined = (drift_result.get("turns_analyzed") or 0) >= 1
+    # Phase 4 Stage 1 — Exfiltration Signal Correlation
+        components = drift_result.get("components") or {}
+        token_collapse = float(components.get("token_collapse", 0.0))
+        input_anomaly = float(components.get("input_anomaly", 0.0))
+        exfiltration_risk_score = round((token_collapse * 0.5) + (input_anomaly * 0.5), 4)
+        exfiltration_alert = exfiltration_risk_score > 0.65
 
     # ------------------------------------------------------------------
     # Shadow Score v2 — canonical composite (Phase 3 Stage 4)
@@ -1024,6 +1030,14 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
             "threshold": 3,
         },
         "legal_holds": [h["id"] for h in holds],
+        "exfiltration": {
+                "risk_score": exfiltration_risk_score,
+                "alert": exfiltration_alert,
+                "components": {
+                    "token_collapse": token_collapse,
+                    "input_anomaly": input_anomaly,
+                },
+            },
     }
 
 
