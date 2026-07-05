@@ -9,8 +9,21 @@ Assembled entirely from existing Pulse infrastructure — no new tables needed.
   2. Session Lineage       — ai_events summary (sessions, turns, blocked)
   3. Drift + Shadow Score  — drift engine + shadow score v2
   4. Compliance Status     — ASEAN deadline clock status
-  5. Breach Readiness      — active legal holds + composite score
+  5. Breach Readiness      — Phase 4 Stage 4: full evidence package + score
+                             Phase 4 Stage 5: breach_type classification on holds
   6. Passport Signature    — SHA-256 hash of sections 1–5 + generation metadata
+
+Phase 4 Stage 4 additions to Section 5:
+  - threat_classification: computed fresh from available signals
+  - verdict: EVIDENCE READY / EVIDENCE PARTIAL / EVIDENCE INSUFFICIENT
+  - regulator_statement: plain-English summary for DPO/compliance head
+  - missing: list of evidence gaps
+  - evidence_package: what IS present for court/regulator use
+
+Phase 4 Stage 5 additions:
+  - breach_type on each legal hold: data_exfiltration / insider_threat /
+    swarm_injection / scope_violation / compliance_breach / unknown
+  - breach_type_summary on the section: counts by type
 
 The signature is computed over the canonical JSON of sections 1–5.
 Tampering with any field invalidates the signature — court-defensible.
@@ -54,7 +67,140 @@ def _sign_passport(sections: Dict[str, Any], generated_at: str, agent_id: str) -
 
 
 # ---------------------------------------------------------------------------
-# Section assemblers — each takes pre-fetched data, returns a clean dict
+# Phase 4 Stage 5 — Breach Type Classifier
+# Classifies each legal hold into a breach type category.
+# ---------------------------------------------------------------------------
+
+def _classify_breach_type(hold: Dict[str, Any]) -> str:
+    """
+    Classify a legal hold into a breach type.
+    Maps trigger_type + reason keywords to one of 5 breach categories.
+    """
+    trigger = (hold.get("trigger_type") or "").lower()
+    reason = (hold.get("reason") or "").lower()
+
+    if trigger == "exfiltration" or "exfiltration" in reason:
+        return "data_exfiltration"
+    if trigger in {"unauthorized_spawn", "shadow_score"} or "unregistered" in reason or "spawn" in reason:
+        return "insider_threat"
+    if trigger == "swarm" or "swarm" in reason:
+        return "swarm_injection"
+    if trigger == "scope_violation" or "scope" in reason:
+        return "scope_violation"
+    if trigger == "compliance_breach" or "compliance" in reason or "deadline" in reason or "pdpa" in reason or "mgf" in reason or "vietnam" in reason:
+        return "compliance_breach"
+    if trigger == "drift" or "drift" in reason or "critical" in reason:
+        return "data_exfiltration"  # Critical drift is most likely exfiltration-adjacent
+    return "unknown"
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 Stage 4 — Evidence Gap Analyser
+# Determines what evidence IS present and what is MISSING.
+# ---------------------------------------------------------------------------
+
+def _analyse_evidence(
+    *,
+    agent_registered: bool,
+    has_lineage: bool,
+    drift_baselined: bool,
+    shadow_score: Optional[float],
+    active_holds: List[Dict[str, Any]],
+    exfiltration_risk: float,
+    threat_level: str,
+    compliance_overall: str,
+    total_sessions: int,
+    total_turns: int,
+) -> Dict[str, Any]:
+    """
+    Analyse what evidence is present and what is missing.
+    Returns evidence_present, missing, verdict, regulator_statement.
+    """
+    evidence_present = []
+    missing = []
+
+    # Agent identity
+    if agent_registered:
+        evidence_present.append("Agent identity verified — registered in Pulse registry")
+    else:
+        missing.append("Agent not registered — identity cannot be confirmed for court submission")
+
+    # Session lineage
+    if has_lineage and total_sessions > 0:
+        evidence_present.append(f"Session lineage recorded — {total_sessions} sessions, {total_turns} turns")
+    else:
+        missing.append("No session history — agent activity cannot be reconstructed")
+
+    # Drift baseline
+    if drift_baselined:
+        evidence_present.append("Behavioural baseline established — drift analysis is statistically valid")
+    else:
+        missing.append("Behavioural baseline not yet established — need 5+ turns per session for drift analysis")
+
+    # Shadow score
+    if shadow_score is not None:
+        evidence_present.append(f"Shadow Score computed — composite risk: {round(shadow_score, 4)}")
+    else:
+        missing.append("Shadow Score not yet computable — session not baselined")
+
+    # Exfiltration signal
+    if exfiltration_risk > 0.0:
+        if exfiltration_risk > 0.65:
+            evidence_present.append(f"Exfiltration signal detected — risk score {round(exfiltration_risk, 4)} (above threshold)")
+        else:
+            evidence_present.append(f"Exfiltration signal monitored — risk score {round(exfiltration_risk, 4)} (below threshold)")
+    else:
+        missing.append("Exfiltration signal not yet measurable — session not baselined")
+
+    # Legal holds
+    if active_holds:
+        evidence_present.append(f"{len(active_holds)} active legal hold(s) — evidence preservation triggered")
+    else:
+        missing.append("No active legal holds — evidence preservation not yet triggered")
+
+    # Agent scope
+    # (scope is always missing until agents register with real scopes)
+    missing.append("Agent scope not declared — cannot confirm agent operated within authorised boundaries")
+
+    # Determine verdict
+    evidence_count = len(evidence_present)
+    missing_count = len(missing)
+
+    if evidence_count >= 4 and missing_count <= 2:
+        verdict = "EVIDENCE READY"
+    elif evidence_count >= 2:
+        verdict = "EVIDENCE PARTIAL"
+    else:
+        verdict = "EVIDENCE INSUFFICIENT"
+
+    # Regulator statement
+    if verdict == "EVIDENCE READY":
+        regulator_statement = (
+            "If a breach involving this agent occurred today, Pulse has sufficient evidence "
+            "to support a regulatory submission under PDPA Malaysia, Singapore MGF, and Vietnam AI Law. "
+            "Export this passport as a signed PDF for your compliance submission."
+        )
+    elif verdict == "EVIDENCE PARTIAL":
+        regulator_statement = (
+            "If a breach involving this agent occurred today, Pulse has partial evidence. "
+            f"The following gaps must be addressed before regulatory submission: {'; '.join(missing[:2])}."
+        )
+    else:
+        regulator_statement = (
+            "Insufficient evidence to support a regulatory submission at this time. "
+            "Register this agent and allow 5+ turns of session activity to establish a behavioural baseline."
+        )
+
+    return {
+        "verdict": verdict,
+        "evidence_present": evidence_present,
+        "missing": missing,
+        "regulator_statement": regulator_statement,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Section assemblers
 # ---------------------------------------------------------------------------
 
 def _section_agent_identity(agent: Optional[Dict[str, Any]], agent_id: str) -> Dict[str, Any]:
@@ -172,22 +318,92 @@ def _section_compliance_status(deadlines: List[Dict[str, Any]]) -> Dict[str, Any
 def _section_breach_readiness(
     holds: List[Dict[str, Any]],
     shadow_score: Optional[float],
-    drift_status: Optional[str],
+    drift: Dict[str, Any],
     compliance_overall: str,
+    agent_registered: bool,
+    events: List[Dict[str, Any]],
 ) -> Dict[str, Any]:
     """
-    Breach Readiness Score — composite of:
-      - Active legal holds presence (0 = clean, 1+ = risk)
-      - Shadow score (unregistered + unauthorized spawn)
-      - Drift status
-      - Compliance overall status
+    Phase 4 Stage 4 — Full Breach Readiness Evidence Package.
+    Phase 4 Stage 5 — Breach Type classification on each legal hold.
 
-    Score: 0.0 (no readiness concern) → 1.0 (breach imminent/active)
+    Composite score + verdict + evidence package + regulator statement.
     """
     active_holds = [h for h in holds if h.get("status") == "ACTIVE"]
     critical_holds = [h for h in active_holds if h.get("severity") == "CRITICAL"]
 
-    # Hold component: 0.0 clean, 0.5 active holds, 1.0 critical holds
+    # Phase 4 Stage 5 — classify breach type on each hold
+    classified_holds = []
+    breach_type_counts: Dict[str, int] = {}
+    for hold in active_holds:
+        breach_type = _classify_breach_type(hold)
+        breach_type_counts[breach_type] = breach_type_counts.get(breach_type, 0) + 1
+        classified_holds.append({
+            "id": hold.get("id"),
+            "trigger_type": hold.get("trigger_type"),
+            "severity": hold.get("severity"),
+            "reason": hold.get("reason"),
+            "created_at": hold.get("created_at"),
+            "framework": hold.get("framework"),
+            "jurisdiction": hold.get("jurisdiction"),
+            "breach_type": breach_type,  # Phase 4 Stage 5
+        })
+
+    # Drift info
+    drift_status = drift.get("status") or "stable"
+    drift_baselined = (drift.get("turns_analyzed") or 0) >= 5
+
+    # Exfiltration risk from drift components
+    components = drift.get("components") or {}
+    token_collapse = float(components.get("token_collapse") or 0.0)
+    input_anomaly = float(components.get("input_anomaly") or 0.0)
+    exfiltration_risk = round((token_collapse * 0.25) + (input_anomaly * 0.75), 4) if drift_baselined else 0.0
+
+    # Session counts
+    sessions: Dict[str, Any] = {}
+    for e in events:
+        sid = e.get("session_id")
+        if sid:
+            sessions[sid] = True
+    total_sessions = len(sessions)
+    total_turns = len(events)
+    has_lineage = total_turns > 0
+
+    # Threat level from threat scores
+    threat_flags_count = 0
+    if exfiltration_risk > 0.65:
+        threat_flags_count += 1
+    if not agent_registered and drift_baselined:
+        threat_flags_count += 1
+    if (drift.get("score") or 0) > 0.65:
+        threat_flags_count += 1
+    if len(active_holds) > 0:
+        threat_flags_count += 1
+
+    if threat_flags_count >= 3:
+        threat_level = "CRITICAL"
+    elif threat_flags_count == 2:
+        threat_level = "HIGH"
+    elif threat_flags_count == 1:
+        threat_level = "MEDIUM"
+    else:
+        threat_level = "LOW"
+
+    # Evidence analysis (Phase 4 Stage 4)
+    evidence = _analyse_evidence(
+        agent_registered=agent_registered,
+        has_lineage=has_lineage,
+        drift_baselined=drift_baselined,
+        shadow_score=shadow_score,
+        active_holds=active_holds,
+        exfiltration_risk=exfiltration_risk,
+        threat_level=threat_level,
+        compliance_overall=compliance_overall,
+        total_sessions=total_sessions,
+        total_turns=total_turns,
+    )
+
+    # Composite score (weighted)
     if critical_holds:
         hold_score = 1.0
     elif active_holds:
@@ -195,18 +411,12 @@ def _section_breach_readiness(
     else:
         hold_score = 0.0
 
-    # Shadow component
     shadow_component = min(1.0, float(shadow_score or 0.0))
-
-    # Drift component
     drift_map = {"stable": 0.0, "elevated": 0.5, "critical": 1.0}
-    drift_component = drift_map.get(drift_status or "stable", 0.0)
-
-    # Compliance component
+    drift_component = drift_map.get(drift_status, 0.0)
     compliance_map = {"NOMINAL": 0.0, "WARNING": 0.3, "CRITICAL": 0.7, "BREACHED": 1.0}
     compliance_component = compliance_map.get(compliance_overall, 0.0)
 
-    # Weighted composite
     score = round(
         (hold_score * 0.35)
         + (shadow_component * 0.30)
@@ -223,22 +433,25 @@ def _section_breach_readiness(
         readiness_band = "CLEAN"
 
     return {
+        # Core score (unchanged from PP-1)
         "breach_readiness_score": score,
         "readiness_band": readiness_band,
         "active_holds": len(active_holds),
         "critical_holds": len(critical_holds),
-        "holds": [
-            {
-                "id": h.get("id"),
-                "trigger_type": h.get("trigger_type"),
-                "severity": h.get("severity"),
-                "reason": h.get("reason"),
-                "created_at": h.get("created_at"),
-                "framework": h.get("framework"),
-                "jurisdiction": h.get("jurisdiction"),
-            }
-            for h in active_holds
-        ],
+
+        # Phase 4 Stage 4 — Evidence Package
+        "verdict": evidence["verdict"],
+        "regulator_statement": evidence["regulator_statement"],
+        "evidence_present": evidence["evidence_present"],
+        "missing": evidence["missing"],
+        "threat_level": threat_level,
+        "exfiltration_risk": exfiltration_risk,
+
+        # Phase 4 Stage 5 — Breach Type Classification
+        "holds": classified_holds,
+        "breach_type_summary": breach_type_counts,
+
+        # Score breakdown
         "components": {
             "hold_score": round(hold_score, 4),
             "shadow_component": round(shadow_component, 4),
@@ -268,11 +481,6 @@ def assemble_passport(
     deadlines: List[Dict[str, Any]],
     holds: List[Dict[str, Any]],
 ) -> Dict[str, Any]:
-    """
-    Assemble a complete Pulse Passport for an agent.
-    All inputs are pre-fetched by the caller (main.py endpoint).
-    Returns the full passport dict including signature.
-    """
     generated_at = datetime.now(timezone.utc).isoformat()
 
     s1 = _section_agent_identity(agent, agent_id)
@@ -282,8 +490,10 @@ def assemble_passport(
     s5 = _section_breach_readiness(
         holds=holds,
         shadow_score=shadow.get("shadow_score"),
-        drift_status=drift.get("status"),
+        drift=drift,
         compliance_overall=s4["overall_status"],
+        agent_registered=s1["registered"],
+        events=events,
     )
 
     sections = {
@@ -311,11 +521,6 @@ def assemble_passport(
 # ---------------------------------------------------------------------------
 
 def render_pdf(passport: Dict[str, Any]) -> bytes:
-    """
-    Render a Pulse Passport dict as a signed PDF.
-    Returns raw PDF bytes.
-    Requires: pip install reportlab
-    """
     try:
         from reportlab.lib.pagesizes import A4
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -344,44 +549,16 @@ def render_pdf(passport: Dict[str, Any]) -> bytes:
     TEAL = colors.HexColor("#00C9A7")
     DARK = colors.HexColor("#0D1117")
     GREY = colors.HexColor("#6B7280")
+    RED = colors.HexColor("#EF4444")
+    AMBER = colors.HexColor("#F59E0B")
+    GREEN = colors.HexColor("#10B981")
 
-    title_style = ParagraphStyle(
-        "PulseTitle",
-        parent=styles["Title"],
-        fontSize=20,
-        textColor=DARK,
-        spaceAfter=4,
-    )
-    subtitle_style = ParagraphStyle(
-        "PulseSub",
-        parent=styles["Normal"],
-        fontSize=9,
-        textColor=GREY,
-        spaceAfter=12,
-    )
-    section_style = ParagraphStyle(
-        "PulseSection",
-        parent=styles["Heading2"],
-        fontSize=11,
-        textColor=TEAL,
-        spaceBefore=12,
-        spaceAfter=4,
-    )
-    body_style = ParagraphStyle(
-        "PulseBody",
-        parent=styles["Normal"],
-        fontSize=8,
-        textColor=DARK,
-        spaceAfter=2,
-        leading=12,
-    )
-    mono_style = ParagraphStyle(
-        "PulseMono",
-        parent=styles["Code"],
-        fontSize=7,
-        textColor=GREY,
-        spaceAfter=2,
-    )
+    title_style = ParagraphStyle("PulseTitle", parent=styles["Title"], fontSize=20, textColor=DARK, spaceAfter=4)
+    subtitle_style = ParagraphStyle("PulseSub", parent=styles["Normal"], fontSize=9, textColor=GREY, spaceAfter=12)
+    section_style = ParagraphStyle("PulseSection", parent=styles["Heading2"], fontSize=11, textColor=TEAL, spaceBefore=12, spaceAfter=4)
+    body_style = ParagraphStyle("PulseBody", parent=styles["Normal"], fontSize=8, textColor=DARK, spaceAfter=2, leading=12)
+    mono_style = ParagraphStyle("PulseMono", parent=styles["Code"], fontSize=7, textColor=GREY, spaceAfter=2)
+    verdict_style = ParagraphStyle("PulseVerdict", parent=styles["Normal"], fontSize=9, textColor=DARK, spaceAfter=4, leading=14)
 
     def kv(label: str, value: Any) -> Paragraph:
         val = str(value) if value is not None else "—"
@@ -452,18 +629,45 @@ def render_pdf(passport: Dict[str, Any]) -> bytes:
             body_style,
         ))
 
-    # Section 5 — Breach Readiness
+    # Section 5 — Breach Readiness (Phase 4 Stage 4 + Stage 5)
     story += section_header("5. Breach Readiness")
     s5 = passport.get("breach_readiness", {})
     story.append(kv("Breach Readiness Score", s5.get("breach_readiness_score")))
     story.append(kv("Readiness Band", s5.get("readiness_band")))
+    story.append(kv("Threat Level", s5.get("threat_level")))
+    story.append(kv("Verdict", s5.get("verdict")))
+    story.append(Spacer(1, 4))
+    # Regulator statement
+    story.append(Paragraph(f"<b>Regulator Statement:</b>", body_style))
+    story.append(Paragraph(s5.get("regulator_statement", ""), verdict_style))
+    story.append(Spacer(1, 4))
+    # Evidence present
+    story.append(Paragraph("<b>Evidence Present:</b>", body_style))
+    for item in s5.get("evidence_present", []):
+        story.append(Paragraph(f"  ✓ {item}", body_style))
+    story.append(Spacer(1, 4))
+    # Missing
+    story.append(Paragraph("<b>Evidence Gaps:</b>", body_style))
+    for item in s5.get("missing", []):
+        story.append(Paragraph(f"  ✗ {item}", body_style))
+    story.append(Spacer(1, 4))
+    # Legal holds with breach type (Stage 5)
     story.append(kv("Active Legal Holds", s5.get("active_holds")))
     story.append(kv("Critical Holds", s5.get("critical_holds")))
     for hold in s5.get("holds", []):
         story.append(Paragraph(
-            f"  • [{hold.get('severity')}] {hold.get('trigger_type')} — {hold.get('reason')}",
+            f"  • [{hold.get('severity')}] {hold.get('trigger_type')} "
+            f"— {hold.get('reason')} "
+            f"<b>[{hold.get('breach_type', 'unknown').upper()}]</b>",
             body_style,
         ))
+    # Breach type summary (Stage 5)
+    breach_summary = s5.get("breach_type_summary", {})
+    if breach_summary:
+        story.append(Spacer(1, 4))
+        story.append(Paragraph("<b>Breach Type Summary:</b>", body_style))
+        for btype, count in breach_summary.items():
+            story.append(Paragraph(f"  {btype}: {count}", body_style))
 
     # Section 6 — Signature
     story += section_header("6. Passport Signature")
@@ -471,7 +675,6 @@ def render_pdf(passport: Dict[str, Any]) -> bytes:
     story.append(kv("Algorithm", sig.get("algorithm")))
     story.append(kv("Signed Fields", ", ".join(sig.get("signed_fields", []))))
     story.append(Spacer(1, 4))
-    # Break digest across two lines for readability
     digest = sig.get("digest", "")
     story.append(Paragraph("<b>SHA-256 Digest:</b>", body_style))
     story.append(Paragraph(digest[:32], mono_style))
