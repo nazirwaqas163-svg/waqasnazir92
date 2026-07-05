@@ -32,6 +32,7 @@ from shadow import compute_shadow, compute_trust_divergence
 from topology import build_topology
 from legal_hold import legal_hold_manager, evaluate_triggers
 from passport import assemble_passport, render_pdf
+from threat_classifier import threat_classifier
 
 APP_NAME = "pulse-proxy"
 SYNTHESIS_ENABLED = os.getenv("PULSE_SYNTHESIS_ENABLED", "true").lower() in {"1", "true", "yes"}
@@ -820,9 +821,10 @@ async def chat_completions(payload: ChatProxyRequest, request: Request):
 
 @app.post("/intercept")
 async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
-    """SDK hook: record agent input/output and apply circuit-breaker governance."""
+    """SDK hook: record agent input/output and apply circuit-breaker governance.
+    Phase 4 Stage 3: Threat Classification Layer (observation-only, no blocking).
+    """
     if not payload.session_id:
-        # Avoid polluting a global default baseline across unrelated runs.
         payload.session_id = f"{payload.agent_id}:{uuid.uuid4()}"
 
     bdi_score = session_store.record_turn(
@@ -849,7 +851,6 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
     components = drift_result.get("components") or {}
     token_collapse = float(components.get("token_collapse", 0.0))
     input_anomaly = float(components.get("input_anomaly", 0.0))
-    # Weight input_anomaly higher: exfiltration is primarily an input/output semantic signal.
     exfiltration_risk_score = round((token_collapse * 0.25) + (input_anomaly * 0.75), 4)
     exfiltration_alert = exfiltration_risk_score > 0.65
     if exfiltration_alert:
@@ -875,14 +876,9 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
 
     # ------------------------------------------------------------------
     # Shadow Score v2 — canonical composite (Phase 3 Stage 4)
-    # Uses agent registry cache to avoid Supabase round-trip per request.
     # ------------------------------------------------------------------
     is_registered = await _is_agent_registered(payload.agent_id)
     unregistered = 0.0 if is_registered else 1.0
-
-    # unauthorized_spawn: 0.0 if parent_session_id supplied, 1.0 if not.
-    # When lineage (Stage 2) is not baselined yet, we still compute the score
-    # but note that unauthorized_spawn defaults to 1.0 for any rootless session.
     has_parent = bool(payload.parent_session_id and payload.parent_session_id.strip())
     unauthorized_spawn = 0.0 if has_parent else 1.0
 
@@ -894,7 +890,7 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
         scope_measurable=False,
     )
 
-    # Trust Divergence — separate dual-channel signal (kept alongside Shadow v2)
+    # Trust Divergence — separate dual-channel signal
     trust_divergence = compute_trust_divergence(
         payload.self_reported_risk, drift_score, baselined=baselined
     )
@@ -911,6 +907,31 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
         if payload.entropy is not None
         else _calculate_shannon_entropy(payload.input_text)
     )
+
+    # ------------------------------------------------------------------
+    # Phase 4 Stage 3 — Threat Classification Layer (NEW)
+    # Observation-only: compute threat scores, append to response, no blocking.
+    # ------------------------------------------------------------------
+    # Count policy violations in this session (blocked turns)
+    session_events = await supabase_audit_client.get_recent_events(limit=500)
+    session_turns = [e for e in session_events if e.get("session_id") == payload.session_id]
+    policy_blocked_turns = sum(1 for e in session_turns if e.get("policy_result") == "blocked")
+    policy_total_turns = len(session_turns)
+
+    threat_classification = threat_classifier.classify(
+        exfiltration_risk=exfiltration_risk_score,
+        unregistered=unregistered,
+        unauthorized_spawn=unauthorized_spawn,
+        scope_violation=None,
+        swarm_suspect=swarm_suspect,
+        swarm_session_count=swarm_session_count,
+        drift_score=drift_score,
+        entropy=entropy,
+        policy_blocked_turns=policy_blocked_turns,
+        policy_total_turns=policy_total_turns,
+        baselined=baselined,
+    )
+
     disposition = circuit_breaker.gate_request(
         agent_id=payload.agent_id,
         bdi_score=bdi_score,
@@ -940,6 +961,7 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
                 "action": disposition.get("action"),
                 "shadow": shadow,
                 "trust_divergence": trust_divergence,
+                "threat_classification": threat_classification,
                 "legal_holds": [h["id"] for h in holds],
             },
         )
@@ -998,6 +1020,7 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
             "window_seconds": 300,
             "threshold": 3,
         },
+        "threat_classification": threat_classification,
         "legal_holds": [h["id"] for h in holds],
         "exfiltration": {
             "risk_score": exfiltration_risk_score,
@@ -1020,16 +1043,10 @@ def reset() -> Dict[str, Any]:
     _agent_cache.clear()
     return {"ok": True}
 
-# ---------------------------------------------------------------------------
-# NEW ENDPOINT: /drift/recent — Phase 3 False Positive Fix
-# Returns last N sessions with ACTUAL drift engine scores (not raw entropy).
-# Replaces Analytics page reliance on raw entropy from /ai_events/recent.
-# ---------------------------------------------------------------------------
 @app.get("/drift/recent")
 async def get_recent_drift_scores(limit: int = 50) -> Dict[str, Any]:
     """Return last N sessions with ACTUAL drift engine scores (not raw entropy).
-    Used by Analytics page to correctly display behavioural drift, not character entropy.
-    Fixes false positive: demo-normal-001 was scoring 0.94 CRITICAL due to raw entropy.
+    Fixes false positive: demo-normal-001 scoring 0.94 CRITICAL due to raw entropy.
     """
     try:
         events = await supabase_audit_client.get_recent_events(limit=limit)
@@ -1440,7 +1457,6 @@ async def register_agent(payload: AgentRegisterRequest) -> Dict[str, Any]:
         if reason == "agent_id_already_registered":
             raise HTTPException(status_code=409, detail=f"Agent '{payload.agent_id}' is already registered.")
         raise HTTPException(status_code=500, detail=f"Registration failed: {reason}")
-    # Invalidate cache so next /intercept call fetches fresh registry status
     _cache_invalidate(payload.agent_id)
     return {
         "ok": True,
@@ -1513,13 +1529,11 @@ async def shadow_score(
     agent_self_report: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Shadow Score v2 — Phase 3 Stage 4. Canonical composite formula."""
-    # Resolve registration status via cache
     is_registered = False
     if agent_id:
         is_registered = await _is_agent_registered(agent_id)
     unregistered = 0.0 if is_registered else 1.0
 
-    # Resolve lineage and drift baseline
     unauthorized_spawn = 1.0
     baselined = False
     if session_id:
@@ -1538,7 +1552,6 @@ async def shadow_score(
         scope_measurable=False,
     )
 
-    # Trust divergence alongside if self_report provided
     trust_div = None
     if agent_self_report is not None and session_id:
         drift = drift_engine.get_drift(session_id)
@@ -1564,8 +1577,7 @@ async def topology(limit: int = 500) -> Dict[str, Any]:
 @app.get("/ai_events/recent")
 async def ai_events_recent(limit: int = 500) -> Dict[str, Any]:
     """Durable event feed for the dashboard — reads from Supabase, survives
-    Render free-tier restarts. /events only reads the in-process feed, which
-    wipes on every cold start."""
+    Render free-tier restarts."""
     events = await supabase_audit_client.get_recent_events(limit=limit)
     return {"ok": True, "total": len(events), "events": events}
 
@@ -1631,7 +1643,7 @@ async def release_hold(hold_id: str, payload: LegalHoldReleaseRequest) -> Dict[s
 
 @app.get("/session/tree/{session_id}")
 async def session_tree(session_id: str, limit: int = 500) -> Dict[str, Any]:
-    """Session lineage tree — Phase 3 Stage 2 (ancestors + descendants via parent_session_id)."""
+    """Session lineage tree — Phase 3 Stage 2."""
     events = await supabase_audit_client.get_recent_events(limit=limit)
     by_session: Dict[str, Dict[str, Any]] = {}
     children: Dict[str, List[str]] = {}
