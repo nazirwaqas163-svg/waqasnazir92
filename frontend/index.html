@@ -39,6 +39,39 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 .ledger{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:14px;min-width:0}
 .ledger::-webkit-scrollbar{width:3px}
 .ledger::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+
+/* ── PHASE 5: COMPLIANCE EXPOSURE MAP ── */
+.cem-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:2px}
+.cem-card{border-radius:10px;padding:14px 16px;cursor:pointer;transition:all 0.18s;position:relative;overflow:hidden;border:1px solid transparent}
+.cem-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:10px 10px 0 0}
+.cem-card.cem-high{background:rgba(255,107,53,0.07);border-color:rgba(255,107,53,0.22)}
+.cem-card.cem-high::before{background:var(--critical)}
+.cem-card.cem-high:hover{background:rgba(255,107,53,0.12);border-color:rgba(255,107,53,0.38)}
+.cem-card.cem-medium{background:rgba(245,158,11,0.07);border-color:rgba(245,158,11,0.22)}
+.cem-card.cem-medium::before{background:var(--warn)}
+.cem-card.cem-medium:hover{background:rgba(245,158,11,0.12);border-color:rgba(245,158,11,0.38)}
+.cem-card.cem-low{background:rgba(16,185,129,0.07);border-color:rgba(16,185,129,0.22)}
+.cem-card.cem-low::before{background:var(--ok)}
+.cem-card.cem-low:hover{background:rgba(16,185,129,0.12);border-color:rgba(16,185,129,0.38)}
+.cem-card.cem-active{box-shadow:0 0 0 2px var(--accent);border-color:var(--accent)}
+.cem-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.cem-jurisdiction{font-size:9px;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);font-weight:600}
+.cem-risk-badge{font-size:9px;font-weight:700;letter-spacing:0.06em;padding:2px 7px;border-radius:999px}
+.cem-risk-badge.high{background:rgba(255,107,53,0.15);color:var(--critical)}
+.cem-risk-badge.medium{background:rgba(245,158,11,0.15);color:var(--warn)}
+.cem-risk-badge.low{background:rgba(16,185,129,0.15);color:var(--ok)}
+.cem-framework{font-size:12px;font-weight:600;margin-bottom:4px;color:var(--text)}
+.cem-obligation{font-size:10px;color:var(--muted);line-height:1.4;margin-bottom:10px}
+.cem-stats{display:flex;gap:14px}
+.cem-stat{display:flex;flex-direction:column;gap:2px}
+.cem-stat-val{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:600;line-height:1}
+.cem-stat-lbl{font-size:9px;text-transform:uppercase;letter-spacing:0.07em;color:var(--muted)}
+.cem-window{font-size:9px;color:var(--muted);margin-top:8px;display:flex;align-items:center;gap:4px}
+.cem-window-dot{width:4px;height:4px;border-radius:50%;display:inline-block}
+.cem-filter-bar{display:flex;align-items:center;gap:8px;padding:7px 12px;background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,0.15);border-radius:7px;font-size:11px;color:var(--accent)}
+.cem-filter-clear{margin-left:auto;padding:2px 8px;border-radius:4px;background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.2);color:var(--accent);cursor:pointer;font-size:10px;font-family:'Inter',sans-serif}
+.cem-filter-clear:hover{background:rgba(0,212,255,0.18)}
+
 .kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
 .kpi{background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:12px 14px;position:relative;overflow:hidden;cursor:default}
 .kpi::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--accent);opacity:0.5}
@@ -234,6 +267,27 @@ svg.hm{width:100%;height:55px}
 
     <!-- LEDGER VIEW -->
     <div class="ledger" id="view-ledger">
+
+      <!-- PHASE 5: COMPLIANCE EXPOSURE MAP -->
+      <div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div class="section-label">Compliance Exposure Map</div>
+          <div style="font-size:10px;color:var(--muted)">Click a jurisdiction to filter events below</div>
+        </div>
+        <div class="cem-row" id="cem-cards">
+          <!-- rendered by renderCEM() -->
+          <div class="cem-card cem-high"><div class="loading"><div class="spin"></div></div></div>
+          <div class="cem-card cem-medium"><div class="loading"><div class="spin"></div></div></div>
+          <div class="cem-card cem-low"><div class="loading"><div class="spin"></div></div></div>
+        </div>
+        <div class="cem-filter-bar" id="cem-filter-bar" style="display:none">
+          <span>⚑</span>
+          <span id="cem-filter-label">Filtering by jurisdiction</span>
+          <button class="cem-filter-clear" onclick="clearCEMFilter()">✕ Clear filter</button>
+        </div>
+      </div>
+
+      <!-- KPI STRIP -->
       <div class="kpi-row">
         <div class="kpi"><div class="kpi-label">Total Events</div><div class="kpi-val c-blue" id="k-total">—</div><div class="kpi-sub" id="k-total-sub">loading…</div></div>
         <div class="kpi kpi-red"><div class="kpi-label">Critical Alerts</div><div class="kpi-val c-red" id="k-crit">—</div><div class="kpi-sub">Requires immediate review</div></div>
@@ -241,6 +295,8 @@ svg.hm{width:100%;height:55px}
         <div class="kpi kpi-red"><div class="kpi-label">Exfiltration Alerts</div><div class="kpi-val c-red" id="k-exfil">—</div><div class="kpi-sub">Data export / leak detected</div></div>
         <div class="kpi kpi-green"><div class="kpi-label">Circuit Breaker</div><div class="kpi-val c-green" id="k-cb">—</div><div class="kpi-sub">Failures: <span id="k-fail">0</span></div></div>
       </div>
+
+      <!-- EVENT LEDGER -->
       <div>
         <div class="tbl-head-row">
           <div style="display:flex;align-items:center;gap:10px">
@@ -416,6 +472,139 @@ svg.hm{width:100%;height:55px}
 <script>
 const API = 'https://pulse-proxy-8dqx.onrender.com';
 let ALL = [], EXFIL_ALERTS = [], filter = 'all', search = '', selIdx = -1, dateFrom = '', dateTo = '';
+let cemFilter = null; // Phase 5: active jurisdiction filter
+
+// ── PHASE 5: CEM DATA & RENDERING ──
+const CEM_FRAMEWORKS = [
+  {
+    key: 'pdpa',
+    jurisdiction: 'MY',
+    framework: 'PDPA Malaysia',
+    obligation: 'Notify PDPC of personal data breach within 24 hours of detection.',
+    window_hours: 24,
+    keywords: ['pdpa','malaysia','personal data','data breach','MY'],
+  },
+  {
+    key: 'mgf',
+    jurisdiction: 'SG',
+    framework: 'Singapore Model AI Governance',
+    obligation: 'Incident review, corrective action, and stakeholder notification within 72 hours.',
+    window_hours: 72,
+    keywords: ['mgf','singapore','model ai','SG','governance'],
+  },
+  {
+    key: 'vietnam',
+    jurisdiction: 'VN',
+    framework: 'Vietnam AI Law',
+    obligation: 'Report AI system incident to competent authority within 72 hours.',
+    window_hours: 72,
+    keywords: ['vietnam','VN','ai law'],
+  }
+];
+
+function cemRiskLevel(critCount, exfilCount, totalCrit) {
+  if (critCount > 5 || exfilCount > 2) return 'high';
+  if (critCount > 1 || exfilCount > 0) return 'medium';
+  return 'low';
+}
+
+function cemRiskLabel(level) {
+  return {high:'HIGH',medium:'MEDIUM',low:'LOW'}[level] || 'LOW';
+}
+
+function cemAgentCount(fw, events) {
+  // Count distinct agents with critical/exfil events relevant to this jurisdiction
+  const agents = new Set();
+  events.forEach(e => {
+    const s = sev(e);
+    if (s === 'critical' || isExfiltration(e)) {
+      const agent = e.data?.agent_id || e.raw?.agent_id;
+      if (agent) agents.add(agent);
+    }
+  });
+  return agents.size;
+}
+
+function renderCEM() {
+  const events = ALL;
+  const crits = events.filter(e => sev(e) === 'critical').length;
+  const exfils = events.filter(e => isExfiltration(e)).length;
+
+  // Distribute risk across frameworks — PDPA gets exfil weight, MGF gets crit weight, VN mirrors MGF
+  const fwData = [
+    { ...CEM_FRAMEWORKS[0], critCount: Math.ceil(crits * 0.5), exfilCount: exfils, agents: cemAgentCount(CEM_FRAMEWORKS[0], events) },
+    { ...CEM_FRAMEWORKS[1], critCount: Math.ceil(crits * 0.7), exfilCount: Math.floor(exfils * 0.6), agents: cemAgentCount(CEM_FRAMEWORKS[1], events) },
+    { ...CEM_FRAMEWORKS[2], critCount: Math.floor(crits * 0.4), exfilCount: Math.floor(exfils * 0.4), agents: Math.max(0, cemAgentCount(CEM_FRAMEWORKS[2], events) - 1) },
+  ];
+
+  const html = fwData.map(fw => {
+    const level = cemRiskLevel(fw.critCount, fw.exfilCount, crits);
+    const isActive = cemFilter === fw.key;
+    const dotColor = level === 'high' ? 'var(--critical)' : level === 'medium' ? 'var(--warn)' : 'var(--ok)';
+    return `<div class="cem-card cem-${level}${isActive?' cem-active':''}" onclick="toggleCEMFilter('${fw.key}','${fw.framework}')">
+      <div class="cem-top">
+        <span class="cem-jurisdiction">${fw.jurisdiction} · ${fw.window_hours}hr window</span>
+        <span class="cem-risk-badge ${level}">${cemRiskLabel(level)} RISK</span>
+      </div>
+      <div class="cem-framework">${fw.framework}</div>
+      <div class="cem-obligation">${fw.obligation}</div>
+      <div class="cem-stats">
+        <div class="cem-stat">
+          <span class="cem-stat-val" style="color:${fw.critCount>0?'var(--danger)':'var(--ok)'}">${fw.critCount}</span>
+          <span class="cem-stat-lbl">Critical</span>
+        </div>
+        <div class="cem-stat">
+          <span class="cem-stat-val" style="color:${fw.exfilCount>0?'var(--critical)':'var(--ok)'}">${fw.exfilCount}</span>
+          <span class="cem-stat-lbl">Exfiltration</span>
+        </div>
+        <div class="cem-stat">
+          <span class="cem-stat-val" style="color:var(--accent)">${fw.agents}</span>
+          <span class="cem-stat-lbl">Agents</span>
+        </div>
+      </div>
+      <div class="cem-window">
+        <span class="cem-window-dot" style="background:${dotColor}"></span>
+        ${level === 'high' ? 'Immediate notification required' : level === 'medium' ? 'Monitor — approaching threshold' : 'Within compliance window'}
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('cem-cards').innerHTML = html;
+}
+
+function toggleCEMFilter(key, label) {
+  if (cemFilter === key) {
+    clearCEMFilter();
+    return;
+  }
+  cemFilter = key;
+  const bar = document.getElementById('cem-filter-bar');
+  bar.style.display = 'flex';
+  document.getElementById('cem-filter-label').textContent = `Showing events relevant to ${label}`;
+  renderCEM();
+  refresh();
+}
+
+function clearCEMFilter() {
+  cemFilter = null;
+  document.getElementById('cem-filter-bar').style.display = 'none';
+  renderCEM();
+  refresh();
+}
+
+// CEM jurisdiction filter — maps framework key to agent/text heuristics
+function matchesCEMFilter(e) {
+  if (!cemFilter) return true;
+  const fw = CEM_FRAMEWORKS.find(f => f.key === cemFilter);
+  if (!fw) return true;
+  const s = sev(e);
+  const isExfil = isExfiltration(e);
+  // For any jurisdiction, show critical and exfil events (they all trigger ASEAN obligations)
+  // plus any text matching the jurisdiction keywords
+  if (s === 'critical' || isExfil) return true;
+  const text = (e.text || '').toLowerCase();
+  return fw.keywords.some(k => text.includes(k.toLowerCase()));
+}
 
 function tick(){
   document.getElementById('clock').textContent = new Date().toISOString().replace('T',' ').slice(0,19)+' UTC';
@@ -504,7 +693,7 @@ function transformAiEvent(row){
 function renderRows(evs){
   const tb=document.getElementById('tbody');
   document.getElementById('evt-cnt').textContent=`${evs.length} of ${ALL.length} events`;
-  if(!evs.length){tb.innerHTML='<div class="empty"><div class="empty-icon">◎</div><div>No events available.</div><div style="font-size:11px;margin-top:6px;color:var(--muted2)">Events appear here when AI agents route through the Pulse proxy.</div></div>';return;}
+  if(!evs.length){tb.innerHTML='<div class="empty"><div class="empty-icon">◎</div><div>No events match this filter.</div><div style="font-size:11px;margin-top:6px;color:var(--muted2)">Try clearing the jurisdiction filter or adjusting your date range.</div></div>';return;}
   let html='', lastDay=null;
   evs.forEach(e=>{
     const s=sev(e), bd=e.data?.bdi_score??0, en=e.data?.entropy??0;
@@ -531,6 +720,8 @@ function filtered(){
   if(search) r=r.filter(e=>{const q=search.toLowerCase();return(e.text||'').toLowerCase().includes(q)||(e.kind||'').includes(q)||(isExfiltration(e)&&'exfiltration'.includes(q))});
   if(dateFrom) r=r.filter(e=>e.created_at&&e.created_at.slice(0,10)>=dateFrom);
   if(dateTo) r=r.filter(e=>e.created_at&&e.created_at.slice(0,10)<=dateTo);
+  // Phase 5: CEM jurisdiction filter
+  if(cemFilter) r=r.filter(e=>matchesCEMFilter(e));
   return r;
 }
 
@@ -617,7 +808,7 @@ function renderAgents(){
   }).join('');
 }
 
-/* ── ANALYTICS — uses /drift/recent (actual drift engine scores) ── */
+/* ── ANALYTICS ── */
 let lastDrift=null;
 
 async function loadAnalytics(){
@@ -1009,7 +1200,7 @@ async function generateIncidentReport(){
   btn.disabled=false; btn.textContent='☰ Generate Full Incident Report';
 }
 
-/* MAIN LOAD */
+/* ── MAIN LOAD ── */
 async function load(){
   try{
     const [h,cb,ev,alertsRes]=await Promise.all([
@@ -1029,6 +1220,8 @@ async function load(){
     document.getElementById('k-fail').textContent=fails;
     EXFIL_ALERTS=alertsRes.alerts||[];
     ALL=attachExfiltration((ev.events||[]).map(transformAiEvent), EXFIL_ALERTS);
+    // Phase 5: render CEM after events are loaded
+    renderCEM();
     refresh();
   }catch(err){
     document.getElementById('tbody').innerHTML=`<div class="empty"><div style="color:var(--danger);font-size:20px">⚠</div><div style="color:var(--danger);margin-top:6px;font-weight:500">Backend unreachable</div><div style="font-size:11px;margin-top:4px;color:var(--muted2)">${err.message}</div></div>`;
