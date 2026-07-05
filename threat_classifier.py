@@ -2,6 +2,11 @@
 Phase 4 Stage 3 — Threat Classification Layer
 Computes discrete threat class scores for behavioral risk assessment.
 Observation-only: scores appended to /intercept response, no blocking.
+
+FP Fix (post-measurement):
+- exfiltration suppressed until session baselined (5+ turns)
+- unauthorized_spawn suppressed until session baselined (5+ turns)
+- Both return 0.0 with explicit not_yet_measurable flag when unbaselined
 """
 
 from typing import Any, Dict, Optional
@@ -12,7 +17,6 @@ class ThreatClassifier:
 
     def __init__(self):
         self.baseline_min_turns = 5
-        # Thresholds for individual threat scores (0.0–1.0)
         self.thresholds = {
             "exfiltration": 0.65,
             "unauthorized_spawn": 0.50,
@@ -39,65 +43,84 @@ class ThreatClassifier:
     ) -> Dict[str, Any]:
         """
         Compute threat classification vector across 6 threat classes.
-        
-        Args:
-            exfiltration_risk: Pre-computed exfiltration risk score (0.0–1.0)
-            unregistered: 1.0 if agent not in registry, else 0.0
-            unauthorized_spawn: 1.0 if no parent_session_id, else 0.0
-            scope_violation: Pre-computed scope violation score, or None
-            swarm_suspect: Boolean flag from session-count check
-            swarm_session_count: Active sessions for this agent in window
-            drift_score: Drift engine composite score (0.0–1.0)
-            entropy: Shannon entropy of input text (0.0–1.0)
-            policy_blocked_turns: Number of blocked turns in session
-            policy_total_turns: Total turns in session
-            baselined: Whether drift engine has enough turns for baseline
-        
-        Returns:
-            Dict with threat_scores, threat_flags, threat_level, etc.
+
+        FP fixes applied:
+        - exfiltration: suppressed (0.0) until baselined — drift engine needs
+          5+ turns to establish a normal baseline before anomaly is meaningful.
+        - unauthorized_spawn: suppressed (0.0) until baselined — new sessions
+          always lack lineage on turn 1; flagging them is noise, not signal.
+        - Both carry not_yet_measurable=True flag when suppressed.
         """
         threat_scores: Dict[str, float] = {}
         threat_flags: Dict[str, bool] = {}
+        not_yet_measurable: Dict[str, bool] = {}
         rationale: Dict[str, str] = {}
 
         # ===== THREAT 1: EXFILTRATION RISK =====
-        exfiltration_score = exfiltration_risk if exfiltration_risk is not None else 0.0
+        # Suppressed until baselined — input_anomaly is meaningless before
+        # the drift engine has a normal baseline to compare against.
+        if not baselined:
+            exfiltration_score = 0.0
+            not_yet_measurable["exfiltration"] = True
+            rationale["exfiltration"] = (
+                f"Exfiltration: 0.0000 (not_yet_measurable — session not baselined, "
+                f"need {self.baseline_min_turns}+ turns). "
+                f"Raw signal suppressed to prevent false positives on new sessions."
+            )
+        else:
+            exfiltration_score = exfiltration_risk if exfiltration_risk is not None else 0.0
+            not_yet_measurable["exfiltration"] = False
+            rationale["exfiltration"] = (
+                f"Token collapse + input anomaly: {exfiltration_score:.4f}. "
+                f"Threshold: {self.thresholds['exfiltration']}. "
+                f"High scores indicate semantic drift toward data-exfiltration patterns."
+            )
         threat_scores["exfiltration"] = round(exfiltration_score, 4)
         threat_flags["exfiltration"] = exfiltration_score > self.thresholds["exfiltration"]
-        rationale["exfiltration"] = (
-            f"Token collapse + input anomaly: {exfiltration_score:.4f}. "
-            f"Threshold: {self.thresholds['exfiltration']}. "
-            f"High scores indicate semantic drift toward data-exfiltration patterns."
-        )
 
         # ===== THREAT 2: UNAUTHORIZED SPAWN =====
-        spawn_score = max(unregistered, unauthorized_spawn)
+        # Suppressed until baselined — every new session starts without lineage.
+        # Flagging turn 1 as unauthorized is noise. Wait for baseline first.
+        if not baselined:
+            spawn_score = 0.0
+            not_yet_measurable["unauthorized_spawn"] = True
+            rationale["unauthorized_spawn"] = (
+                f"Unauthorized spawn: 0.0000 (not_yet_measurable — session not baselined, "
+                f"need {self.baseline_min_turns}+ turns). "
+                f"Lineage check suppressed to prevent false positives on session start."
+            )
+        else:
+            spawn_score = max(unregistered, unauthorized_spawn)
+            not_yet_measurable["unauthorized_spawn"] = False
+            spawn_rationale = []
+            if unregistered > 0.5:
+                spawn_rationale.append("agent unregistered")
+            if unauthorized_spawn > 0.5:
+                spawn_rationale.append("no parent session (rootless)")
+            rationale["unauthorized_spawn"] = (
+                f"Spawn risk: {spawn_score:.4f} ({', '.join(spawn_rationale) if spawn_rationale else 'none'}). "
+                f"Threshold: {self.thresholds['unauthorized_spawn']}. "
+                f"Unregistered or rootless sessions cannot be traced to a parent context."
+            )
         threat_scores["unauthorized_spawn"] = round(spawn_score, 4)
         threat_flags["unauthorized_spawn"] = spawn_score > self.thresholds["unauthorized_spawn"]
-        spawn_rationale = []
-        if unregistered > 0.5:
-            spawn_rationale.append("agent unregistered")
-        if unauthorized_spawn > 0.5:
-            spawn_rationale.append("no parent session (rootless)")
-        rationale["unauthorized_spawn"] = (
-            f"Spawn risk: {spawn_score:.4f} ({', '.join(spawn_rationale) if spawn_rationale else 'none'}). "
-            f"Threshold: {self.thresholds['unauthorized_spawn']}. "
-            f"Unregistered or rootless sessions cannot be traced to a parent context."
-        )
 
         # ===== THREAT 3: SCOPE VIOLATION =====
         scope_score = scope_violation if scope_violation is not None else 0.0
         threat_scores["scope_violation"] = round(scope_score, 4)
         threat_flags["scope_violation"] = scope_score > self.thresholds["scope_violation"]
+        not_yet_measurable["scope_violation"] = True
         rationale["scope_violation"] = (
             f"Scope violation: {scope_score:.4f}. Threshold: {self.thresholds['scope_violation']}. "
             f"Not yet measurable (agent scopes not registered). Will activate when scope baseline available."
         )
 
         # ===== THREAT 4: SWARM ACTIVITY =====
+        # NOT suppressed — swarm is observable from turn 1 (session count is independent of baseline).
         swarm_score = 1.0 if swarm_suspect else 0.0
         threat_scores["swarm_activity"] = round(swarm_score, 4)
         threat_flags["swarm_activity"] = swarm_score > self.thresholds["swarm_activity"]
+        not_yet_measurable["swarm_activity"] = False
         rationale["swarm_activity"] = (
             f"Swarm risk: {swarm_score:.4f} ({swarm_session_count} active sessions in 5m window). "
             f"Threshold: {self.thresholds['swarm_activity']}. "
@@ -105,12 +128,14 @@ class ThreatClassifier:
         )
 
         # ===== THREAT 5: POLICY VIOLATION =====
+        # NOT suppressed — blocked turns are observable immediately.
         policy_score = 0.0
         if policy_total_turns > 0:
             blocked_ratio = policy_blocked_turns / policy_total_turns
             policy_score = min(1.0, blocked_ratio * 2.0)
         threat_scores["policy_violation"] = round(policy_score, 4)
         threat_flags["policy_violation"] = policy_score > self.thresholds["policy_violation"]
+        not_yet_measurable["policy_violation"] = False
         rationale["policy_violation"] = (
             f"Policy risk: {policy_score:.4f} "
             f"({policy_blocked_turns} blocked / {policy_total_turns} total turns). "
@@ -119,6 +144,7 @@ class ThreatClassifier:
         )
 
         # ===== THREAT 6: ENTROPY SPIKE =====
+        # Already gated on baselined — no change needed.
         entropy_score = 0.0
         if drift_score is not None and baselined:
             if drift_score > 0.65:
@@ -128,6 +154,7 @@ class ThreatClassifier:
             entropy_score = min(1.0, entropy_score)
         threat_scores["entropy_spike"] = round(entropy_score, 4)
         threat_flags["entropy_spike"] = entropy_score > self.thresholds["entropy_spike"]
+        not_yet_measurable["entropy_spike"] = not baselined
         drift_status = "critical" if (drift_score or 0) > 0.65 else "normal" if baselined else "unbaselined"
         rationale["entropy_spike"] = (
             f"Entropy risk: {entropy_score:.4f} "
@@ -155,6 +182,8 @@ class ThreatClassifier:
             "threat_level": threat_level,
             "fired_threats": fired_threats,
             "fired_count": threat_count,
+            "not_yet_measurable": not_yet_measurable,
+            "baselined": baselined,
             "rationale": rationale,
         }
 
