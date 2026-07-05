@@ -357,9 +357,12 @@ def _normalized_bdi_score(bdi_snapshot: dict[str, object]) -> float:
     return min(1.0, max(0.0, score))
 
 def _should_block_financial_transaction(payload: ChatProxyRequest) -> bool:
-    payload_dict = payload.model_dump(exclude_none=True)
+    # Only check input (messages) — not output_text.
+    # FP fix: legitimate agents that summarise expenses in their output_text
+    # were tripping this check. The governance concern is about agent-initiated
+    # transactions, not reporting on past ones.
     prompt_text = _messages_text(payload.messages)
-    amounts = _financial_amounts_from_payload(payload_dict)
+    amounts: List[Decimal] = []
     if _is_financial_text(prompt_text):
         amounts.extend(_financial_amounts_from_text(prompt_text))
     return any(amount > FINANCIAL_TRANSACTION_LIMIT for amount in amounts)
