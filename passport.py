@@ -95,8 +95,26 @@ def _classify_breach_type(hold: Dict[str, Any]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Phase 4 Stage 4 — Evidence Gap Analyser
-# Determines what evidence IS present and what is MISSING.
+# Phase 4 Stage 4 — Evidence Gap Analyser (FIXED in Phase 6)
+#
+# FIX: Separates Forensic Completeness from Analytical Readiness.
+#
+# Forensic Completeness = the record exists (turns logged, identity known).
+# Analytical Readiness  = the baseline is established (5+ turns per session).
+#
+# An agent with 95 turns but no individual session baselined is
+# FORENSICALLY COMPLETE but ANALYTICALLY still warming up.
+# Old logic returned EVIDENCE PARTIAL for this case — incorrect.
+#
+# New verdict logic:
+#   EVIDENCE READY       — forensic record complete (turns > 0, registered)
+#                          + analytical baseline established (drift_baselined)
+#   EVIDENCE READY*      — forensic record complete but baseline still forming:
+#                          verdict = "EVIDENCE READY" with a note in
+#                          regulator_statement distinguishing the two states
+#   EVIDENCE PARTIAL     — some forensic record exists but gaps remain
+#                          (e.g. unregistered agent with some turns)
+#   EVIDENCE INSUFFICIENT — no meaningful data at all
 # ---------------------------------------------------------------------------
 
 def _analyse_evidence(
@@ -125,17 +143,18 @@ def _analyse_evidence(
     else:
         missing.append("Agent not registered — identity cannot be confirmed for court submission")
 
-    # Session lineage
-    if has_lineage and total_sessions > 0:
+    # Session lineage — forensic completeness check (turns recorded, not baseline)
+    if has_lineage and total_turns > 0:
         evidence_present.append(f"Session lineage recorded — {total_sessions} sessions, {total_turns} turns")
     else:
         missing.append("No session history — agent activity cannot be reconstructed")
 
-    # Drift baseline
+    # Drift baseline — analytical readiness (separate from forensic completeness)
     if drift_baselined:
         evidence_present.append("Behavioural baseline established — drift analysis is statistically valid")
     else:
-        missing.append("Behavioural baseline not yet established — need 5+ turns per session for drift analysis")
+        # Not a hard gap — forensic record still exists, baseline is warming up
+        missing.append("Analytical baseline in progress — need 5+ turns per session for drift scoring")
 
     # Shadow score
     if shadow_score is not None:
@@ -159,33 +178,41 @@ def _analyse_evidence(
         missing.append("No active legal holds — evidence preservation not yet triggered")
 
     # Agent scope
-    # (scope is always missing until agents register with real scopes)
     missing.append("Agent scope not declared — cannot confirm agent operated within authorised boundaries")
 
-    # Determine verdict
-    evidence_count = len(evidence_present)
-    missing_count = len(missing)
+    # ── FIXED VERDICT LOGIC ──
+    # Forensic completeness: agent registered + turns recorded = the record exists
+    forensic_complete = agent_registered and has_lineage and total_turns > 0
+    # Analytical readiness: drift baselined = scoring is statistically valid
+    analytical_ready = drift_baselined
 
-    if evidence_count >= 4 and missing_count <= 2:
+    if forensic_complete and analytical_ready:
         verdict = "EVIDENCE READY"
-    elif evidence_count >= 2:
-        verdict = "EVIDENCE PARTIAL"
-    else:
-        verdict = "EVIDENCE INSUFFICIENT"
-
-    # Regulator statement
-    if verdict == "EVIDENCE READY":
         regulator_statement = (
             "If a breach involving this agent occurred today, Pulse has sufficient evidence "
             "to support a regulatory submission under PDPA Malaysia, Singapore MGF, and Vietnam AI Law. "
             "Export this passport as a signed PDF for your compliance submission."
         )
-    elif verdict == "EVIDENCE PARTIAL":
+    elif forensic_complete and not analytical_ready:
+        # Key fix: high turn count agents (e.g. NovaTrans 95 turns) land here,
+        # not in EVIDENCE PARTIAL. The forensic record is complete.
+        verdict = "EVIDENCE READY"
+        regulator_statement = (
+            f"Forensic record complete — {total_turns} turns across {total_sessions} session(s) logged "
+            "and cryptographically sealed in the Pulse audit ledger. "
+            "Analytical baseline is still forming (requires 5+ turns per individual session for drift scoring). "
+            "The evidence package is exportable and court-admissible now. "
+            "Full drift analysis will activate as sessions accumulate."
+        )
+    elif not forensic_complete and (has_lineage or agent_registered):
+        verdict = "EVIDENCE PARTIAL"
         regulator_statement = (
             "If a breach involving this agent occurred today, Pulse has partial evidence. "
-            f"The following gaps must be addressed before regulatory submission: {'; '.join(missing[:2])}."
+            f"The following gaps must be addressed before regulatory submission: "
+            f"{'; '.join(missing[:2])}."
         )
     else:
+        verdict = "EVIDENCE INSUFFICIENT"
         regulator_statement = (
             "Insufficient evidence to support a regulatory submission at this time. "
             "Register this agent and allow 5+ turns of session activity to establish a behavioural baseline."
@@ -389,7 +416,7 @@ def _section_breach_readiness(
     else:
         threat_level = "LOW"
 
-    # Evidence analysis (Phase 4 Stage 4)
+    # Evidence analysis (Phase 4 Stage 4, fixed in Phase 6)
     evidence = _analyse_evidence(
         agent_registered=agent_registered,
         has_lineage=has_lineage,
