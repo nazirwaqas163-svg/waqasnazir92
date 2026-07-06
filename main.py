@@ -357,10 +357,6 @@ def _normalized_bdi_score(bdi_snapshot: dict[str, object]) -> float:
     return min(1.0, max(0.0, score))
 
 def _should_block_financial_transaction(payload: ChatProxyRequest) -> bool:
-    # Only check input (messages) — not output_text.
-    # FP fix: legitimate agents that summarise expenses in their output_text
-    # were tripping this check. The governance concern is about agent-initiated
-    # transactions, not reporting on past ones.
     prompt_text = _messages_text(payload.messages)
     amounts: List[Decimal] = []
     if _is_financial_text(prompt_text):
@@ -1508,6 +1504,64 @@ class LegalHoldCreateRequest(BaseModel):
 
 class LegalHoldReleaseRequest(BaseModel):
     released_by: str = "dashboard"
+
+class OrgPolicyRequest(BaseModel):
+    org_id: str
+    policy_id: str
+    name: str
+    rules: Dict[str, Any]
+
+@app.post("/org/policies")
+async def create_org_policy(payload: OrgPolicyRequest) -> Dict[str, Any]:
+    """Create or update org policy. Stored durably in Supabase."""
+    try:
+        result = await supabase_audit_client.insert_org_policy(
+            org_id=payload.org_id,
+            policy_id=payload.policy_id,
+            name=payload.name,
+            rules=payload.rules,
+        )
+        return {
+            "ok": True,
+            "created": True,
+            "policy": result,
+            "message": f"Policy '{payload.policy_id}' created for org '{payload.org_id}'",
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+@app.get("/org/policies")
+async def list_org_policies(org_id: str) -> Dict[str, Any]:
+    """List all active policies for an org."""
+    try:
+        policies = await supabase_audit_client.list_org_policies(org_id=org_id)
+        return {
+            "ok": True,
+            "org_id": org_id,
+            "total": len(policies),
+            "policies": policies,
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+@app.delete("/org/policies/{policy_id}")
+async def delete_org_policy(policy_id: str, org_id: str) -> Dict[str, Any]:
+    """Deactivate a policy (soft delete)."""
+    try:
+        result = await supabase_audit_client.deactivate_org_policy(
+            policy_id=policy_id,
+            org_id=org_id,
+        )
+        if not result:
+            raise HTTPException(status_code=404, detail=f"Policy '{policy_id}' not found")
+        return {
+            "ok": True,
+            "deactivated": True,
+            "policy_id": policy_id,
+            "message": f"Policy '{policy_id}' deactivated",
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 @app.get("/swarm/detect")
 async def swarm_detect(
