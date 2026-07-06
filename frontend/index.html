@@ -41,7 +41,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 .ledger::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
 
 /* ── PHASE 5: COMPLIANCE EXPOSURE MAP ── */
-.cem-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:2px}
+.cem-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:2px}
 .cem-card{border-radius:10px;padding:14px 16px;cursor:pointer;transition:all 0.18s;position:relative;overflow:hidden;border:1px solid transparent}
 .cem-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:10px 10px 0 0}
 .cem-card.cem-high{background:rgba(255,107,53,0.07);border-color:rgba(255,107,53,0.22)}
@@ -279,6 +279,7 @@ svg.hm{width:100%;height:55px}
           <div class="cem-card cem-high"><div class="loading"><div class="spin"></div></div></div>
           <div class="cem-card cem-medium"><div class="loading"><div class="spin"></div></div></div>
           <div class="cem-card cem-low"><div class="loading"><div class="spin"></div></div></div>
+          <div class="cem-card cem-low"><div class="loading"><div class="spin"></div></div></div>
         </div>
         <div class="cem-filter-bar" id="cem-filter-bar" style="display:none">
           <span>⚑</span>
@@ -499,6 +500,14 @@ const CEM_FRAMEWORKS = [
     obligation: 'Report AI system incident to competent authority within 72 hours.',
     window_hours: 72,
     keywords: ['vietnam','VN','ai law'],
+  },
+  {
+    key: 'company',
+    jurisdiction: 'ORG',
+    framework: 'Company Policy',
+    obligation: 'Custom org policies enforced by Pulse before agent execution.',
+    window_hours: null,
+    keywords: ['customer_id','email','phone','policy','org','company','custom'],
   }
 ];
 
@@ -525,46 +534,68 @@ function cemAgentCount(fw, events) {
   return agents.size;
 }
 
+// Phase 6 Stage 3 — count policy violations from event text
+const POLICY_KEYWORDS = ['customer_id','email','phone'];
+function cemPolicyViolations(events) {
+  return events.filter(e => {
+    const text = (e.text || '').toLowerCase();
+    return POLICY_KEYWORDS.some(kw => text.includes(kw));
+  }).length;
+}
+function cemPolicyAgents(events) {
+  return new Set(
+    events.filter(e => {
+      const text = (e.text || '').toLowerCase();
+      return POLICY_KEYWORDS.some(kw => text.includes(kw));
+    }).map(e => e.data?.agent_id || e.raw?.agent_id).filter(Boolean)
+  ).size;
+}
+
 function renderCEM() {
   const events = ALL;
   const crits = events.filter(e => sev(e) === 'critical').length;
   const exfils = events.filter(e => isExfiltration(e)).length;
+  const policyViolations = cemPolicyViolations(events);
+  const policyAgents = cemPolicyAgents(events);
 
   // Distribute risk across frameworks — PDPA gets exfil weight, MGF gets crit weight, VN mirrors MGF
   const fwData = [
     { ...CEM_FRAMEWORKS[0], critCount: Math.ceil(crits * 0.5), exfilCount: exfils, agents: cemAgentCount(CEM_FRAMEWORKS[0], events) },
     { ...CEM_FRAMEWORKS[1], critCount: Math.ceil(crits * 0.7), exfilCount: Math.floor(exfils * 0.6), agents: cemAgentCount(CEM_FRAMEWORKS[1], events) },
     { ...CEM_FRAMEWORKS[2], critCount: Math.floor(crits * 0.4), exfilCount: Math.floor(exfils * 0.4), agents: Math.max(0, cemAgentCount(CEM_FRAMEWORKS[2], events) - 1) },
+    { ...CEM_FRAMEWORKS[3], critCount: policyViolations, exfilCount: 0, agents: policyAgents },
   ];
 
   const html = fwData.map(fw => {
     const level = cemRiskLevel(fw.critCount, fw.exfilCount, crits);
     const isActive = cemFilter === fw.key;
     const dotColor = level === 'high' ? 'var(--critical)' : level === 'medium' ? 'var(--warn)' : 'var(--ok)';
+    const windowLabel = fw.window_hours ? `${fw.jurisdiction} · ${fw.window_hours}hr window` : `${fw.jurisdiction} · Custom Rules`;
+    const statusText = fw.key === 'company'
+      ? (level === 'high' ? 'Policy violations detected' : level === 'medium' ? 'Some violations flagged' : 'No policy violations')
+      : (level === 'high' ? 'Immediate notification required' : level === 'medium' ? 'Monitor — approaching threshold' : 'Within compliance window');
+    const statsHtml = fw.key === 'company'
+      ? `<div class="cem-stats">
+        <div class="cem-stat"><span class="cem-stat-val" style="color:${fw.critCount>0?'var(--danger)':'var(--ok)'}">${fw.critCount}</span><span class="cem-stat-lbl">Violations</span></div>
+        <div class="cem-stat"><span class="cem-stat-val" style="color:var(--accent)">${fw.agents}</span><span class="cem-stat-lbl">Agents</span></div>
+        <div class="cem-stat"><span class="cem-stat-val" style="color:var(--ok)">1</span><span class="cem-stat-lbl">Policies</span></div>
+      </div>`
+      : `<div class="cem-stats">
+        <div class="cem-stat"><span class="cem-stat-val" style="color:${fw.critCount>0?'var(--danger)':'var(--ok)'}">${fw.critCount}</span><span class="cem-stat-lbl">Critical</span></div>
+        <div class="cem-stat"><span class="cem-stat-val" style="color:${fw.exfilCount>0?'var(--critical)':'var(--ok)'}">${fw.exfilCount}</span><span class="cem-stat-lbl">Exfiltration</span></div>
+        <div class="cem-stat"><span class="cem-stat-val" style="color:var(--accent)">${fw.agents}</span><span class="cem-stat-lbl">Agents</span></div>
+      </div>`;
     return `<div class="cem-card cem-${level}${isActive?' cem-active':''}" onclick="toggleCEMFilter('${fw.key}','${fw.framework}')">
       <div class="cem-top">
-        <span class="cem-jurisdiction">${fw.jurisdiction} · ${fw.window_hours}hr window</span>
+        <span class="cem-jurisdiction">${windowLabel}</span>
         <span class="cem-risk-badge ${level}">${cemRiskLabel(level)} RISK</span>
       </div>
       <div class="cem-framework">${fw.framework}</div>
       <div class="cem-obligation">${fw.obligation}</div>
-      <div class="cem-stats">
-        <div class="cem-stat">
-          <span class="cem-stat-val" style="color:${fw.critCount>0?'var(--danger)':'var(--ok)'}">${fw.critCount}</span>
-          <span class="cem-stat-lbl">Critical</span>
-        </div>
-        <div class="cem-stat">
-          <span class="cem-stat-val" style="color:${fw.exfilCount>0?'var(--critical)':'var(--ok)'}">${fw.exfilCount}</span>
-          <span class="cem-stat-lbl">Exfiltration</span>
-        </div>
-        <div class="cem-stat">
-          <span class="cem-stat-val" style="color:var(--accent)">${fw.agents}</span>
-          <span class="cem-stat-lbl">Agents</span>
-        </div>
-      </div>
+      ${statsHtml}
       <div class="cem-window">
         <span class="cem-window-dot" style="background:${dotColor}"></span>
-        ${level === 'high' ? 'Immediate notification required' : level === 'medium' ? 'Monitor — approaching threshold' : 'Within compliance window'}
+        ${statusText}
       </div>
     </div>`;
   }).join('');
@@ -599,6 +630,10 @@ function matchesCEMFilter(e) {
   if (!fw) return true;
   const s = sev(e);
   const isExfil = isExfiltration(e);
+  if (fw.key === 'company') {
+    const text = (e.text || '').toLowerCase();
+    return fw.keywords.some(k => text.includes(k.toLowerCase()));
+  }
   // For any jurisdiction, show critical and exfil events (they all trigger ASEAN obligations)
   // plus any text matching the jurisdiction keywords
   if (s === 'critical' || isExfil) return true;
@@ -978,6 +1013,7 @@ function renderSettings(){
       <div class="settings-row"><span class="settings-key">AI Events Integrity</span><a href="${API}/ledger/integrity/ai_events" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">ai_events chain →</a></div>
       <div class="settings-row"><span class="settings-key">Swarm Detector</span><a href="${API}/swarm/detect" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">run detection →</a></div>
       <div class="settings-row"><span class="settings-key">Active Legal Holds</span><a href="${API}/legal-hold?source=db" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">view holds →</a></div>
+      <div class="settings-row"><span class="settings-key">Org Policies</span><a href="${API}/org/policies?org_id=demo-org" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">view active policies →</a></div>
     </div>
   `;
 }
