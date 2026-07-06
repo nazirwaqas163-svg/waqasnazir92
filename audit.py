@@ -187,9 +187,6 @@ class SupabaseAuditClient:
         parent_session_id: Optional[str] = None,
         entropy: Optional[float] = None,
     ) -> bool:
-        # Hash-chain every row, independent of whether Supabase is reachable,
-        # so the in-process chain stays a complete and continuous record of
-        # everything Pulse has seen this run (build rule: hash-chain every row).
         chain_payload = {
             "event_id": event_id,
             "timestamp": timestamp,
@@ -457,6 +454,93 @@ class SupabaseAuditClient:
                 )
                 return response.status_code in (200, 204)
         except httpx.HTTPError:
+            return False
+
+    async def insert_org_policy(
+        self,
+        *,
+        org_id: str,
+        policy_id: str,
+        name: str,
+        rules: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Insert or replace an org policy in Supabase."""
+        if not self.configured:
+            return {"ok": False, "reason": "supabase_not_configured"}
+        row = {
+            "org_id": org_id,
+            "policy_id": policy_id,
+            "name": name,
+            "rules": rules,
+            "active": True,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        try:
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.post(
+                    f"{self.url}/rest/v1/org_policies",
+                    headers={
+                        "apikey": self.key or "",
+                        "authorization": f"Bearer {self.key}",
+                        "content-type": "application/json",
+                        "prefer": "return=representation,resolution=merge-duplicates",
+                    },
+                    json=row,
+                )
+                if response.status_code in (200, 201):
+                    data = response.json()
+                    return data[0] if data else row
+                return {"ok": False, "reason": response.text}
+        except Exception as exc:
+            return {"ok": False, "reason": str(exc)}
+
+    async def list_org_policies(self, org_id: str) -> List[Dict[str, Any]]:
+        """List all active policies for an org."""
+        if not self.configured:
+            return []
+        try:
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.get(
+                    f"{self.url}/rest/v1/org_policies",
+                    headers={
+                        "apikey": self.key or "",
+                        "authorization": f"Bearer {self.key}",
+                    },
+                    params={
+                        "org_id": f"eq.{org_id}",
+                        "active": "eq.true",
+                        "order": "created_at.asc",
+                        "select": "*",
+                    },
+                )
+                return response.json() if response.status_code == 200 else []
+        except Exception:
+            return []
+
+    async def deactivate_org_policy(self, policy_id: str, org_id: str) -> bool:
+        """Soft-delete a policy by setting active=false."""
+        if not self.configured:
+            return False
+        try:
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.patch(
+                    f"{self.url}/rest/v1/org_policies",
+                    headers={
+                        "apikey": self.key or "",
+                        "authorization": f"Bearer {self.key}",
+                        "content-type": "application/json",
+                    },
+                    params={
+                        "policy_id": f"eq.{policy_id}",
+                        "org_id": f"eq.{org_id}",
+                    },
+                    json={
+                        "active": False,
+                        "updated_at": datetime.now(timezone.utc).isoformat(),
+                    },
+                )
+                return response.status_code in (200, 204)
+        except Exception:
             return False
 
 
