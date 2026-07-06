@@ -33,6 +33,7 @@ from topology import build_topology
 from legal_hold import legal_hold_manager, evaluate_triggers
 from passport import assemble_passport, render_pdf
 from threat_classifier import threat_classifier
+from org_policy_engine import evaluate_org_policies
 
 APP_NAME = "pulse-proxy"
 SYNTHESIS_ENABLED = os.getenv("PULSE_SYNTHESIS_ENABLED", "true").lower() in {"1", "true", "yes"}
@@ -57,12 +58,8 @@ AMOUNT_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
-# ---------------------------------------------------------------------------
-# Agent Registry Cache — avoids a Supabase round-trip on every /intercept call.
-# TTL: 60 seconds. Invalidated on register. Thread-safe for single-process use.
-# ---------------------------------------------------------------------------
-_agent_cache: Dict[str, Dict[str, Any]] = {}   # agent_id -> {"found": bool, "ts": float}
-AGENT_CACHE_TTL = 60.0  # seconds
+_agent_cache: Dict[str, Dict[str, Any]] = {}
+AGENT_CACHE_TTL = 60.0
 
 def _cache_get(agent_id: str) -> Optional[Dict[str, Any]]:
     entry = _agent_cache.get(agent_id)
@@ -80,7 +77,6 @@ def _cache_invalidate(agent_id: str) -> None:
     _agent_cache.pop(agent_id, None)
 
 async def _is_agent_registered(agent_id: str) -> bool:
-    """Returns True if agent is in registry. Uses cache, falls back to Supabase."""
     cached = _cache_get(agent_id)
     if cached is not None:
         return cached["found"]
@@ -822,6 +818,7 @@ async def chat_completions(payload: ChatProxyRequest, request: Request):
 async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
     """SDK hook: record agent input/output and apply circuit-breaker governance.
     Phase 4 Stage 3: Threat Classification Layer (observation-only, no blocking).
+    Phase 6 Stage 2: Org Policy Enforcement.
     """
     if not payload.session_id:
         payload.session_id = f"{payload.agent_id}:{uuid.uuid4()}"
@@ -846,7 +843,6 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
 
     drift_score = float(drift_result.get("score") or 0.0)
     baselined = (drift_result.get("turns_analyzed") or 0) >= BASELINE_MIN_TURNS
-    # Phase 4 Stage 1 — Exfiltration Signal Correlation
     components = drift_result.get("components") or {}
     token_collapse = float(components.get("token_collapse", 0.0))
     input_anomaly = float(components.get("input_anomaly", 0.0))
@@ -873,9 +869,6 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
             )
         )
 
-    # ------------------------------------------------------------------
-    # Shadow Score v2 — canonical composite (Phase 3 Stage 4)
-    # ------------------------------------------------------------------
     is_registered = await _is_agent_registered(payload.agent_id)
     unregistered = 0.0 if is_registered else 1.0
     has_parent = bool(payload.parent_session_id and payload.parent_session_id.strip())
@@ -889,12 +882,10 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
         scope_measurable=False,
     )
 
-    # Trust Divergence — separate dual-channel signal
     trust_divergence = compute_trust_divergence(
         payload.self_reported_risk, drift_score, baselined=baselined
     )
 
-    # Lightweight sync swarm check — session-count-per-window (Phase 3)
     active_sessions = session_store.active_sessions_for_agent(
         payload.agent_id, window_seconds=300
     )
@@ -907,11 +898,6 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
         else _calculate_shannon_entropy(payload.input_text)
     )
 
-    # ------------------------------------------------------------------
-    # Phase 4 Stage 3 — Threat Classification Layer (NEW)
-    # Observation-only: compute threat scores, append to response, no blocking.
-    # ------------------------------------------------------------------
-    # Count policy violations in this session (blocked turns)
     session_events = await supabase_audit_client.get_recent_events(limit=500)
     session_turns = [e for e in session_events if e.get("session_id") == payload.session_id]
     policy_blocked_turns = sum(1 for e in session_turns if e.get("policy_result") == "blocked")
@@ -930,6 +916,35 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
         policy_total_turns=policy_total_turns,
         baselined=baselined,
     )
+
+    # ------------------------------------------------------------------
+    # Phase 6 Stage 2 — Org Policy Enforcement
+    # Load org policies and check input text against them.
+    # org_id defaults to "demo-org"; pass via metadata.org_id to override.
+    # ------------------------------------------------------------------
+    org_id = (payload.metadata or {}).get("org_id", "demo-org")
+    policy_violations = await evaluate_org_policies(
+        input_text=payload.input_text,
+        org_id=org_id,
+        supabase_client=supabase_audit_client,
+    )
+    if policy_violations:
+        feed.add(
+            PulseEvent(
+                kind="alert",
+                text=f"Org policy violation: {len(policy_violations)} rule(s) fired",
+                data={
+                    "decision": "alert",
+                    "status_code": 200,
+                    "severity": "HIGH",
+                    "trigger_type": "policy_violation",
+                    "violations": policy_violations,
+                    "agent_id": payload.agent_id,
+                    "session_id": payload.session_id,
+                    "org_id": org_id,
+                },
+            )
+        )
 
     disposition = circuit_breaker.gate_request(
         agent_id=payload.agent_id,
@@ -961,6 +976,7 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
                 "shadow": shadow,
                 "trust_divergence": trust_divergence,
                 "threat_classification": threat_classification,
+                "policy_violations": policy_violations,
                 "legal_holds": [h["id"] for h in holds],
             },
         )
@@ -1020,6 +1036,7 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
             "threshold": 3,
         },
         "threat_classification": threat_classification,
+        "policy_violations": policy_violations,
         "legal_holds": [h["id"] for h in holds],
         "exfiltration": {
             "risk_score": exfiltration_risk_score,
@@ -1044,9 +1061,6 @@ def reset() -> Dict[str, Any]:
 
 @app.get("/drift/recent")
 async def get_recent_drift_scores(limit: int = 50) -> Dict[str, Any]:
-    """Return last N sessions with ACTUAL drift engine scores (not raw entropy).
-    Fixes false positive: demo-normal-001 scoring 0.94 CRITICAL due to raw entropy.
-    """
     try:
         events = await supabase_audit_client.get_recent_events(limit=limit)
         result = []
@@ -1070,7 +1084,6 @@ async def get_recent_drift_scores(limit: int = 50) -> Dict[str, Any]:
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
-        
 @app.get("/drift/{session_id}")
 def get_drift(session_id: str) -> Dict[str, Any]:
     return {"ok": True, "session_id": session_id, "drift": drift_engine.get_drift(session_id)}
@@ -1105,7 +1118,6 @@ def compliance_events(limit: int = 100) -> Dict[str, Any]:
 
 @app.get("/compliance/deadlines")
 async def compliance_deadlines(incident_time: Optional[str] = None, auto_hold: bool = True) -> Dict[str, Any]:
-    """ASEAN Deadline Clock — Action 3 (Phase 2) + auto legal hold on breach (Stage 6)."""
     from datetime import timedelta
     ASEAN_FRAMEWORKS = [
         {"framework": "PDPA Malaysia", "obligation": "Notify PDPC of personal data breach", "window_hours": 24, "jurisdiction": "MY"},
@@ -1185,7 +1197,6 @@ def compliance_mgf(
     severity: Optional[str] = None,
     session_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """MGF Compliance Mapper — Action 2 (Phase 2)."""
     MGF_CLAUSES = [
         {"clause": "2.1", "title": "Internal Governance Structures and Measures", "trigger_severity": ["elevated", "critical"], "trigger_entropy_min": 0.40, "obligation": "Ensure senior management oversight of AI decisions at elevated risk.", "recommended_action": "Escalate to AI governance owner. Log decision rationale.", "priority": "HIGH"},
         {"clause": "2.2", "title": "Determining AI Decision Type", "trigger_severity": ["critical"], "trigger_entropy_min": 0.70, "obligation": "Classify AI decision impact. Flag fully automated decisions on individuals.", "recommended_action": "Introduce human-in-the-loop review before execution.", "priority": "CRITICAL"},
@@ -1208,7 +1219,6 @@ def compliance_mgf(
 
 @app.get("/session/lineage/{session_id}")
 async def session_lineage(session_id: str) -> Dict[str, Any]:
-    """Session Lineage Tracker — Action 5 (Phase 2)."""
     try:
         result = await supabase_audit_client.get_session_events(session_id=session_id)
         events = result or []
@@ -1257,7 +1267,6 @@ async def trust_score(
     blocked_turns: Optional[int] = None,
     total_turns: Optional[int] = None,
 ) -> Dict[str, Any]:
-    """Entropy-Weighted Trust Score — Action 4 (Phase 2)."""
     W_ENTROPY = 0.35
     W_BDI = 0.25
     W_DRIFT = 0.20
@@ -1298,7 +1307,6 @@ async def trust_score(
 
 @app.post("/agt/bridge")
 async def agt_bridge(payload: AGTToolCall) -> Dict[str, Any]:
-    """AGT-to-Pulse Bridge — Action 1 (Phase 2)."""
     input_text = ""
     if payload.tool_input:
         try:
@@ -1365,7 +1373,6 @@ async def agt_bridge(payload: AGTToolCall) -> Dict[str, Any]:
 
 @app.get("/ledger/integrity")
 async def ledger_integrity(limit: int = 100) -> Dict[str, Any]:
-    """Ledger Integrity Verifier — SHA-256 hash chain proof."""
     if not supabase_audit_client.configured:
         raise HTTPException(status_code=503, detail="Supabase not configured")
     try:
@@ -1442,7 +1449,6 @@ async def ledger_integrity(limit: int = 100) -> Dict[str, Any]:
 
 @app.post("/agents/register")
 async def register_agent(payload: AgentRegisterRequest) -> Dict[str, Any]:
-    """Agent Identity Registry — Phase 3 Stage 1. Register an agent identity."""
     result = await supabase_audit_client.register_agent(
         agent_id=payload.agent_id,
         name=payload.name,
@@ -1465,7 +1471,6 @@ async def register_agent(payload: AgentRegisterRequest) -> Dict[str, Any]:
 
 @app.get("/agents")
 async def list_agents(limit: int = 100) -> Dict[str, Any]:
-    """Agent Identity Registry — list all registered agents."""
     agents = await supabase_audit_client.list_agents(limit=limit)
     return {
         "ok": True,
@@ -1475,7 +1480,6 @@ async def list_agents(limit: int = 100) -> Dict[str, Any]:
 
 @app.get("/agents/{agent_id}")
 async def get_agent(agent_id: str) -> Dict[str, Any]:
-    """Agent Identity Registry — look up a single agent."""
     agent = await supabase_audit_client.get_agent(agent_id=agent_id)
     if agent is None:
         return {
@@ -1570,7 +1574,6 @@ async def swarm_detect(
     min_distinct_sessions: int = 2,
     limit: int = 500,
 ) -> Dict[str, Any]:
-    """Swarm Detector — Phase 3 Stage 3."""
     events = await supabase_audit_client.get_recent_events(limit=limit)
     return swarm_detector.detect(
         events,
@@ -1585,12 +1588,10 @@ async def shadow_score(
     session_id: Optional[str] = None,
     agent_self_report: Optional[float] = None,
 ) -> Dict[str, Any]:
-    """Shadow Score v2 — Phase 3 Stage 4. Canonical composite formula."""
     is_registered = False
     if agent_id:
         is_registered = await _is_agent_registered(agent_id)
     unregistered = 0.0 if is_registered else 1.0
-
     unauthorized_spawn = 1.0
     baselined = False
     if session_id:
@@ -1600,7 +1601,6 @@ async def shadow_score(
         session_events = [e for e in events if e.get("session_id") == session_id]
         has_parent = any(e.get("parent_session_id") for e in session_events)
         unauthorized_spawn = 0.0 if has_parent else 1.0
-
     shadow = compute_shadow(
         unregistered=unregistered,
         unauthorized_spawn=unauthorized_spawn,
@@ -1608,13 +1608,11 @@ async def shadow_score(
         baselined=baselined,
         scope_measurable=False,
     )
-
     trust_div = None
     if agent_self_report is not None and session_id:
         drift = drift_engine.get_drift(session_id)
         pulse_score = float(drift.get("score") or 0.0)
         trust_div = compute_trust_divergence(agent_self_report, pulse_score, baselined=baselined)
-
     return {
         "ok": True,
         "agent_id": agent_id,
@@ -1625,7 +1623,6 @@ async def shadow_score(
 
 @app.get("/topology")
 async def topology(limit: int = 500) -> Dict[str, Any]:
-    """Dashboard Topology — Phase 3 Stage 5."""
     events = await supabase_audit_client.get_recent_events(limit=limit)
     agents = await supabase_audit_client.list_agents(limit=500)
     graph = build_topology(events, agents=agents, drift_lookup=drift_engine.get_drift)
@@ -1633,14 +1630,11 @@ async def topology(limit: int = 500) -> Dict[str, Any]:
 
 @app.get("/ai_events/recent")
 async def ai_events_recent(limit: int = 500) -> Dict[str, Any]:
-    """Durable event feed for the dashboard — reads from Supabase, survives
-    Render free-tier restarts."""
     events = await supabase_audit_client.get_recent_events(limit=limit)
     return {"ok": True, "total": len(events), "events": events}
 
 @app.get("/alerts")
 def alerts(limit: int = 50) -> Dict[str, Any]:
-    """Unified alert stream + active legal holds — Phase 3 Stage 6."""
     recent = feed.list(limit=500)
     alert_events = [e for e in recent if e.get("kind") in {"alert", "shadow", "governance"}][:limit]
     return {
@@ -1651,7 +1645,6 @@ def alerts(limit: int = 50) -> Dict[str, Any]:
 
 @app.get("/legal-hold")
 async def list_holds(status: Optional[str] = None, limit: int = 100, source: str = "memory") -> Dict[str, Any]:
-    """Legal Hold registry — Phase 3 Stage 6. source=memory (live) or db (durable)."""
     if source == "db":
         holds = await supabase_audit_client.list_legal_holds(status=status, limit=limit)
     else:
@@ -1700,7 +1693,6 @@ async def release_hold(hold_id: str, payload: LegalHoldReleaseRequest) -> Dict[s
 
 @app.get("/session/tree/{session_id}")
 async def session_tree(session_id: str, limit: int = 500) -> Dict[str, Any]:
-    """Session lineage tree — Phase 3 Stage 2."""
     events = await supabase_audit_client.get_recent_events(limit=limit)
     by_session: Dict[str, Dict[str, Any]] = {}
     children: Dict[str, List[str]] = {}
@@ -1750,7 +1742,6 @@ async def session_tree(session_id: str, limit: int = 500) -> Dict[str, Any]:
 
 @app.get("/ledger/integrity/ai_events")
 async def ledger_integrity_ai_events(limit: int = 100) -> Dict[str, Any]:
-    """Ledger Integrity Verifier for ai_events — independent SHA-256 hash chain proof."""
     if not supabase_audit_client.configured:
         raise HTTPException(status_code=503, detail="Supabase not configured")
     rows = await supabase_audit_client.get_ai_events_chain(limit=limit)
@@ -1819,14 +1810,10 @@ async def agent_passport(
     """
     from datetime import timedelta
 
-    # 1. Agent Identity
     agent = await supabase_audit_client.get_agent(agent_id=agent_id)
-
-    # 2. Session events for this agent
     events = await supabase_audit_client.get_recent_events(limit=500)
     agent_events = [e for e in events if e.get("agent_id") == agent_id]
 
-    # 3. Drift
     if session_id:
         drift = drift_engine.get_drift(session_id)
     else:
@@ -1838,7 +1825,6 @@ async def agent_passport(
         best_session = max(session_counts, key=session_counts.get) if session_counts else None
         drift = drift_engine.get_drift(best_session) if best_session else {}
 
-    # 4. Shadow Score v2
     is_registered = await _is_agent_registered(agent_id)
     unregistered = 0.0 if is_registered else 1.0
     has_parent = any(e.get("parent_session_id") for e in agent_events)
@@ -1852,7 +1838,6 @@ async def agent_passport(
         scope_measurable=False,
     )
 
-    # 5. ASEAN Compliance deadlines
     now = datetime.now(timezone.utc)
     ASEAN_FRAMEWORKS = [
         {"framework": "PDPA Malaysia", "obligation": "Notify PDPC of personal data breach", "window_hours": 24, "jurisdiction": "MY"},
@@ -1872,7 +1857,6 @@ async def agent_passport(
             "breached": False,
         })
 
-    # 6. Legal holds
     all_holds = legal_hold_manager.list(status="ACTIVE")
     agent_holds = [h for h in all_holds if h.get("agent_id") == agent_id]
     db_holds = await supabase_audit_client.list_legal_holds(status="ACTIVE", limit=100)
@@ -1882,7 +1866,6 @@ async def agent_passport(
         hold_map.setdefault(h["id"], h)
     merged_holds = list(hold_map.values())
 
-    # Assemble
     passport = assemble_passport(
         agent_id=agent_id,
         agent=agent,
