@@ -592,9 +592,19 @@ async def _maybe_open_legal_hold(
     shadow: Optional[Dict[str, Any]] = None,
     swarm: Optional[Dict[str, Any]] = None,
     deadlines: Optional[List[Dict[str, Any]]] = None,
+    exfiltration: Optional[Dict[str, Any]] = None,
+    policy_violations: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
+    # Phase 7 Stage 1 — Auto-Response Security Protocol:
+    # exfiltration alerts, org policy violations, and live swarm suspicion
+    # now auto-open legal holds with no manual dashboard action required.
     triggers = evaluate_triggers(
-        drift_result=drift_result, shadow=shadow, swarm=swarm, deadlines=deadlines
+        drift_result=drift_result,
+        shadow=shadow,
+        swarm=swarm,
+        deadlines=deadlines,
+        exfiltration=exfiltration,
+        policy_violations=policy_violations,
     )
     if not triggers:
         return []
@@ -611,7 +621,13 @@ async def _maybe_open_legal_hold(
             chain_hash=chain_hash,
             framework=t.get("framework"),
             jurisdiction=t.get("jurisdiction"),
-            evidence={"drift": drift_result, "shadow": shadow},
+            evidence={
+                "drift": drift_result,
+                "shadow": shadow,
+                "exfiltration": exfiltration,
+                "policy_violations": policy_violations,
+                "swarm": swarm,
+            },
             dedupe_scope=t.get("dedupe_scope"),
         )
         if hold is None:
@@ -819,6 +835,9 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
     """SDK hook: record agent input/output and apply circuit-breaker governance.
     Phase 4 Stage 3: Threat Classification Layer (observation-only, no blocking).
     Phase 6 Stage 2: Org Policy Enforcement.
+    Phase 7 Stage 1: Auto-Response — confirmed breaches (exfiltration alert,
+    org policy violation, swarm suspicion) auto-open legal holds; no manual
+    Remediate action required.
     """
     if not payload.session_id:
         payload.session_id = f"{payload.agent_id}:{uuid.uuid4()}"
@@ -965,6 +984,22 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
             event_id=request_id,
             drift_result=drift_result,
             shadow=shadow,
+            swarm={
+                "swarm_suspect": swarm_suspect,
+                "active_sessions": swarm_session_count,
+                "window_seconds": 300,
+                "threshold": 3,
+                "agent_id": payload.agent_id,
+            },
+            exfiltration={
+                "alert": exfiltration_alert,
+                "risk_score": exfiltration_risk_score,
+                "components": {
+                    "token_collapse": token_collapse,
+                    "input_anomaly": input_anomaly,
+                },
+            },
+            policy_violations=policy_violations,
         )
         raise HTTPException(
             status_code=409,
@@ -1020,6 +1055,22 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
         event_id=request_id,
         drift_result=drift_result,
         shadow=shadow,
+        swarm={
+            "swarm_suspect": swarm_suspect,
+            "active_sessions": swarm_session_count,
+            "window_seconds": 300,
+            "threshold": 3,
+            "agent_id": payload.agent_id,
+        },
+        exfiltration={
+            "alert": exfiltration_alert,
+            "risk_score": exfiltration_risk_score,
+            "components": {
+                "token_collapse": token_collapse,
+                "input_anomaly": input_anomaly,
+            },
+        },
+        policy_violations=policy_violations,
     )
     return {
         "ok": True,
