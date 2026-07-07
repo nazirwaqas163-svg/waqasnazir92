@@ -866,7 +866,11 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
     token_collapse = float(components.get("token_collapse", 0.0))
     input_anomaly = float(components.get("input_anomaly", 0.0))
     exfiltration_risk_score = round((token_collapse * 0.25) + (input_anomaly * 0.75), 4)
-    exfiltration_alert = exfiltration_risk_score > 0.65
+    # Phase 7 Stage 1 fix: exfiltration alert (and therefore the auto legal
+    # hold) only fires once the session is baselined (5+ analyzed turns),
+    # matching the threat classifier's own suppression rule. Prevents a
+    # CRITICAL hold from opening on turn 1 of every new session.
+    exfiltration_alert = baselined and exfiltration_risk_score > 0.65
     if exfiltration_alert:
         feed.add(
             PulseEvent(
