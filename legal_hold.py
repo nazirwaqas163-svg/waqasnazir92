@@ -1,9 +1,18 @@
 """
-Legal Hold + Alert — Phase 3 Stage 6.
+Legal Hold + Alert — Phase 3 Stage 6, extended by Phase 7 Stage 1.
 
 A legal hold pins forensic evidence the moment a governance event fires:
 critical drift, agent under-reporting (shadow), a malicious swarm, or a breached
 ASEAN compliance deadline (build rule: missed deadline auto-triggers a hold).
+
+Phase 7 Stage 1 — Auto-Response Security Protocol: two additional confirmed-breach
+signals now auto-open a legal hold with no manual dashboard action required:
+  * exfiltration      — /intercept exfiltration risk_score crossed the alert
+                        threshold (currently > 0.65) → CRITICAL hold
+  * policy_violation  — one or more org policies fired on the intercepted
+                        input → HIGH hold
+Swarm suspicion from the live /intercept path (>= 3 active sessions for one
+agent inside the rolling window) also opens a HIGH hold, deduped per agent.
 
 Evidence integrity is anchored to the *chained* table (audit_logs.chain_hash),
 not ai_events — ai_events is the readable append-only mirror; audit_logs carries
@@ -29,8 +38,17 @@ def evaluate_triggers(
     shadow: Optional[Dict[str, Any]] = None,
     swarm: Optional[Dict[str, Any]] = None,
     deadlines: Optional[List[Dict[str, Any]]] = None,
+    exfiltration: Optional[Dict[str, Any]] = None,
+    policy_violations: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
-    """Return the list of triggers fired by the supplied signals."""
+    """Return the list of triggers fired by the supplied signals.
+
+    Phase 7 Stage 1 adds two confirmed-breach signals (`exfiltration` and
+    `policy_violations`) and accepts the live /intercept swarm_check dict
+    (key `swarm_suspect`) in addition to the batch detector dict
+    (key `swarm_detected`). All new parameters are optional and default to
+    None, so every pre-existing caller keeps working unchanged.
+    """
     triggers: List[Dict[str, Any]] = []
 
     if drift_result and drift_result.get("status") == "critical":
@@ -61,6 +79,52 @@ def evaluate_triggers(
                 "trigger_type": "swarm",
                 "severity": sev,
                 "reason": f"Malicious swarm detected ({swarm.get('clusters_found')} cluster(s))",
+            }
+        )
+    elif swarm and swarm.get("swarm_suspect"):
+        # Live /intercept swarm signal — one agent running >= threshold
+        # concurrent sessions inside the rolling window. Deduped per agent
+        # so a sustained swarm doesn't spawn a hold on every turn.
+        triggers.append(
+            {
+                "trigger_type": "swarm",
+                "severity": "HIGH",
+                "reason": (
+                    "Swarm suspicion: "
+                    f"{swarm.get('active_sessions')} concurrent sessions for one agent "
+                    f"(threshold {swarm.get('threshold', 3)}, "
+                    f"window {swarm.get('window_seconds', 300)}s)"
+                ),
+                "dedupe_scope": f"agent:{swarm.get('agent_id') or 'unknown'}",
+            }
+        )
+
+    if exfiltration and exfiltration.get("alert"):
+        triggers.append(
+            {
+                "trigger_type": "exfiltration",
+                "severity": "CRITICAL",
+                "reason": (
+                    "Exfiltration risk confirmed "
+                    f"(risk_score={exfiltration.get('risk_score')})"
+                ),
+            }
+        )
+
+    if policy_violations:
+        rule_names = ", ".join(
+            str(v.get("policy_id") or v.get("policy_name") or v.get("name") or "unknown")
+            for v in policy_violations[:3]
+        )
+        suffix = "…" if len(policy_violations) > 3 else ""
+        triggers.append(
+            {
+                "trigger_type": "policy_violation",
+                "severity": "HIGH",
+                "reason": (
+                    f"Org policy violation: {len(policy_violations)} rule(s) fired "
+                    f"({rule_names}{suffix})"
+                ),
             }
         )
 
