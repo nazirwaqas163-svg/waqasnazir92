@@ -48,19 +48,12 @@ class Logger:
             return len(self._chain)
 
     def recent_entries(self, limit: int = 50) -> List[Dict[str, Any]]:
-        """Thread-safe snapshot of the most recent chain entries."""
         with self._lock:
             if limit <= 0:
                 return []
             return list(self._chain[-limit:])
 
     def log_event(self, event_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Append an event to the chain.
-
-        The previous event's hash is stored on the new entry, then the new
-        entry's hash is computed from (event_data, previous_hash).
-        """
         with self._lock:
             previous_hash = self._chain[-1]["hash"] if self._chain else GENESIS_HASH
             entry: Dict[str, Any] = {
@@ -72,7 +65,6 @@ class Logger:
             return entry
 
     def verify_chain(self) -> bool:
-        """Return True if every link matches its predecessor's stored hash."""
         with self._lock:
             entries = list(self._chain)
         expected_previous = GENESIS_HASH
@@ -88,10 +80,6 @@ class Logger:
         return True
 
 
-# Two independent chains: one for audit_logs (request/response pairs), one for
-# ai_events (the readable per-turn mirror). They are deliberately separate —
-# ai_events being independently chained means it no longer depends on
-# audit_logs to be forensically defensible on its own.
 audit_logger = Logger()
 ai_events_logger = Logger()
 
@@ -214,9 +202,7 @@ class SupabaseAuditClient:
         return await self._post_row("ai_events", row)
 
     async def get_session_events(self, session_id: str) -> List[Dict[str, Any]]:
-        """Fetch all ai_events for a given session_id, ordered by timestamp."""
         if not self.configured:
-            logger.warning("Skipping get_session_events because Supabase is not configured")
             return []
         try:
             headers = {
@@ -342,7 +328,6 @@ class SupabaseAuditClient:
             pass
 
     def get_chain_hash_local(self, event_id: str) -> Optional[str]:
-        """SHA-256 chain hash for an audit_logs event, read from the in-process chain."""
         for entry in self._chain_logger.chain:
             data = entry.get("data") or {}
             if data.get("id") == event_id:
@@ -350,7 +335,6 @@ class SupabaseAuditClient:
         return None
 
     def get_ai_event_chain_hash_local(self, event_id: str) -> Optional[str]:
-        """SHA-256 chain hash (row_hash) for an ai_events row, read from the in-process chain."""
         for entry in self._ai_events_chain_logger.chain:
             data = entry.get("data") or {}
             if data.get("event_id") == event_id:
@@ -386,7 +370,6 @@ class SupabaseAuditClient:
             return []
 
     async def get_ai_events_chain(self, limit: int = 100) -> List[Dict[str, Any]]:
-        """Fetch ai_events rows ordered by created_at for chain verification."""
         if not self.configured:
             return []
         try:
@@ -464,7 +447,6 @@ class SupabaseAuditClient:
         name: str,
         rules: Dict[str, Any],
     ) -> Dict[str, Any]:
-        """Insert or replace an org policy in Supabase."""
         if not self.configured:
             return {"ok": False, "reason": "supabase_not_configured"}
         row = {
@@ -495,7 +477,6 @@ class SupabaseAuditClient:
             return {"ok": False, "reason": str(exc)}
 
     async def list_org_policies(self, org_id: str) -> List[Dict[str, Any]]:
-        """List all active policies for an org."""
         if not self.configured:
             return []
         try:
@@ -518,7 +499,6 @@ class SupabaseAuditClient:
             return []
 
     async def deactivate_org_policy(self, policy_id: str, org_id: str) -> bool:
-        """Soft-delete a policy by setting active=false."""
         if not self.configured:
             return False
         try:
@@ -532,6 +512,106 @@ class SupabaseAuditClient:
                     },
                     params={
                         "policy_id": f"eq.{policy_id}",
+                        "org_id": f"eq.{org_id}",
+                    },
+                    json={
+                        "active": False,
+                        "updated_at": datetime.now(timezone.utc).isoformat(),
+                    },
+                )
+                return response.status_code in (200, 204)
+        except Exception:
+            return False
+
+    # ------------------------------------------------------------------
+    # Phase 7 Stage 2 — Webhook Registration Methods
+    # ------------------------------------------------------------------
+
+    async def insert_webhook_registration(
+        self,
+        *,
+        org_id: str,
+        name: str,
+        url: str,
+        secret: str,
+        events: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """Insert a new webhook registration. Returns the created row."""
+        if not self.configured:
+            return {"ok": False, "reason": "supabase_not_configured"}
+        row = {
+            "org_id": org_id,
+            "name": name,
+            "url": url,
+            "secret": secret,
+            "events": events or ["legal_hold.opened"],
+            "active": True,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        try:
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.post(
+                    f"{self.url}/rest/v1/webhook_registrations",
+                    headers={
+                        "apikey": self.key or "",
+                        "authorization": f"Bearer {self.key}",
+                        "content-type": "application/json",
+                        "prefer": "return=representation",
+                    },
+                    json=row,
+                )
+                if response.status_code in (200, 201):
+                    data = response.json()
+                    return data[0] if data else row
+                return {"ok": False, "reason": response.text}
+        except Exception as exc:
+            return {"ok": False, "reason": str(exc)}
+
+    async def list_webhook_registrations(
+        self, org_id: str, active_only: bool = True
+    ) -> List[Dict[str, Any]]:
+        """List webhook registrations for an org."""
+        if not self.configured:
+            return []
+        params: Dict[str, str] = {
+            "org_id": f"eq.{org_id}",
+            "order": "created_at.asc",
+            "select": "*",
+        }
+        if active_only:
+            params["active"] = "eq.true"
+        try:
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.get(
+                    f"{self.url}/rest/v1/webhook_registrations",
+                    headers={
+                        "apikey": self.key or "",
+                        "authorization": f"Bearer {self.key}",
+                    },
+                    params=params,
+                )
+                return response.json() if response.status_code == 200 else []
+        except Exception:
+            return []
+
+    async def deactivate_webhook_registration(
+        self, webhook_id: str, org_id: str
+    ) -> bool:
+        """Soft-delete a webhook registration."""
+        if not self.configured:
+            return False
+        try:
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.patch(
+                    f"{self.url}/rest/v1/webhook_registrations",
+                    headers={
+                        "apikey": self.key or "",
+                        "authorization": f"Bearer {self.key}",
+                        "content-type": "application/json",
+                    },
+                    params={
+                        "id": f"eq.{webhook_id}",
                         "org_id": f"eq.{org_id}",
                     },
                     json={
