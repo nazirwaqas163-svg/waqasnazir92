@@ -624,4 +624,79 @@ class SupabaseAuditClient:
             return False
 
 
+    async def insert_incident_report(
+        self,
+        *,
+        hold_id: str,
+        agent_id: Optional[str],
+        session_id: Optional[str],
+        trigger_type: Optional[str],
+        severity: Optional[str],
+        json_package: Dict[str, Any],
+        pdf_bytes: Optional[bytes] = None,
+    ) -> Optional[str]:
+        """Insert a sealed incident report. Returns the report id or None."""
+        if not self.configured:
+            return None
+        import base64
+        row: Dict[str, Any] = {
+            "hold_id": hold_id,
+            "agent_id": agent_id,
+            "session_id": session_id,
+            "trigger_type": trigger_type,
+            "severity": severity,
+            "json_package": json_package,
+            "sealed": True,
+            "dpo_email_sent": False,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        if pdf_bytes:
+            row["pdf_bytes"] = base64.b64encode(pdf_bytes).decode()
+        try:
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.post(
+                    f"{self.url}/rest/v1/incident_reports",
+                    headers={
+                        "apikey": self.key or "",
+                        "authorization": f"Bearer {self.key}",
+                        "content-type": "application/json",
+                        "prefer": "return=representation",
+                    },
+                    json=row,
+                )
+                if response.status_code in (200, 201):
+                    data = response.json()
+                    return data[0].get("id") if data else None
+                logger.warning("Failed to insert incident report: %s", response.text)
+                return None
+        except Exception:
+            logger.exception("Failed to insert incident report")
+            return None
+
+    async def get_incident_report(self, hold_id: str) -> Optional[Dict[str, Any]]:
+        """Fetch the incident report for a given hold_id."""
+        if not self.configured:
+            return None
+        try:
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.get(
+                    f"{self.url}/rest/v1/incident_reports",
+                    headers={
+                        "apikey": self.key or "",
+                        "authorization": f"Bearer {self.key}",
+                    },
+                    params={
+                        "hold_id": f"eq.{hold_id}",
+                        "select": "*",
+                        "limit": "1",
+                        "order": "generated_at.desc",
+                    },
+                )
+                rows = response.json() if response.status_code == 200 else []
+                return rows[0] if rows else None
+        except Exception:
+            logger.exception("Failed to fetch incident report for hold %s", hold_id)
+            return None
+
+
 supabase_audit_client = SupabaseAuditClient(SUPABASE_URL, SUPABASE_KEY)
