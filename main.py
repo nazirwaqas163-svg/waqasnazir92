@@ -975,6 +975,7 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
         entropy=entropy,
         shadow_mode=SHADOW_MODE,
         intercept=True,
+        baselined=baselined,
     )
     if disposition.get("shadow_mode") and disposition.get("would_have_action"):
         _record_shadow_event(disposition, agent_id=payload.agent_id, bdi_score=bdi_score, entropy=entropy)
