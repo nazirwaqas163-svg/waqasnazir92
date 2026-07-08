@@ -650,6 +650,13 @@ async def _maybe_open_legal_hold(
             )
         )
         await supabase_audit_client.insert_legal_hold(hold)
+        # Phase 7 Stage 3 — auto-isolate the offending agent on swarm detection
+        if hold["trigger_type"] == "swarm" and agent_id:
+            session_store.isolate_agent(
+                agent_id,
+                reason=hold["reason"],
+                hold_id=hold["id"],
+            )
         # Phase 7 Stage 2 — fire signed webhook alerts for this hold
         org_id = hold.get("evidence", {}).get("org_id") or "demo-org"
         registrations = await supabase_audit_client.list_webhook_registrations(org_id=org_id)
@@ -841,12 +848,26 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
     """SDK hook: record agent input/output and apply circuit-breaker governance.
     Phase 4 Stage 3: Threat Classification Layer (observation-only, no blocking).
     Phase 6 Stage 2: Org Policy Enforcement.
-    Phase 7 Stage 1: Auto-Response — confirmed breaches (exfiltration alert,
-    org policy violation, swarm suspicion) auto-open legal holds; no manual
-    Remediate action required.
+    Phase 7 Stage 1: Auto-Response — confirmed breaches auto-open legal holds.
+    Phase 7 Stage 3: Agent Auto-Isolation — isolated agents receive 423 Locked.
     """
     if not payload.session_id:
         payload.session_id = f"{payload.agent_id}:{uuid.uuid4()}"
+
+    # Phase 7 Stage 3 — Agent Auto-Isolation: reject quarantined agents immediately
+    if session_store.is_isolated(payload.agent_id):
+        isolation = session_store.get_isolation(payload.agent_id)
+        raise HTTPException(
+            status_code=423,
+            detail={
+                "error": "Agent is isolated and cannot execute requests",
+                "agent_id": payload.agent_id,
+                "reason": isolation.reason if isolation else "quarantined",
+                "isolated_at": isolation.isolated_at if isolation else None,
+                "hold_id": isolation.hold_id if isolation else None,
+                "release_endpoint": f"/agents/{payload.agent_id}/release",
+            },
+        )
 
     bdi_score = session_store.record_turn(
         payload.session_id,
@@ -1683,6 +1704,39 @@ async def delete_webhook(webhook_id: str, org_id: str) -> Dict[str, Any]:
         raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
+
+# ------------------------------------------------------------------
+# Phase 7 Stage 3 — Agent Isolation Endpoints
+# ------------------------------------------------------------------
+
+class AgentIsolateRequest(BaseModel):
+    reason: str = "Manual isolation from dashboard"
+    hold_id: Optional[str] = None
+
+class AgentReleaseRequest(BaseModel):
+    released_by: str = "dashboard"
+
+@app.post("/agents/{agent_id}/isolate")
+async def isolate_agent(agent_id: str, payload: AgentIsolateRequest) -> Dict[str, Any]:
+    """Quarantine an agent — all future /intercept calls return 423 Locked."""
+    record = session_store.isolate_agent(
+        agent_id, reason=payload.reason, hold_id=payload.hold_id
+    )
+    return {"ok": True, "isolated": True, "isolation": record.to_dict()}
+
+@app.post("/agents/{agent_id}/release")
+async def release_agent(agent_id: str, payload: AgentReleaseRequest) -> Dict[str, Any]:
+    """Release an agent from isolation."""
+    record = session_store.release_agent(agent_id, released_by=payload.released_by)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' is not isolated")
+    return {"ok": True, "released": True, "isolation": record.to_dict()}
+
+@app.get("/agents/isolated")
+def list_isolated_agents(active_only: bool = True) -> Dict[str, Any]:
+    """List all currently isolated agents."""
+    records = session_store.list_isolated(active_only=active_only)
+    return {"ok": True, "total": len(records), "isolated_agents": records}
 
 @app.get("/swarm/detect")
 async def swarm_detect(
