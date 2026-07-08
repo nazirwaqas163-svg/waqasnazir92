@@ -35,6 +35,7 @@ from passport import assemble_passport, render_pdf
 from threat_classifier import threat_classifier
 from org_policy_engine import evaluate_org_policies
 from webhook_engine import fire_webhooks
+from incident_report import assemble_evidence_package, render_incident_pdf
 
 APP_NAME = "pulse-proxy"
 SYNTHESIS_ENABLED = os.getenv("PULSE_SYNTHESIS_ENABLED", "true").lower() in {"1", "true", "yes"}
@@ -657,6 +658,35 @@ async def _maybe_open_legal_hold(
                 reason=hold["reason"],
                 hold_id=hold["id"],
             )
+        # Phase 7 Stage 4 — auto-generate sealed incident report
+        try:
+            agent_events = await supabase_audit_client.get_recent_events(limit=500)
+            agent_specific_events = [
+                e for e in agent_events if e.get("agent_id") == agent_id
+            ] if agent_id else []
+            evidence_package = assemble_evidence_package(
+                hold=hold,
+                agent_events=agent_specific_events,
+                exfiltration=exfiltration,
+                policy_violations=policy_violations,
+                swarm=swarm,
+            )
+            pdf_bytes = None
+            try:
+                pdf_bytes = render_incident_pdf(evidence_package)
+            except RuntimeError:
+                pass  # reportlab not installed — JSON-only mode
+            await supabase_audit_client.insert_incident_report(
+                hold_id=hold["id"],
+                agent_id=agent_id,
+                session_id=session_id,
+                trigger_type=hold.get("trigger_type"),
+                severity=hold.get("severity"),
+                json_package=evidence_package,
+                pdf_bytes=pdf_bytes,
+            )
+        except Exception:
+            pass  # incident report failure must never block the governance engine
         # Phase 7 Stage 2 — fire signed webhook alerts for this hold
         org_id = hold.get("evidence", {}).get("org_id") or "demo-org"
         registrations = await supabase_audit_client.list_webhook_registrations(org_id=org_id)
@@ -1737,6 +1767,119 @@ def list_isolated_agents(active_only: bool = True) -> Dict[str, Any]:
     """List all currently isolated agents."""
     records = session_store.list_isolated(active_only=active_only)
     return {"ok": True, "total": len(records), "isolated_agents": records}
+
+# ------------------------------------------------------------------
+# Phase 7 Stage 4 — Evidence Package Endpoints
+# ------------------------------------------------------------------
+
+@app.get("/legal-hold/{hold_id}/evidence-package")
+async def get_evidence_package(hold_id: str, format: str = "json") -> Any:
+    """
+    Download the sealed incident evidence package for a legal hold.
+    format=json (default) — returns the JSON evidence package
+    format=pdf            — returns the downloadable signed PDF
+    """
+    report = await supabase_audit_client.get_incident_report(hold_id=hold_id)
+    if not report:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No evidence package found for hold '{hold_id}'. "
+                   "It may still be generating or the hold may not exist.",
+        )
+    if format.lower() == "pdf":
+        import base64
+        from fastapi.responses import Response as FastAPIResponse
+        pdf_b64 = report.get("pdf_bytes")
+        if not pdf_b64:
+            raise HTTPException(
+                status_code=404,
+                detail="PDF not available for this report (reportlab may not be installed).",
+            )
+        pdf_bytes = base64.b64decode(pdf_b64)
+        filename = f"pulse-incident-{hold_id[:8]}.pdf"
+        return FastAPIResponse(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    return {
+        "ok": True,
+        "hold_id": hold_id,
+        "report_id": report.get("id"),
+        "generated_at": report.get("generated_at"),
+        "sealed": report.get("sealed"),
+        "evidence_package": report.get("json_package"),
+    }
+
+@app.post("/legal-hold/{hold_id}/evidence-package/send")
+async def send_evidence_package(hold_id: str, dpo_email: str) -> Dict[str, Any]:
+    """
+    Phase 7 Stage 4 — Send the sealed evidence package to a DPO email.
+    Note: requires SMTP configuration via environment variables
+    PULSE_SMTP_HOST, PULSE_SMTP_PORT, PULSE_SMTP_USER, PULSE_SMTP_PASS.
+    """
+    report = await supabase_audit_client.get_incident_report(hold_id=hold_id)
+    if not report:
+        raise HTTPException(status_code=404, detail=f"No evidence package found for hold '{hold_id}'")
+
+    smtp_host = os.getenv("PULSE_SMTP_HOST")
+    if not smtp_host:
+        return {
+            "ok": False,
+            "message": "SMTP not configured. Set PULSE_SMTP_HOST, PULSE_SMTP_PORT, PULSE_SMTP_USER, PULSE_SMTP_PASS environment variables to enable DPO email delivery.",
+            "hold_id": hold_id,
+            "dpo_email": dpo_email,
+        }
+
+    try:
+        import smtplib
+        import base64
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+        from email.mime.application import MIMEApplication
+
+        smtp_port = int(os.getenv("PULSE_SMTP_PORT", "587"))
+        smtp_user = os.getenv("PULSE_SMTP_USER", "")
+        smtp_pass = os.getenv("PULSE_SMTP_PASS", "")
+
+        msg = MIMEMultipart()
+        msg["From"] = smtp_user
+        msg["To"] = dpo_email
+        msg["Subject"] = f"Pulse Incident Evidence Package — Hold {hold_id[:8]}"
+
+        body = (
+            f"Please find attached the sealed incident evidence package for legal hold {hold_id}.\n\n"
+            f"Generated at: {report.get('generated_at')}\n"
+            f"Trigger type: {report.get('trigger_type')}\n"
+            f"Severity: {report.get('severity')}\n\n"
+            "This document was automatically generated and sealed by the Pulse AI Governance Engine."
+        )
+        msg.attach(MIMEText(body, "plain"))
+
+        pdf_b64 = report.get("pdf_bytes")
+        if pdf_b64:
+            pdf_bytes = base64.b64decode(pdf_b64)
+            attachment = MIMEApplication(pdf_bytes, _subtype="pdf")
+            attachment.add_header(
+                "Content-Disposition", "attachment",
+                filename=f"pulse-incident-{hold_id[:8]}.pdf",
+            )
+            msg.attach(attachment)
+
+        with smtplib.SMTP(smtp_host, smtp_port) as server:
+            server.starttls()
+            server.login(smtp_user, smtp_pass)
+            server.sendmail(smtp_user, dpo_email, msg.as_string())
+
+        return {
+            "ok": True,
+            "sent": True,
+            "hold_id": hold_id,
+            "dpo_email": dpo_email,
+            "sent_at": datetime.now(timezone.utc).isoformat(),
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Email delivery failed: {str(exc)}")
 
 @app.get("/swarm/detect")
 async def swarm_detect(
