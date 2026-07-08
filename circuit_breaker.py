@@ -48,7 +48,7 @@ class CircuitBreakerMiddleware:
         entropy_threshold: float = 0.95,
         agent_cooldown_seconds: float = 30.0,
         minimum_calls: int = 5,
-        session_baseline_turns: int = 5,
+        session_baseline_turns: int = 10,
     ):
         self.state: CircuitState = CircuitState.CLOSED
         self.bdi_threshold = bdi_threshold
