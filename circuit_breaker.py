@@ -218,6 +218,7 @@ class CircuitBreakerMiddleware:
         entropy: float,
         shadow_mode: bool = False,
         intercept: bool = False,
+        baselined: bool = False,
     ) -> Dict[str, object]:
         """
         Thread-safe entry point for concurrent proxy requests.
@@ -225,11 +226,20 @@ class CircuitBreakerMiddleware:
         When OPEN: drops requests (never returns a retryable 409-style outcome).
         Applies a per-agent cooldown window while open.
 
-        BDI tripping is deferred until at least minimum_calls intercept requests
-        have been recorded (cold-start / low-traffic protection).
+        Phase 7 Stage 1 fix — Baseline gate for BDI trip:
+        BDI-based circuit breaker trips are suppressed until the session is
+        baselined (5+ turns analyzed by the drift engine). This prevents a
+        normal multi-turn conversation from naturally accumulating BDI score
+        and tripping the breaker before enough context exists to distinguish
+        legitimate behaviour from a genuine threat.
 
-        When shadow_mode is True, governance is evaluated but state is not mutated
-        and traffic is always allowed through (would-block metadata is attached).
+        The existing minimum_calls warm-up guard (global intercept counter)
+        is kept as an additional layer but the per-session baseline gate is
+        the primary protection for the /intercept path.
+
+        When shadow_mode is True, governance is evaluated but state is not
+        mutated and traffic is always allowed through (would-block metadata
+        is attached).
         """
         with self._lock:
             now = time.monotonic()
@@ -243,14 +253,17 @@ class CircuitBreakerMiddleware:
                     return self._shadow_proceed(would_have)
                 return would_have
 
-                self.open(
-                    reason="Shannon entropy exceeded kill threshold",
-                    bdi_score=bdi_score,
-                    entropy=entropy,
-                )
-                return would_have
+            # BDI trip gate — requires BOTH warm-up AND session baseline
+            # before allowing a BDI-score-based trip. This prevents the
+            # natural growth of BDI context in a normal conversation from
+            # falsely tripping the breaker before the session is established.
+            bdi_warming_up = self._bdi_warming_up_locked(intercept=intercept)
+            # For /intercept calls, also require the session to be baselined.
+            # For non-intercept paths (proxy), baseline is not tracked so we
+            # fall back to the existing minimum_calls guard only.
+            bdi_not_yet_measurable = bdi_warming_up or (intercept and not baselined)
 
-            if bdi_score > self.bdi_threshold and not self._bdi_warming_up_locked(intercept=intercept):
+            if bdi_score > self.bdi_threshold and not bdi_not_yet_measurable:
                 would_have = self._trip_drop("Governance kill switch engaged due to elevated BDI.")
                 if shadow_mode:
                     return self._shadow_proceed(would_have)
@@ -262,10 +275,11 @@ class CircuitBreakerMiddleware:
                 return would_have
 
             extra: Dict[str, object] = {}
-            if intercept and self._bdi_warming_up_locked(intercept=intercept):
+            if intercept and bdi_not_yet_measurable:
                 extra["bdi_warming_up"] = True
                 extra["intercept_calls"] = self._intercept_calls
                 extra["minimum_calls"] = self.minimum_calls
+                extra["baselined"] = baselined
 
             if shadow_mode:
                 return self._proceed(shadow_mode=shadow_mode, **extra)
