@@ -34,6 +34,7 @@ from legal_hold import legal_hold_manager, evaluate_triggers
 from passport import assemble_passport, render_pdf
 from threat_classifier import threat_classifier
 from org_policy_engine import evaluate_org_policies
+from webhook_engine import fire_webhooks
 
 APP_NAME = "pulse-proxy"
 SYNTHESIS_ENABLED = os.getenv("PULSE_SYNTHESIS_ENABLED", "true").lower() in {"1", "true", "yes"}
@@ -649,6 +650,11 @@ async def _maybe_open_legal_hold(
             )
         )
         await supabase_audit_client.insert_legal_hold(hold)
+        # Phase 7 Stage 2 — fire signed webhook alerts for this hold
+        org_id = hold.get("evidence", {}).get("org_id") or "demo-org"
+        registrations = await supabase_audit_client.list_webhook_registrations(org_id=org_id)
+        if registrations:
+            await fire_webhooks(hold, registrations)
         opened.append(hold)
     return opened
 
@@ -1621,6 +1627,60 @@ async def delete_org_policy(policy_id: str, org_id: str) -> Dict[str, Any]:
             "policy_id": policy_id,
             "message": f"Policy '{policy_id}' deactivated",
         }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+# ------------------------------------------------------------------
+# Phase 7 Stage 2 — Webhook Registration Endpoints
+# ------------------------------------------------------------------
+
+class WebhookRegistrationRequest(BaseModel):
+    org_id: str
+    name: str
+    url: str
+    secret: str
+    events: Optional[List[str]] = None
+
+@app.post("/webhooks")
+async def register_webhook(payload: WebhookRegistrationRequest) -> Dict[str, Any]:
+    """Register a webhook URL to receive signed breach alerts."""
+    try:
+        result = await supabase_audit_client.insert_webhook_registration(
+            org_id=payload.org_id,
+            name=payload.name,
+            url=payload.url,
+            secret=payload.secret,
+            events=payload.events or ["legal_hold.opened"],
+        )
+        if isinstance(result, dict) and result.get("ok") is False:
+            raise HTTPException(status_code=500, detail=result.get("reason"))
+        return {"ok": True, "created": True, "webhook": result}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+@app.get("/webhooks")
+async def list_webhooks(org_id: str) -> Dict[str, Any]:
+    """List active webhook registrations for an org."""
+    try:
+        webhooks = await supabase_audit_client.list_webhook_registrations(org_id=org_id)
+        return {"ok": True, "org_id": org_id, "total": len(webhooks), "webhooks": webhooks}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+@app.delete("/webhooks/{webhook_id}")
+async def delete_webhook(webhook_id: str, org_id: str) -> Dict[str, Any]:
+    """Deactivate a webhook registration."""
+    try:
+        result = await supabase_audit_client.deactivate_webhook_registration(
+            webhook_id=webhook_id, org_id=org_id
+        )
+        if not result:
+            raise HTTPException(status_code=404, detail=f"Webhook '{webhook_id}' not found")
+        return {"ok": True, "deactivated": True, "webhook_id": webhook_id}
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
