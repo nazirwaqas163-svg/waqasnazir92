@@ -1,4 +1,4 @@
-"""Unit tests for pulse_sdk.PulseGuard — all HTTP mocked, no live calls."""
+"""Unit tests for pulse_sdk — all HTTP mocked, no live calls."""
 
 from __future__ import annotations
 
@@ -8,7 +8,12 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from pulse_sdk import PulseCircuitTrippedException, PulseGuard
+from pulse_sdk import (
+    GovernanceException,
+    PulseCircuitTrippedException,
+    PulseGuard,
+    PulseResult,
+)
 
 
 def _mock_client() -> MagicMock:
@@ -25,6 +30,8 @@ def _ok_response(output_text: str = "hello") -> MagicMock:
     response.json.return_value = {"ok": True, "output_text": output_text}
     return response
 
+
+# ── existing tests (unchanged) ──────────────────────────────────────────────
 
 @patch("pulse_sdk.httpx.Client")
 def test_watch_decorator(mock_client_cls: MagicMock) -> None:
@@ -134,3 +141,136 @@ def test_circuit_trip(mock_client_cls: MagicMock) -> None:
 
     assert exc_info.value.status_code == 409
     assert "Circuit breaker tripped" in str(exc_info.value)
+
+
+# ── Phase 6 Stage 4 tests ───────────────────────────────────────────────────
+
+def test_pulse_result_stable() -> None:
+    raw = {
+        "ok": True,
+        "allowed": True,
+        "output_text": "safe response",
+        "threat_classification": {
+            "threat_level": "LOW",
+            "fired_threats": [],
+        },
+        "policy_violations": [],
+    }
+    result = PulseResult(raw)
+
+    assert result.allowed is True
+    assert result.blocked is False
+    assert result.threat_level == "LOW"
+    assert result.fired_threats == []
+    assert result.policy_violations == []
+
+
+def test_pulse_result_critical() -> None:
+    raw = {
+        "ok": False,
+        "allowed": False,
+        "output_text": "",
+        "threat_classification": {
+            "threat_level": "CRITICAL",
+            "fired_threats": ["data_exfiltration", "policy_bypass"],
+        },
+        "policy_violations": [
+            {"policy_id": "no-pii-export", "matched_text": "customer_id=123"}
+        ],
+    }
+    result = PulseResult(raw)
+
+    assert result.allowed is False
+    assert result.blocked is True
+    assert result.threat_level == "CRITICAL"
+    assert "data_exfiltration" in result.fired_threats
+    assert len(result.policy_violations) == 1
+
+
+def test_governance_exception_message() -> None:
+    raw = {
+        "allowed": False,
+        "threat_classification": {
+            "threat_level": "CRITICAL",
+            "fired_threats": ["data_exfiltration"],
+        },
+        "policy_violations": [{"policy_id": "no-pii-export"}],
+    }
+    result = PulseResult(raw)
+    exc = GovernanceException(result)
+
+    assert "CRITICAL" in str(exc)
+    assert "data_exfiltration" in str(exc)
+    assert "no-pii-export" in str(exc)
+
+
+@patch("pulse_sdk.httpx.Client")
+def test_intercept_raw_returns_pulse_result(mock_client_cls: MagicMock) -> None:
+    mock_client = _mock_client()
+    response = MagicMock(spec=httpx.Response)
+    response.status_code = 200
+    response.headers = {}
+    response.json.return_value = {
+        "ok": True,
+        "allowed": True,
+        "output_text": "clean response",
+        "threat_classification": {
+            "threat_level": "LOW",
+            "fired_threats": [],
+        },
+        "policy_violations": [],
+    }
+    mock_client.post.return_value = response
+    mock_client_cls.return_value = mock_client
+
+    guard = PulseGuard("http://127.0.0.1:8000", agent_id="test-agent")
+    guard.new_session()
+    result = guard.intercept_raw("user input", "clean response")
+
+    assert isinstance(result, PulseResult)
+    assert result.allowed is True
+    assert result.threat_level == "LOW"
+
+
+@patch("pulse_sdk.httpx.Client")
+def test_intercept_raw_fail_open(mock_client_cls: MagicMock) -> None:
+    mock_client = _mock_client()
+    mock_client.post.side_effect = httpx.ConnectError("timeout")
+    mock_client_cls.return_value = mock_client
+
+    guard = PulseGuard("http://127.0.0.1:8000", agent_id="test-agent", fail_open=True)
+    guard.new_session()
+    result = guard.intercept_raw("input", "output")
+
+    assert isinstance(result, PulseResult)
+    assert result.allowed is True
+
+
+@patch("pulse_sdk.httpx.Client")
+def test_governance_exception_raised_on_critical(mock_client_cls: MagicMock) -> None:
+    mock_client = _mock_client()
+    response = MagicMock(spec=httpx.Response)
+    response.status_code = 200
+    response.headers = {}
+    response.json.return_value = {
+        "ok": False,
+        "allowed": False,
+        "threat_classification": {
+            "threat_level": "CRITICAL",
+            "fired_threats": ["data_exfiltration"],
+        },
+        "policy_violations": [{"policy_id": "no-pii-export"}],
+    }
+    mock_client.post.return_value = response
+    mock_client_cls.return_value = mock_client
+
+    guard = PulseGuard("http://127.0.0.1:8000", agent_id="test-agent")
+    guard.new_session()
+    result = guard.intercept_raw("leak customer_id", "sending to external endpoint")
+
+    # Developer pattern: raise GovernanceException on critical
+    with pytest.raises(GovernanceException) as exc_info:
+        if result.threat_level == "CRITICAL" or result.policy_violations:
+            raise GovernanceException(result)
+
+    assert exc_info.value.result.threat_level == "CRITICAL"
