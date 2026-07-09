@@ -819,7 +819,7 @@ async function loadAgents(){
 
 function toggleAgent(id){if(agentsOpen.has(id))agentsOpen.delete(id);else agentsOpen.add(id);renderAgents();}
 
-function renderAgents(){
+async function renderAgents(){
   const data=lastTopology; if(!data) return;
   const box=document.getElementById('agents-body');
   const nodes=data.nodes||[], agents=nodes.filter(n=>n.type==='agent'), sessions=nodes.filter(n=>n.type==='session'), sum=data.summary||{};
@@ -830,8 +830,14 @@ function renderAgents(){
   document.getElementById('ag-edges').textContent=sum.edges??(data.edges||[]).length;
   if(!agents.length){box.innerHTML='<div class="empty"><div class="empty-icon">◎</div><div>No agents seen yet.</div></div>';return;}
   const order={critical:0,elevated:1,caution:1,unregistered:2,stable:3};
-const sorted=agents.slice().sort((a,b)=>(order[a.risk_band]??9)-(order[b.risk_band]??9)||(b.events||0)-(a.events||0));
-let isolatedSet=new Set();try{const isoResp=await fetch(API+'/agents/isolated?active_only=true',{cache:'no-store'});const isoData=isoResp.ok?await isoResp.json():{isolated_agents:[]};(isoData.isolated_agents||[]).forEach(r=>isolatedSet.add(r.agent_id));}catch(_){}  box.innerHTML=sorted.map(a=>{
+  const sorted=agents.slice().sort((a,b)=>(order[a.risk_band]??9)-(order[b.risk_band]??9)||(b.events||0)-(a.events||0));
+  let isolatedSet=new Set();
+  try{
+    const isoResp=await fetch(API+'/agents/isolated?active_only=true',{cache:'no-store'});
+    const isoData=isoResp.ok?await isoResp.json():{isolated_agents:[]};
+    (isoData.isolated_agents||[]).forEach(r=>isolatedSet.add(r.agent_id));
+  }catch(_){}
+  box.innerHTML=sorted.map(a=>{
     const aSessions=sessions.filter(s=>s.agent_id===a.agent_id);
     const blockedRatio=a.events?Math.round((a.blocked/a.events)*100):0;
     const isOpen=agentsOpen.has(a.agent_id);
@@ -1267,7 +1273,15 @@ async function load(){
     document.getElementById('tbody').innerHTML=`<div class="empty"><div style="color:var(--danger);font-size:20px">⚠</div><div style="color:var(--danger);margin-top:6px;font-weight:500">Backend unreachable</div><div style="font-size:11px;margin-top:4px;color:var(--muted2)">${err.message}</div></div>`;
   }
 }
-let isolatedSet=nwindow.addEventListener('DOMContentLoaded',function(){const today=new Date().toISOString().slice(0,10);dateFrom=today;const df=document.getElementById('date-from');if(df)df.value=today;});ew Set();try{const isoResp=await fetch(API+'/agents/isolated?active_only=true',{cache:'no-store'});const isoData=isoResp.ok?await isoResp.json():{isolated_agents:[]};(isoData.isolated_agents||[]).forEach(r=>isolatedSet.add(r.agent_id));}catch(_){}
+
+// Default the date filter to today on first load
+window.addEventListener('DOMContentLoaded',function(){
+  const today=new Date().toISOString().slice(0,10);
+  dateFrom=today;
+  const df=document.getElementById('date-from');
+  if(df)df.value=today;
+});
+
 load(); setInterval(load,10000);
 </script>
 </body>
