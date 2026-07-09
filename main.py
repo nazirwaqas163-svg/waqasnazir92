@@ -1005,6 +1005,7 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
     org_id = (payload.metadata or {}).get("org_id", "demo-org")
     policy_violations = await evaluate_org_policies(
         input_text=payload.input_text,
+        output_text=payload.output_text,
         org_id=org_id,
         supabase_client=supabase_audit_client,
     )
