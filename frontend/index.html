@@ -1025,7 +1025,27 @@ function renderSettings(){
       <div class="settings-row"><span class="settings-key">Webhooks</span><a href="${API}/webhooks?org_id=demo-org" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">view registrations →</a></div>
       <div class="settings-row"><span class="settings-key">Evidence Packages</span><a href="${API}/legal-hold?status=ACTIVE" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">view active holds →</a></div>
     </div>
+    <div class="settings-card">
+      <div class="inv-sec-title" style="margin-bottom:8px">◎ Active Org Policies — demo-org</div>
+      <div id="org-policies-body"><div class="loading"><div class="spin"></div>Loading policies…</div></div>
+    </div>
   `;
+  // Phase 6 Stage 3 — load and render active org policies
+  fetch(API+'/org/policies?org_id=demo-org',{cache:'no-store'})
+    .then(r=>r.json())
+    .then(data=>{
+      const policies=data.policies||[];
+      const pb=document.getElementById('org-policies-body');
+      if(!pb) return;
+      if(!policies.length){pb.innerHTML='<div style="font-size:11px;color:var(--muted)">No active policies for demo-org.</div>';return;}
+      pb.innerHTML=policies.map(p=>{
+        const ruleHtml=Array.isArray(p.rules)?p.rules.map(r=>`<div style="font-size:10px;color:var(--muted);margin-top:3px">↳ <span style="color:${r.action==='block'?'var(--danger)':'var(--warn)'}">${r.action}</span> if output contains <strong style="color:var(--text)">${r.match||r.keyword||''}</strong></div>`).join(''):'';
+        return `<div style="padding:8px 0;border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:11px;font-weight:500">${p.name}</span><span class="badge stable">active</span></div><div style="font-size:10px;color:var(--muted);margin-top:2px">${p.description||p.policy_id}</div>${ruleHtml}</div>`;
+      }).join('');
+    }).catch(()=>{
+      const pb=document.getElementById('org-policies-body');
+      if(pb) pb.innerHTML='<div style="font-size:11px;color:var(--danger)">Could not load policies.</div>';
+    });
 }
 
 /* ── EVENT LISTENERS ── */
