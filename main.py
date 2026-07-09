@@ -1593,6 +1593,12 @@ async def list_agents(limit: int = 100) -> Dict[str, Any]:
         "agents": agents,
     }
 
+@app.get("/agents/isolated")
+def list_isolated_agents(active_only: bool = True) -> Dict[str, Any]:
+    """List all currently isolated agents."""
+    records = session_store.list_isolated(active_only=active_only)
+    return {"ok": True, "total": len(records), "isolated_agents": records}
+    
 @app.get("/agents/{agent_id}")
 async def get_agent(agent_id: str) -> Dict[str, Any]:
     agent = await supabase_audit_client.get_agent(agent_id=agent_id)
@@ -1763,11 +1769,7 @@ async def release_agent(agent_id: str, payload: AgentReleaseRequest) -> Dict[str
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' is not isolated")
     return {"ok": True, "released": True, "isolation": record.to_dict()}
 
-@app.get("/agents/isolated")
-def list_isolated_agents(active_only: bool = True) -> Dict[str, Any]:
-    """List all currently isolated agents."""
-    records = session_store.list_isolated(active_only=active_only)
-    return {"ok": True, "total": len(records), "isolated_agents": records}
+
 
 # ------------------------------------------------------------------
 # Phase 7 Stage 4 — Evidence Package Endpoints
