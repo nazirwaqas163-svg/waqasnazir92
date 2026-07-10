@@ -1850,13 +1850,75 @@ async def send_evidence_package(hold_id: str, dpo_email: str) -> Dict[str, Any]:
         msg["To"] = dpo_email
         msg["Subject"] = f"Pulse Incident Evidence Package — Hold {hold_id[:8]}"
 
-        body = (
-            f"Please find attached the sealed incident evidence package for legal hold {hold_id}.\n\n"
-            f"Generated at: {report.get('generated_at')}\n"
-            f"Trigger type: {report.get('trigger_type')}\n"
-            f"Severity: {report.get('severity')}\n\n"
-            "This document was automatically generated and sealed by the Pulse AI Governance Engine."
-        )
+      # PDPA-compliant DPO notification
+        incident_time = report.get("generated_at", datetime.now(timezone.utc).isoformat())
+        trigger_type_rep = report.get("trigger_type", "data_breach")
+        severity_rep = report.get("severity", "HIGH")
+        agent_id_rep = report.get("agent_id", "unknown")
+        json_pkg = report.get("json_package") or {}
+        seal_hash_rep = json_pkg.get("seal_hash", "—")
+        chain_hash_rep = json_pkg.get("chain_hash", "—")
+        tsa_status_rep = json_pkg.get("tsa_status", "INTERNAL_SEAL_ONLY")
+        tsa_stamped_rep = json_pkg.get("tsa_stamped_at", "—")
+
+        body = f"""PERSONAL DATA BREACH NOTIFICATION
+Pursuant to Malaysia Personal Data Protection Act 2010 (Amended 2024)
+Section 30 — Mandatory Breach Notification
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Dear Data Protection Officer,
+
+This notice is issued by the Pulse AI Governance Engine to inform your office of a
+detected AI agent security incident that may constitute a personal data breach under
+PDPA Malaysia (Amended 2024).
+
+INCIDENT REFERENCE
+  Legal Hold ID  : {hold_id}
+  Agent ID       : {agent_id_rep}
+  Detected At    : {incident_time}
+  Trigger Type   : {trigger_type_rep}
+  Severity       : {severity_rep}
+
+EVIDENCE INTEGRITY
+  Seal Hash      : {seal_hash_rep}
+  Chain Hash     : {chain_hash_rep}
+  Timestamp Auth : {tsa_status_rep}
+  TSA Stamped At : {tsa_stamped_rep}
+
+The sealed evidence package is attached as a PDF. It contains:
+  - Full incident timeline and agent session lineage
+  - BDI behavioural divergence scores and entropy readings
+  - Threat classification and exfiltration risk signals
+  - SHA-256 tamper-evident seal (independently verifiable)
+  - RFC 3161 trusted timestamp certificate (where available)
+  - ASEAN regulatory mapping and notification deadlines
+
+REGULATORY OBLIGATIONS
+  Malaysia PDPA 2010 (s.30) : Notify PDPC within 72 hours (recommended 24hr)
+  Singapore PDPC            : Notify within 3 calendar days if >500 individuals affected
+  Vietnam AI Law Art. 9     : Report to competent authority within 72 hours
+  ISO/IEC 42001             : Document and retain record for minimum 7 years
+
+ACTION REQUIRED
+  1. Review the attached sealed evidence package immediately
+  2. Assess whether the incident meets the mandatory notification threshold
+  3. If threshold met - notify PDPC Malaysia at pdpc.complaints@pdpc.gov.my
+  4. Preserve this email and attachment as part of your breach response record
+  5. Log your assessment decision with reference to Hold ID: {hold_id}
+
+This notification was generated automatically by Pulse AI Governance Middleware.
+Evidence has been cryptographically sealed and timestamped. Do not alter or delete.
+
+Verification: openssl ts -verify -in token.tsr -digest <seal_hash> -CAfile tsa_ca.pem
+
+Pulse AI Governance Middleware
+pulse-proxy-8dqx.onrender.com
+Generated: {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CONFIDENTIAL - FOR DESIGNATED DATA PROTECTION OFFICER ONLY
+"""
         msg.attach(MIMEText(body, "plain"))
 
         pdf_b64 = report.get("pdf_bytes")
@@ -2207,3 +2269,195 @@ async def agent_passport(
         )
 
     return {"ok": True, "passport": passport}
+# ------------------------------------------------------------------
+# Read-Only Audit Viewer — shareable expiring link, no credentials needed
+# ------------------------------------------------------------------
+
+import hashlib as _hashlib
+import hmac as _hmac
+
+VIEWER_SECRET = os.getenv("PULSE_VIEWER_SECRET", "pulse-viewer-secret-change-in-prod")
+VIEWER_TTL_SECONDS = int(os.getenv("PULSE_VIEWER_TTL", "86400"))  # 24 hours
+
+
+def _generate_viewer_token(hold_id: str) -> str:
+    expires = int(time.time()) + VIEWER_TTL_SECONDS
+    payload = f"{hold_id}:{expires}"
+    sig = _hmac.new(VIEWER_SECRET.encode(), payload.encode(), _hashlib.sha256).hexdigest()
+    return f"{expires}:{sig}"
+
+
+def _verify_viewer_token(hold_id: str, token: str) -> bool:
+    try:
+        expires_str, sig = token.split(":", 1)
+        expires = int(expires_str)
+        if time.time() > expires:
+            return False
+        payload = f"{hold_id}:{expires}"
+        expected = _hmac.new(VIEWER_SECRET.encode(), payload.encode(), _hashlib.sha256).hexdigest()
+        return _hmac.compare_digest(sig, expected)
+    except Exception:
+        return False
+
+
+@app.get("/legal-hold/{hold_id}/view-link")
+async def get_viewer_link(hold_id: str) -> Dict[str, Any]:
+    """
+    Generate a shareable read-only viewer link for an incident report.
+    Expires after PULSE_VIEWER_TTL seconds (default 24 hours).
+    Safe to share with auditors and regulators — no login required.
+    """
+    report = await supabase_audit_client.get_incident_report(hold_id=hold_id)
+    if not report:
+        raise HTTPException(status_code=404, detail=f"No evidence package found for hold '{hold_id}'")
+    token = _generate_viewer_token(hold_id)
+    expires_ts = int(token.split(":")[0])
+    expires_dt = datetime.fromtimestamp(expires_ts, tz=timezone.utc).isoformat()
+    base_url = os.getenv("PULSE_PUBLIC_URL", "https://pulse-proxy-8dqx.onrender.com")
+    viewer_url = f"{base_url}/legal-hold/{hold_id}/view?token={token}"
+    return {
+        "ok": True,
+        "hold_id": hold_id,
+        "viewer_url": viewer_url,
+        "expires_at": expires_dt,
+        "ttl_hours": VIEWER_TTL_SECONDS // 3600,
+        "note": "Share with auditors or regulators. No login required. Link expires after TTL.",
+    }
+
+
+@app.get("/legal-hold/{hold_id}/view")
+async def view_incident_report(hold_id: str, token: str) -> Any:
+    """
+    Read-only audit viewer — token-authenticated, expiring, no credentials.
+    Returns a self-contained HTML page with the full incident report.
+    """
+    from fastapi.responses import HTMLResponse
+
+    if not _verify_viewer_token(hold_id, token):
+        return HTMLResponse(content="""<!DOCTYPE html>
+<html><head><title>Link Expired</title>
+<style>body{font-family:system-ui;background:#0f172a;color:#f8fafc;display:flex;
+align-items:center;justify-content:center;height:100vh;margin:0;}
+.box{text-align:center;padding:40px;border:1px solid #334155;border-radius:12px;}</style>
+</head><body><div class="box">
+<h2>🔒 Link Expired or Invalid</h2>
+<p style="color:#64748b;margin-top:12px">This audit viewer link has expired or is invalid.</p>
+<p style="color:#64748b;margin-top:8px">Please request a new link from your Pulse administrator.</p>
+</div></body></html>""", status_code=401)
+
+    report = await supabase_audit_client.get_incident_report(hold_id=hold_id)
+    if not report:
+        return HTMLResponse(content="<h1>Report not found</h1>", status_code=404)
+
+    pkg = report.get("json_package") or {}
+    tsa_status = pkg.get("tsa_status", "INTERNAL_SEAL_ONLY")
+    tsa_stamped = pkg.get("tsa_stamped_at", "—")
+    tsa_badge = "✅ RFC 3161 TIMESTAMPED" if tsa_status == "RFC_3161_STAMPED" else "⚠️ INTERNAL SEAL ONLY"
+    tsa_color = "#10b981" if tsa_status == "RFC_3161_STAMPED" else "#f59e0b"
+    exfil = pkg.get("exfiltration") or {}
+    pviol = pkg.get("policy_violations") or []
+    swarm = pkg.get("swarm") or {}
+    expires_ts = int(token.split(":")[0])
+    expires_dt = datetime.fromtimestamp(expires_ts, tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pulse Incident Report — {hold_id[:12]}</title>
+<style>
+  *{{box-sizing:border-box;margin:0;padding:0}}
+  body{{font-family:system-ui,-apple-system,sans-serif;background:#0f172a;color:#f8fafc;padding:24px}}
+  .header{{border-bottom:1px solid #334155;padding-bottom:20px;margin-bottom:24px}}
+  .logo{{font-size:24px;font-weight:800;color:#3b82f6;letter-spacing:2px}}
+  .subtitle{{color:#64748b;font-size:13px;margin-top:4px}}
+  .badges{{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}}
+  .badge{{padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600}}
+  .badge-red{{background:#7f1d1d;color:#fca5a5}}
+  .badge-blue{{background:#1e3a5f;color:#93c5fd}}
+  .badge-tsa{{background:#1c1917;color:{tsa_color};border:1px solid {tsa_color}}}
+  .section{{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:20px;margin-bottom:16px}}
+  .section-title{{font-size:12px;font-weight:700;color:#3b82f6;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px}}
+  .kv{{display:grid;grid-template-columns:180px 1fr;gap:8px 16px}}
+  .kv-label{{color:#64748b;font-size:12px}}
+  .kv-value{{color:#f8fafc;font-size:12px;font-family:monospace;word-break:break-all}}
+  .hash{{font-family:monospace;font-size:11px;color:#94a3b8;word-break:break-all;padding:10px;background:#0f172a;border-radius:6px;margin-top:8px}}
+  .footer{{text-align:center;color:#475569;font-size:11px;margin-top:24px;padding-top:16px;border-top:1px solid #1e293b}}
+  .warning{{background:#1c1003;border:1px solid #78350f;border-radius:8px;padding:12px 16px;color:#fbbf24;font-size:12px;margin-bottom:16px}}
+  .reg-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}}
+  .reg-card{{background:#0f172a;border:1px solid #334155;border-radius:8px;padding:12px}}
+  .reg-country{{font-weight:700;font-size:13px}}
+  .reg-law{{font-size:11px;color:#64748b;margin:4px 0}}
+  .reg-deadline{{font-size:12px;color:#ef4444;font-weight:600}}
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="logo">PULSE</div>
+  <div class="subtitle">AI Agent Governance Middleware · Read-Only Incident Report</div>
+  <div class="badges">
+    <span class="badge badge-red">CONFIDENTIAL — REGULATORY EVIDENCE</span>
+    <span class="badge badge-blue">{(pkg.get("severity") or "UNKNOWN").upper()}</span>
+    <span class="badge badge-tsa">{tsa_badge}</span>
+  </div>
+</div>
+<div class="warning">⏱ This link expires at <strong>{expires_dt}</strong> · Read-only · No login required</div>
+<div class="section">
+  <div class="section-title">§1 — Incident Summary</div>
+  <div class="kv">
+    <span class="kv-label">Hold ID</span><span class="kv-value">{pkg.get("hold_id", hold_id)}</span>
+    <span class="kv-label">Agent ID</span><span class="kv-value">{pkg.get("agent_id", "—")}</span>
+    <span class="kv-label">Session ID</span><span class="kv-value">{pkg.get("session_id", "—")}</span>
+    <span class="kv-label">Trigger Type</span><span class="kv-value">{pkg.get("trigger_type", "—")}</span>
+    <span class="kv-label">Severity</span><span class="kv-value">{pkg.get("severity", "—")}</span>
+    <span class="kv-label">Status</span><span class="kv-value">{pkg.get("status", "—")}</span>
+    <span class="kv-label">Detected At</span><span class="kv-value">{pkg.get("created_at", "—")}</span>
+    <span class="kv-label">Framework</span><span class="kv-value">{pkg.get("framework", "—")}</span>
+    <span class="kv-label">Jurisdiction</span><span class="kv-value">{pkg.get("jurisdiction", "—")}</span>
+  </div>
+</div>
+<div class="section">
+  <div class="section-title">§2 — Detection Signals</div>
+  <div class="kv">
+    <span class="kv-label">Exfiltration Risk</span><span class="kv-value">{exfil.get("risk_score", "—")}</span>
+    <span class="kv-label">Exfiltration Alert</span><span class="kv-value">{exfil.get("alert", False)}</span>
+    <span class="kv-label">Swarm Suspect</span><span class="kv-value">{swarm.get("swarm_suspect", False)}</span>
+    <span class="kv-label">Policy Violations</span><span class="kv-value">{len(pviol)}</span>
+    <span class="kv-label">Event Count</span><span class="kv-value">{pkg.get("event_count", "—")}</span>
+  </div>
+</div>
+<div class="section">
+  <div class="section-title">§3 — RFC 3161 Trusted Timestamp</div>
+  <div class="kv">
+    <span class="kv-label">TSA Status</span><span class="kv-value" style="color:{tsa_color}">{tsa_status}</span>
+    <span class="kv-label">TSA Stamped At</span><span class="kv-value">{tsa_stamped}</span>
+    <span class="kv-label">TSA Endpoint</span><span class="kv-value">{pkg.get("tsa_endpoint", "—")}</span>
+  </div>
+  <div class="hash">Seal Hash: {pkg.get("seal_hash", "—")}</div>
+  <div class="hash" style="margin-top:6px">Chain Hash: {pkg.get("chain_hash", "—")}</div>
+</div>
+<div class="section">
+  <div class="section-title">§4 — ASEAN Regulatory Obligations</div>
+  <div class="reg-grid">
+    <div class="reg-card"><div class="reg-country">🇲🇾 Malaysia</div><div class="reg-law">PDPA 2010 (Amended 2024)</div><div class="reg-deadline">Notify within 72hr (rec. 24hr)</div></div>
+    <div class="reg-card"><div class="reg-country">🇸🇬 Singapore</div><div class="reg-law">PDPA + Model AI Governance</div><div class="reg-deadline">Notify within 72hr</div></div>
+    <div class="reg-card"><div class="reg-country">🇻🇳 Vietnam</div><div class="reg-law">AI Law 2024 (Art. 9)</div><div class="reg-deadline">Report within 72hr</div></div>
+    <div class="reg-card"><div class="reg-country">🌐 Regional</div><div class="reg-law">ISO/IEC 42001</div><div class="reg-deadline">Document within 168hr</div></div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-title">§5 — Evidence Integrity</div>
+  <div class="kv">
+    <span class="kv-label">Package Fingerprint</span><span class="kv-value">{pkg.get("package_fingerprint", "—")}</span>
+    <span class="kv-label">Package Version</span><span class="kv-value">{pkg.get("package_version", "—")}</span>
+    <span class="kv-label">Storage Region</span><span class="kv-value">Supabase ap-southeast-1 (Singapore)</span>
+  </div>
+</div>
+<div class="footer">
+  Pulse AI Governance Middleware · ASEAN-native · Vendor-neutral · Intercepts before execution<br>
+  Read-only view of a sealed forensic evidence package. Evidence cannot be altered via this interface.
+</div>
+</body></html>"""
+
+    return HTMLResponse(content=html)
