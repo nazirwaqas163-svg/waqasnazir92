@@ -463,6 +463,8 @@ svg.hm{width:100%;height:55px}
           <button class="act-full" id="btn-export" onclick="exportEvidencePackage()">↓ Export Evidence Package</button>
           <button class="act-full" id="btn-report" onclick="generateIncidentReport()">☰ Generate Full Incident Report</button>
           <button class="act-full" id="btn-sealed-pdf" onclick="downloadSealedPDF()">⬇ Download Sealed Evidence PDF</button>
+          <button class="act-full" id="btn-viewer-link" onclick="shareViewerLink()">🔗 Share Audit Viewer Link</button>
+          <button class="act-full" id="btn-send-dpo" onclick="sendToDPO()">✉ Send PDPA Notification to DPO</button>
         </div>
       </div>
     </div>
@@ -1302,7 +1304,74 @@ window.addEventListener('DOMContentLoaded',function(){
   if(df)df.value=today;
 });
 
-load(); setInterval(load,10000);
+/* SHARE VIEWER LINK */
+async function shareViewerLink(){
+  if(selIdx<0){alert('Select an event first.');return;}
+  const e=ALL[selIdx];
+  const sessionId=e.raw&&e.raw.session_id;
+  const agentId=e.data&&e.data.agent_id;
+  const btn=document.getElementById('btn-viewer-link');
+  const orig=btn.textContent;
+  btn.disabled=true; btn.textContent='🔗 Generating link…';
+  try{
+    const holdsRes=await fetch(API+'/legal-hold?status=ACTIVE',{cache:'no-store'}).then(r=>r.json());
+    const holds=holdsRes.holds||[];
+    const match=holds.find(h=>h.session_id===sessionId||h.agent_id===agentId);
+    if(!match){
+      alert('No sealed evidence package found for this event.\nA breach must be detected first to generate a viewer link.');
+      btn.disabled=false; btn.textContent=orig; return;
+    }
+    const linkRes=await fetch(API+'/legal-hold/'+encodeURIComponent(match.id)+'/view-link',{cache:'no-store'}).then(r=>r.json());
+    if(!linkRes.ok||!linkRes.viewer_url){
+      alert('Could not generate viewer link. Check backend logs.');
+      btn.disabled=false; btn.textContent=orig; return;
+    }
+    try{await navigator.clipboard.writeText(linkRes.viewer_url);}catch(_){}
+    alert(
+      'Audit Viewer Link Generated\n\n'+
+      linkRes.viewer_url+'\n\n'+
+      'Expires: '+new Date(linkRes.expires_at).toLocaleString()+'\n'+
+      'TTL: '+linkRes.ttl_hours+' hours\n\n'+
+      'Link copied to clipboard. Share with auditors or regulators — no login required.'
+    );
+  }catch(err){alert('Failed to generate viewer link: '+err.message);}
+  btn.disabled=false; btn.textContent=orig;
+}
+
+/* SEND PDPA DPO NOTIFICATION */
+async function sendToDPO(){
+  if(selIdx<0){alert('Select an event first.');return;}
+  const e=ALL[selIdx];
+  const sessionId=e.raw&&e.raw.session_id;
+  const agentId=e.data&&e.data.agent_id;
+  const dpoEmail=prompt('Enter DPO email address:','dpo@yourcompany.com');
+  if(!dpoEmail||!dpoEmail.includes('@')) return;
+  const btn=document.getElementById('btn-send-dpo');
+  const orig=btn.textContent;
+  btn.disabled=true; btn.textContent='✉ Sending…';
+  try{
+    const holdsRes=await fetch(API+'/legal-hold?status=ACTIVE',{cache:'no-store'}).then(r=>r.json());
+    const holds=holdsRes.holds||[];
+    const match=holds.find(h=>h.session_id===sessionId||h.agent_id===agentId);
+    if(!match){
+      alert('No sealed evidence package found for this event.\nA breach must be detected first to send a DPO notification.');
+      btn.disabled=false; btn.textContent=orig; return;
+    }
+    const sendRes=await fetch(
+      API+'/legal-hold/'+encodeURIComponent(match.id)+'/evidence-package/send?dpo_email='+encodeURIComponent(dpoEmail),
+      {method:'POST',headers:{'Content-Type':'application/json'}}
+    ).then(r=>r.json());
+    if(sendRes.ok===false&&sendRes.message&&sendRes.message.includes('SMTP')){
+      alert('PDPA DPO Notification Ready\n\nSMTP not configured on the backend yet.\nTo enable email delivery, set these in Render environment variables:\n\nPULSE_SMTP_HOST\nPULSE_SMTP_PORT\nPULSE_SMTP_USER\nPULSE_SMTP_PASS\n\nHold ID: '+match.id+'\nTarget DPO: '+dpoEmail);
+    } else if(sendRes.sent){
+      alert('PDPA DPO Notification Sent ✓\n\nTo: '+dpoEmail+'\nHold ID: '+match.id+'\nSent at: '+sendRes.sent_at);
+    } else {
+      alert('Response: '+JSON.stringify(sendRes,null,2));
+    }
+  }catch(err){alert('Failed to send notification: '+err.message);}
+  btn.disabled=false; btn.textContent=orig;
+}
+  load(); setInterval(load,10000);
 </script>
 </body>
 </html>
