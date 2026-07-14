@@ -10,7 +10,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional, Union
 
 import httpx
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
@@ -62,6 +62,44 @@ AMOUNT_PATTERN = re.compile(
 
 _agent_cache: Dict[str, Dict[str, Any]] = {}
 AGENT_CACHE_TTL = 60.0
+
+# ------------------------------------------------------------------
+# Phase 9 — Multi-Tenancy: API key → org_id resolution
+# ------------------------------------------------------------------
+_org_cache: Dict[str, Dict[str, Any]] = {}
+ORG_CACHE_TTL = 300.0  # 5-minute TTL
+
+async def get_org_from_api_key(request: Request) -> Dict[str, Any]:
+    """Resolve X-API-Key header to an org. Returns org dict or raises 401."""
+    api_key = request.headers.get("x-api-key")
+    if not api_key:
+        raise HTTPException(status_code=401, detail="Missing X-API-Key header")
+    # Check cache
+    cached = _org_cache.get(api_key)
+    if cached and time.monotonic() - cached["ts"] < ORG_CACHE_TTL:
+        return cached["org"]
+    # Look up in Supabase orgs table
+    try:
+        headers = {
+            "apikey": supabase_audit_client.key or "",
+            "authorization": f"Bearer {supabase_audit_client.key}",
+            "content-type": "application/json",
+        }
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.get(
+                f"{supabase_audit_client.url}/rest/v1/orgs",
+                headers=headers,
+                params={"api_key": f"eq.{api_key}", "active": "eq.true", "limit": "1"},
+            )
+            response.raise_for_status()
+            rows = response.json()
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Org lookup failed: {str(exc)}")
+    if not rows:
+        raise HTTPException(status_code=401, detail="Invalid or inactive API key")
+    org = rows[0]
+    _org_cache[api_key] = {"org": org, "ts": time.monotonic()}
+    return org
 
 def _cache_get(agent_id: str) -> Optional[Dict[str, Any]]:
     entry = _agent_cache.get(agent_id)
