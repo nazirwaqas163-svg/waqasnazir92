@@ -548,6 +548,7 @@ async def _insert_ai_event_log(
     session_id: Optional[str] = None,
     parent_session_id: Optional[str] = None,
     entropy: Optional[float] = None,
+    org_id: Optional[str] = None,
 ) -> None:
     await supabase_audit_client.insert_ai_event(
         event_id=event_id,
@@ -561,6 +562,7 @@ async def _insert_ai_event_log(
         session_id=session_id,
         parent_session_id=parent_session_id,
         entropy=entropy,
+        org_id=org_id,
     )
 
 async def _insert_audit_log(
@@ -597,6 +599,7 @@ async def _insert_intercept_logs(
     bdi_score: float,
     policy_result: str,
     entropy: Optional[float] = None,
+    org_id: Optional[str] = None,
 ) -> None:
     action = str((payload.metadata or {}).get("operation") or "/intercept")
     event_id = await supabase_audit_client.insert_audit_log(
@@ -621,6 +624,7 @@ async def _insert_intercept_logs(
         session_id=payload.session_id,
         parent_session_id=payload.parent_session_id,
         entropy=entropy,
+        org_id=org_id,
     )
 
 async def _maybe_open_legal_hold(
@@ -1081,7 +1085,7 @@ async def intercept(payload: InterceptRequest, request: Request) -> Dict[str, An
     elif disposition.get("action") != RequestAction.PROCEED.value:
         _record_drop_event(disposition, agent_id=payload.agent_id, bdi_score=bdi_score, entropy=entropy)
         request_id = str(uuid.uuid4())
-        await _insert_intercept_logs(payload, request_id=request_id, bdi_score=bdi_score, policy_result="blocked", entropy=entropy)
+        await _insert_intercept_logs(payload, request_id=request_id, bdi_score=bdi_score, policy_result="blocked", entropy=entropy, org_id=org_id)
         holds = await _maybe_open_legal_hold(
             agent_id=payload.agent_id,
             session_id=payload.session_id,
@@ -1152,7 +1156,7 @@ async def intercept(payload: InterceptRequest, request: Request) -> Dict[str, An
             },
         )
     )
-    await _insert_intercept_logs(payload, request_id=request_id, bdi_score=bdi_score, policy_result="allowed", entropy=entropy)
+    await _insert_intercept_logs(payload, request_id=request_id, bdi_score=bdi_score, policy_result="allowed", entropy=entropy, org_id=org_id)
     holds = await _maybe_open_legal_hold(
         agent_id=payload.agent_id,
         session_id=payload.session_id,
