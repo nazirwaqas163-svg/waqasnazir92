@@ -161,20 +161,21 @@ class SupabaseAuditClient:
         return event_id
 
     async def insert_ai_event(
-        self,
-        *,
-        event_id: str,
-        timestamp: str,
-        agent_id: Optional[str],
-        action: str,
-        input_text: str,
-        output_text: str,
-        bdi_score: Optional[float],
-        policy_result: str,
-        session_id: Optional[str] = None,
-        parent_session_id: Optional[str] = None,
-        entropy: Optional[float] = None,
-    ) -> bool:
+    self,
+    *,
+    event_id: str,
+    timestamp: str,
+    agent_id: Optional[str],
+    action: str,
+    input_text: str,
+    output_text: str,
+    bdi_score: Optional[float],
+    policy_result: str,
+    session_id: Optional[str] = None,
+    parent_session_id: Optional[str] = None,
+    entropy: Optional[float] = None,
+    org_id: Optional[str] = None,
+) -> bool:
         chain_payload = {
             "event_id": event_id,
             "timestamp": timestamp,
@@ -187,6 +188,7 @@ class SupabaseAuditClient:
             "session_id": session_id,
             "parent_session_id": parent_session_id,
             "entropy": entropy,
+            "org_id": org_id,
         }
         chain_entry = self._ai_events_chain_logger.log_event(chain_payload)
 
@@ -342,7 +344,7 @@ class SupabaseAuditClient:
         return None
 
     async def get_recent_events(
-        self, limit: int = 500, since_iso: Optional[str] = None
+        self, limit: int = 500, since_iso: Optional[str] = None, org_id: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         if not self.configured:
             return []
@@ -357,6 +359,10 @@ class SupabaseAuditClient:
         }
         if since_iso:
             params["created_at"] = f"gte.{since_iso}"
+        if org_id:
+            params["org_id"] = f"eq.{org_id}"
+        else:
+            params["org_id"] = "is.null"
         try:
             async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
                 response = await client.get(
