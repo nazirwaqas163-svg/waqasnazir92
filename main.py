@@ -2052,8 +2052,11 @@ async def topology(limit: int = 500) -> Dict[str, Any]:
     return {"ok": True, **graph}
 
 @app.get("/ai_events/recent")
-async def ai_events_recent(limit: int = 500) -> Dict[str, Any]:
-    events = await supabase_audit_client.get_recent_events(limit=limit)
+async def ai_events_recent(limit: int = 500, request: Request = None) -> Dict[str, Any]:
+    api_key = request.headers.get("x-api-key") if request else None
+    org = await get_org_from_api_key(request) if api_key else None
+    org_id = org.get("org_id") if org else None
+    events = await supabase_audit_client.get_recent_events(limit=limit, org_id=org_id)
     return {"ok": True, "total": len(events), "events": events}
 
 @app.get("/alerts")
