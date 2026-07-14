@@ -912,7 +912,7 @@ async def chat_completions(payload: ChatProxyRequest, request: Request):
     return JSONResponse(response_json)
 
 @app.post("/intercept")
-async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
+async def intercept(payload: InterceptRequest, org: Dict[str, Any] = Depends(get_org_from_api_key)) -> Dict[str, Any]:
     """SDK hook: record agent input/output and apply circuit-breaker governance.
     Phase 4 Stage 3: Threat Classification Layer (observation-only, no blocking).
     Phase 6 Stage 2: Org Policy Enforcement.
@@ -1040,7 +1040,7 @@ async def intercept(payload: InterceptRequest) -> Dict[str, Any]:
     # Load org policies and check input text against them.
     # org_id defaults to "demo-org"; pass via metadata.org_id to override.
     # ------------------------------------------------------------------
-    org_id = (payload.metadata or {}).get("org_id", "demo-org")
+    org_id = org.get("org_id") if org else (payload.metadata or {}).get("org_id", "demo-org")
     policy_violations = await evaluate_org_policies(
         input_text=payload.input_text,
         output_text=payload.output_text,
