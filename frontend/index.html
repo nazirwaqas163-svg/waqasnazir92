@@ -478,6 +478,21 @@ const API = 'https://pulse-proxy-8dqx.onrender.com';
 let ALL = [], EXFIL_ALERTS = [], filter = 'all', search = '', selIdx = -1, dateFrom = '', dateTo = '';
 let cemFilter = null; // Phase 5: active jurisdiction filter
 
+// Phase 9 — Multi-Tenancy: read org from URL, resolve to API key
+const ORG_KEY_MAP = {
+  'org_alpha': 'pk_live_alpha_abc123',
+  'org_beta':  'pk_live_beta_def456',
+};
+const urlOrg = new URLSearchParams(window.location.search).get('org');
+const ORG_API_KEY = urlOrg ? (ORG_KEY_MAP[urlOrg] || null) : null;
+const ORG_ID = urlOrg || 'demo-org';
+
+function apiFetch(path, opts = {}) {
+  const headers = Object.assign({'Content-Type': 'application/json'}, opts.headers || {});
+  if (ORG_API_KEY) headers['X-API-Key'] = ORG_API_KEY;
+  return fetch(API + path, Object.assign({}, opts, {headers}));
+}
+
 // ── PHASE 5: CEM DATA & RENDERING ──
 const CEM_FRAMEWORKS = [
   {
@@ -815,7 +830,7 @@ function bandClass(b){if(b==='critical')return 'critical';if(b==='elevated'||b==
 async function loadAgents(){
   const box=document.getElementById('agents-body');
   box.innerHTML='<div class="loading"><div class="spin"></div>Loading agent topology…</div>';
-  try{lastTopology=await fetch(API+'/topology',{cache:'no-store'}).then(r=>r.json());renderAgents();}
+  try{lastTopology=await apiFetch('/topology',{cache:'no-store'}).then(r=>r.json());renderAgents();}
   catch(err){box.innerHTML=`<div class="empty"><div style="color:var(--danger);font-size:20px">⚠</div><div style="color:var(--danger);margin-top:6px;font-weight:500">Could not load topology</div><div style="font-size:11px;margin-top:4px;color:var(--muted2)">${err.message}</div></div>`;}
 }
 
@@ -835,7 +850,7 @@ async function renderAgents(){
   const sorted=agents.slice().sort((a,b)=>(order[a.risk_band]??9)-(order[b.risk_band]??9)||(b.events||0)-(a.events||0));
   let isolatedSet=new Set();
   try{
-    const isoResp=await fetch(API+'/agents/isolated?active_only=true',{cache:'no-store'});
+    const isoResp=await apiFetch('/agents/isolated?active_only=true',{cache:'no-store'});
     const isoData=isoResp.ok?await isoResp.json():{isolated_agents:[]};
     (isoData.isolated_agents||[]).forEach(r=>isolatedSet.add(r.agent_id));
   }catch(_){}
@@ -859,7 +874,7 @@ async function loadAnalytics(){
   const box=document.getElementById('analytics-body');
   box.innerHTML='<div class="loading"><div class="spin"></div>Loading drift analytics…</div>';
   try{
-    const driftData=await fetch(API+'/drift/recent?limit=100',{cache:'no-store'}).then(r=>r.json());
+    const driftData=await apiFetch('/drift/recent?limit=100',{cache:'no-store'}).then(r=>r.json());
     const sessions=driftData.sessions||[];
     const driftMap={};
     sessions.forEach(s=>{
@@ -904,7 +919,7 @@ let lastCbStatus=null;
 async function loadCircuitBreaker(){
   const box=document.getElementById('cb-body');
   box.innerHTML='<div class="loading"><div class="spin"></div>Loading circuit breaker status…</div>';
-  try{lastCbStatus=await fetch(API+'/circuit-breaker/status',{cache:'no-store'}).then(r=>r.json());renderCircuitBreaker();}
+  try{lastCbStatus=await apiFetch('/circuit-breaker/status',{cache:'no-store'}).then(r=>r.json());renderCircuitBreaker();}
   catch(err){box.innerHTML=`<div class="empty"><div style="color:var(--danger);font-size:20px">⚠</div><div style="color:var(--danger);margin-top:6px;font-weight:500">Could not load circuit breaker</div><div style="font-size:11px;margin-top:4px;color:var(--muted2)">${err.message}</div></div>`;}
 }
 
@@ -935,13 +950,13 @@ function renderCircuitBreaker(){
 
 async function cbManualOpen(){
   if(!confirm('Open the circuit breaker and block ALL agent requests?')) return;
-  try{await fetch(API+'/circuit-breaker/open',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reason:'Manual open from dashboard',bdi_score:1.0,entropy:0.0})});loadCircuitBreaker();load();}
+  try{await apiFetch('/circuit-breaker/open',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reason:'Manual open from dashboard',bdi_score:1.0,entropy:0.0})});loadCircuitBreaker();load();}
   catch(err){alert('Failed: '+err.message);}
 }
 
 async function cbManualClose(){
   if(!confirm('Reset the circuit breaker to CLOSED and allow requests?')) return;
-  try{await fetch(API+'/circuit-breaker/close',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reason:'Manual reset from dashboard',bdi_score:0.0,entropy:0.0})});loadCircuitBreaker();load();}
+  try{await apiFetch('/circuit-breaker/close',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reason:'Manual reset from dashboard',bdi_score:0.0,entropy:0.0})});loadCircuitBreaker();load();}
   catch(err){alert('Failed: '+err.message);}
 }
 
@@ -989,7 +1004,7 @@ let lastHealth=null;
 async function loadSettings(){
   const box=document.getElementById('settings-body');
   box.innerHTML='<div class="loading"><div class="spin"></div>Loading system settings…</div>';
-  try{lastHealth=await fetch(API+'/health',{cache:'no-store'}).then(r=>r.json());renderSettings();}
+  try{lastHealth=await apiFetch('/health',{cache:'no-store'}).then(r=>r.json());renderSettings();}
   catch(err){box.innerHTML=`<div class="empty"><div style="color:var(--danger);font-size:20px">⚠</div><div style="color:var(--danger);margin-top:6px;font-weight:500">Could not load settings</div><div style="font-size:11px;margin-top:4px;color:var(--muted2)">${err.message}</div></div>`;}
 }
 
@@ -1033,7 +1048,7 @@ function renderSettings(){
     </div>
   `;
   // Phase 6 Stage 3 — load and render active org policies
-  fetch(API+'/org/policies?org_id=demo-org',{cache:'no-store'})
+  apiFetch('/org/policies?org_id=demo-org',{cache:'no-store'})
     .then(r=>r.json())
     .then(data=>{
       const policies=data.policies||[];
@@ -1148,7 +1163,7 @@ async function loadHeartMonitor(e){
   const sessionId=e.raw?.session_id, en=e.data?.entropy??0, s=sev(e);
   if(!sessionId){renderFlatHM(en,s);return;}
   try{
-    const data=await fetch(API+'/session/lineage/'+encodeURIComponent(sessionId),{cache:'no-store'}).then(r=>r.json());
+    const data=await apiFetch('/session/lineage/'+encodeURIComponent(sessionId),{cache:'no-store'}).then(r=>r.json());
     const lineage=data.lineage||[];
     const entropies=lineage.map(t=>t.entropy??0);
     if(entropies.length<2){renderFlatHM(en,s);return;}
@@ -1192,7 +1207,7 @@ async function remediateEvent(){
   btn.disabled=true; btn.textContent='⚡ Creating hold…';
   try{
     const sevMap={critical:'CRITICAL',elevated:'HIGH',stable:'MEDIUM'};
-    const res=await fetch(API+'/legal-hold',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({trigger_type:'manual',reason:'Manually remediated via dashboard — '+id,severity:sevMap[sev(e)]||'HIGH',agent_id:e.data?.agent_id||null,session_id:e.raw?.session_id||null,event_id:e.raw?.event_id||null})});
+    const res=await apiFetch('/legal-hold',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({trigger_type:'manual',reason:'Manually remediated via dashboard — '+id,severity:sevMap[sev(e)]||'HIGH',agent_id:e.data?.agent_id||null,session_id:e.raw?.session_id||null,event_id:e.raw?.event_id||null})});
     const data=await res.json();
     if(data.created===false) alert('No new hold created — an active hold already exists for this session.');
     else if(data.hold) alert('Legal hold created for '+id+'.\nHold ID: '+data.hold.id+'\nStatus: ACTIVE');
@@ -1224,17 +1239,17 @@ async function replayEventChain(){
   }
   btn.disabled=false; btn.textContent='▷ Replay Event Chain';
 }
-async function downloadSealedPDF(){if(selIdx<0){alert('Select an event first.');return;}const e=ALL[selIdx];const sessionId=e.raw&&e.raw.session_id;if(!sessionId){alert('No session ID on this event.');return;}const btn=document.getElementById('btn-sealed-pdf');const orig=btn.textContent;btn.disabled=true;btn.textContent='⬇ Fetching…';try{const holdsRes=await fetch(API+'/legal-hold?status=ACTIVE',{cache:'no-store'}).then(r=>r.json());const holds=holdsRes.holds||[];const agentId=e.data&&e.data.agent_id;const match=holds.find(function(h){return h.session_id===sessionId||h.agent_id===agentId;});if(!match){alert('No sealed evidence package found.\nA breach must occur first to auto-generate one.');btn.disabled=false;btn.textContent=orig;return;}const pdfUrl=API+'/legal-hold/'+encodeURIComponent(match.id)+'/evidence-package?format=pdf';const a=document.createElement('a');a.href=pdfUrl;a.download='pulse-incident-'+match.id.slice(0,8)+'.pdf';a.target='_blank';a.click();}catch(err){alert('Download failed: '+err.message);}btn.disabled=false;btn.textContent=orig;}
+async function downloadSealedPDF(){if(selIdx<0){alert('Select an event first.');return;}const e=ALL[selIdx];const sessionId=e.raw&&e.raw.session_id;if(!sessionId){alert('No session ID on this event.');return;}const btn=document.getElementById('btn-sealed-pdf');const orig=btn.textContent;btn.disabled=true;btn.textContent='⬇ Fetching…';try{const holdsRes=await apiFetch('/legal-hold?status=ACTIVE',{cache:'no-store'}).then(r=>r.json());const holds=holdsRes.holds||[];const agentId=e.data&&e.data.agent_id;const match=holds.find(function(h){return h.session_id===sessionId||h.agent_id===agentId;});if(!match){alert('No sealed evidence package found.\nA breach must occur first to auto-generate one.');btn.disabled=false;btn.textContent=orig;return;}const pdfUrl=API+'/legal-hold/'+encodeURIComponent(match.id)+'/evidence-package?format=pdf';const a=document.createElement('a');a.href=pdfUrl;a.download='pulse-incident-'+match.id.slice(0,8)+'.pdf';a.target='_blank';a.click();}catch(err){alert('Download failed: '+err.message);}btn.disabled=false;btn.textContent=orig;}
 /* EXPORT */
 async function exportEvidencePackage(){
   var btn=document.getElementById('btn-export'); btn.disabled=true; btn.textContent='↓ Exporting…';
   try{
     var e=selIdx>=0?ALL[selIdx]:null;
     var results=await Promise.all([
-      fetch(API+'/health',{cache:'no-store'}).then(function(r){return r.json()}),
-      fetch(API+'/circuit-breaker/status',{cache:'no-store'}).then(function(r){return r.json()}),
-      fetch(API+'/ai_events/recent?limit=500',{cache:'no-store'}).then(function(r){return r.json()}),
-      fetch(API+'/alerts?limit=100',{cache:'no-store'}).then(function(r){return r.json()}).catch(function(){return {alerts:[]}})
+      apiFetch('/health',{cache:'no-store'}).then(function(r){return r.json()}),
+      apiFetch('/circuit-breaker/status',{cache:'no-store'}).then(function(r){return r.json()}),
+      apiFetch('/ai_events/recent?limit=500',{cache:'no-store'}).then(function(r){return r.json()}),
+      apiFetch('/alerts?limit=100',{cache:'no-store'}).then(function(r){return r.json()}).catch(function(){return {alerts:[]}})
     ]);
     var pkg={exported_at:new Date().toISOString(),governance_version:'pulse-v1-beta',jurisdiction:'ASEAN — PDPA Malaysia (24hr) / Singapore MGF (72hr) / Vietnam AI Law (72hr)',selected_event:e?Object.assign({event_id:evId(selIdx),severity:sev(e),exfiltration:isExfiltration(e)},e):null,health:results[0],circuit_breaker:results[1],all_events:results[2].events||[],exfiltration_alerts:results[3].alerts||[],total_events:(results[2].events||[]).length};
     var blob=new Blob([JSON.stringify(pkg,null,2)],{type:'application/json'});
@@ -1251,7 +1266,7 @@ async function generateIncidentReport(){
     var e=selIdx>=0?ALL[selIdx]:null, s=e?sev(e):'n/a', bd=e&&e.data&&e.data.bdi_score||0, en=e&&e.data&&e.data.entropy||0;
     var ts=e&&e.created_at?new Date(e.created_at).toLocaleString():'Unknown', now=new Date().toISOString();
     var health={ok:'?'}, cb={state:'?',failure_count:0};
-    try{var r2=await Promise.all([fetch(API+'/health',{cache:'no-store'}).then(function(r){return r.json()}),fetch(API+'/circuit-breaker/status',{cache:'no-store'}).then(function(r){return r.json()})]);health=r2[0];cb=r2[1];}catch(_){}
+    try{var r2=await Promise.all([apiFetch('/health',{cache:'no-store'}).then(function(r){return r.json()}),apiFetch('/circuit-breaker/status',{cache:'no-store'}).then(function(r){return r.json()})]);health=r2[0];cb=r2[1];}catch(_){}
     var L=['PULSE AI GOVERNANCE INCIDENT REPORT','=====================================','Generated:    '+now,'Jurisdiction: ASEAN (PDPA Malaysia 24hr / Singapore MGF 72hr / Vietnam AI Law 72hr)','','SYSTEM STATUS','-------------','Health:          '+(health.ok===true?'HEALTHY':'UNKNOWN'),'Circuit Breaker: '+(cb.state||'unknown').toUpperCase(),'Failures:        '+(cb.failure_count||0),''];
     if(e){
       L.push('SELECTED EVENT','——————————','Event ID:  '+evId(selIdx),'Severity:  '+s.toUpperCase(),'Triggered: '+ts,'Kind:      '+(e.kind||'unknown'),'BDI Score: '+Math.round(bd*100)+'%','Entropy:   '+en.toFixed(2),'Exfiltration: '+(isExfiltration(e)?'YES — risk '+((e.data&&e.data.exfiltration&&e.data.exfiltration.risk_score)||'?'):'No'),'Text:      '+(e.text||'(none)'),'');
@@ -1272,10 +1287,10 @@ async function generateIncidentReport(){
 async function load(){
   try{
     const [h,cb,ev,alertsRes]=await Promise.all([
-      fetch(API+'/health',{cache:'no-store'}).then(r=>r.json()),
-      fetch(API+'/circuit-breaker/status',{cache:'no-store'}).then(r=>r.json()),
-      fetch(API+'/ai_events/recent?limit=500',{cache:'no-store'}).then(r=>r.json()),
-      fetch(API+'/alerts?limit=100',{cache:'no-store'}).then(r=>r.json()).catch(()=>({alerts:[]}))
+      apiFetch('/health',{cache:'no-store'}).then(r=>r.json()),
+      apiFetch('/circuit-breaker/status',{cache:'no-store'}).then(r=>r.json()),
+      apiFetch('/ai_events/recent?limit=500',{cache:'no-store'}).then(r=>r.json()),
+      apiFetch('/alerts?limit=100',{cache:'no-store'}).then(r=>r.json()).catch(()=>({alerts:[]}))
     ]);
     const state=cb.state||h.circuit_breaker?.state||'unknown', fails=cb.failure_count??0;
     const pill=document.getElementById('status-pill'), ptxt=document.getElementById('status-text');
@@ -1314,14 +1329,14 @@ async function shareViewerLink(){
   const orig=btn.textContent;
   btn.disabled=true; btn.textContent='🔗 Generating link…';
   try{
-    const holdsRes=await fetch(API+'/legal-hold?status=ACTIVE',{cache:'no-store'}).then(r=>r.json());
+    const holdsRes=await apiFetch('/legal-hold?status=ACTIVE',{cache:'no-store'}).then(r=>r.json());
     const holds=holdsRes.holds||[];
     const match=holds.find(h=>h.session_id===sessionId||h.agent_id===agentId);
     if(!match){
       alert('No sealed evidence package found for this event.\nA breach must be detected first to generate a viewer link.');
       btn.disabled=false; btn.textContent=orig; return;
     }
-    const linkRes=await fetch(API+'/legal-hold/'+encodeURIComponent(match.id)+'/view-link',{cache:'no-store'}).then(r=>r.json());
+    const linkRes=await apiFetch('/legal-hold/'+encodeURIComponent(match.id)+'/view-link',{cache:'no-store'}).then(r=>r.json());
     if(!linkRes.ok||!linkRes.viewer_url){
       alert('Could not generate viewer link. Check backend logs.');
       btn.disabled=false; btn.textContent=orig; return;
@@ -1350,7 +1365,7 @@ async function sendToDPO(){
   const orig=btn.textContent;
   btn.disabled=true; btn.textContent='✉ Sending…';
   try{
-    const holdsRes=await fetch(API+'/legal-hold?status=ACTIVE',{cache:'no-store'}).then(r=>r.json());
+    const holdsRes=await apiFetch('/legal-hold?status=ACTIVE',{cache:'no-store'}).then(r=>r.json());
     const holds=holdsRes.holds||[];
     const match=holds.find(h=>h.session_id===sessionId||h.agent_id===agentId);
     if(!match){
