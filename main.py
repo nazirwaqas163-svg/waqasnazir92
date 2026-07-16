@@ -63,7 +63,34 @@ AMOUNT_PATTERN = re.compile(
     r"(?:\$|usd\s*)\s*(\d[\d,]*(?:\.\d+)?)|(\d[\d,]*(?:\.\d+)?)\s*(?:usd|dollars?)",
     re.IGNORECASE,
 )
-
+# Phase 11 — Calibration Engine Constants
+_REGULATORY_CLAIM_PATTERNS = [
+    r'\bcomplies?\b', r'\bcompliant\b', r'\bpdpa\b', r'\bmgf\b',
+    r'\bpersonal data protection\b', r'\bdata protection act\b',
+    r'\biso.?42001\b', r'\bvietnam ai law\b', r'\bregulat\w+\b',
+    r'\blegal\b', r'\blawful\b', r'\bpermitted\b', r'\brequired by law\b',
+    r'\bmandatory\b', r'\bobligat\w+\b',
+]
+_TEMPORAL_CLAIM_PATTERNS = [
+    r'\bcurrent\w*\b', r'\blatest\b', r'\bas of today\b', r'\bright now\b',
+    r'\btoday\b', r'\bthis week\b', r'\bthis month\b', r'\bthis year\b',
+    r'\brecent\w*\b', r'\bup.?to.?date\b', r'\blive\b', r'\breal.?time\b',
+]
+_CERTAINTY_WORDS = [
+    r'\bis\b', r'\bwill\b', r'\bconfirmed?\b', r'\bguaranteed?\b',
+    r'\bdefinitely\b', r'\bcertainly\b', r'\babsolutely\b', r'\bproven?\b',
+    r'\bestablished\b', r'\bfact\b', r'\bfactually\b', r'\baccurate\b',
+    r'\bexact\w*\b', r'\balways\b', r'\bnever\b', r'\bmust\b',
+]
+_HEDGE_WORDS = [
+    r'\bapproximately\b', r'\blikely\b', r'\bmay\b', r'\bmight\b',
+    r'\bcould\b', r'\bshould\b', r'\bprobably\b', r'\bpossibly\b',
+    r'\bperhaps\b', r'\bseems?\b', r'\bappears?\b', r'\bsuggests?\b',
+    r'\btypically\b', r'\bgenerally\b', r'\busually\b', r'\boften\b',
+    r'\baround\b', r'\babout\b', r'\broughly\b', r'\bestimate\w*\b',
+    r'\buncertain\b', r'\bunclear\b', r'\bcaveat\b', r'\bnote that\b',
+]
+_agent_calibration_history: Dict[str, List[float]] = {}
 _agent_cache: Dict[str, Dict[str, Any]] = {}
 AGENT_CACHE_TTL = 60.0
 
@@ -675,6 +702,7 @@ async def _maybe_open_legal_hold(
                 "exfiltration": exfiltration,
                 "policy_violations": policy_violations,
                 "swarm": swarm,
+                "calibration": calibration,
             },
             dedupe_scope=t.get("dedupe_scope"),
         )
@@ -784,7 +812,164 @@ def _gate_or_drop(
         _record_drop_event(disposition, agent_id=agent_id, bdi_score=bdi_score, entropy=entropy)
         return _dropped_response(disposition)
     return None
+def _count_cal_patterns(text: str, patterns: list) -> int:
+    text_lower = text.lower()
+    count = 0
+    for p in patterns:
+        count += len(re.findall(p, text_lower))
+    return count
 
+
+def compute_calibration(
+    *,
+    output_text: str,
+    input_text: str,
+    bdi_score: float,
+    drift_score: float,
+    entropy: float,
+    baselined: bool,
+    turns_analyzed: int,
+    is_registered: bool,
+    session_history_entropy: List[float],
+    agent_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Phase 11 — Calibration scoring layer (7 signals)."""
+    flags = []
+    output = output_text or ""
+    word_ct = max(1, len(output.split()))
+
+    certainty_count = _count_cal_patterns(output, _CERTAINTY_WORDS)
+    certainty_density = min(1.0, certainty_count / max(10, word_ct) * 10)
+    evidence_quality = min(1.0, (
+        (0.4 if baselined else 0.0) +
+        (0.3 if is_registered else 0.0) +
+        (0.3 * min(1.0, turns_analyzed / 10.0))
+    ))
+    confidence_evidence_gap = round(max(0.0, certainty_density - evidence_quality), 4)
+    if confidence_evidence_gap > 0.5:
+        flags.append("high_confidence_evidence_gap")
+
+    assertion_density = round(min(1.0, certainty_count / max(5, word_ct) * 8), 4)
+    if assertion_density > 0.7:
+        flags.append("high_assertion_density")
+
+    session_maturity = round(min(1.0, turns_analyzed / 10.0), 4)
+    if session_maturity < 0.3 and assertion_density > 0.5:
+        flags.append("low_session_maturity")
+
+    length_certainty_risk = 0.0
+    if word_ct < 20 and certainty_density > 0.4:
+        length_certainty_risk = round(min(1.0, (0.4 / max(0.01, word_ct / 20)) * certainty_density), 4)
+        flags.append("short_high_certainty_output")
+    elif word_ct < 50 and certainty_density > 0.6:
+        length_certainty_risk = round(min(1.0, certainty_density * 0.6), 4)
+
+    compound_risk = round(min(1.0, bdi_score * 0.5 + drift_score * 0.5), 4)
+    if bdi_score > 0.5 and assertion_density > 0.5:
+        compound_risk = round(min(1.0, compound_risk + 0.2), 4)
+        flags.append("bdi_calibration_compound")
+
+    baseline_deviation = 0.0
+    history = _agent_calibration_history.get(agent_id or "", [])
+    if len(history) >= 3:
+        hist_avg = sum(history[-10:]) / len(history[-10:])
+        baseline_deviation = round(max(0.0, assertion_density - hist_avg), 4)
+        if baseline_deviation > 0.25:
+            flags.append("calibration_baseline_deviation")
+
+    hedge_count = _count_cal_patterns(output, _HEDGE_WORDS)
+    hedge_ratio = round(min(1.0, hedge_count / max(5, word_ct) * 8), 4)
+    certainty_hedge_imbalance = round(max(0.0, certainty_density - hedge_ratio), 4)
+    if certainty_hedge_imbalance > 0.6:
+        flags.append("certainty_hedge_imbalance")
+
+    reg_claim_count = _count_cal_patterns(output, _REGULATORY_CLAIM_PATTERNS)
+    regulatory_claim_risk = 0.0
+    regulatory_flags = []
+    if reg_claim_count > 0 and hedge_ratio < 0.2 and certainty_density > 0.3:
+        regulatory_claim_risk = round(min(1.0, reg_claim_count * 0.25), 4)
+        flags.append("regulatory_claim_unverified")
+        regulatory_flags.append({
+            "type": "unverified_regulatory_claim",
+            "count": reg_claim_count,
+            "risk": regulatory_claim_risk,
+            "asean_context": "Unverified definitive regulatory claims violate PDPA Malaysia §5 and Singapore MGF §2.2.",
+        })
+
+    temporal_count = _count_cal_patterns(output, _TEMPORAL_CLAIM_PATTERNS)
+    temporal_risk = 0.0
+    if temporal_count > 0 and certainty_density > 0.3:
+        temporal_risk = round(min(1.0, temporal_count * 0.2 * certainty_density), 4)
+        flags.append("temporal_claim_unverified")
+
+    contradiction_risk = 0.0
+    if len(session_history_entropy) >= 3:
+        diffs = [abs(session_history_entropy[i] - session_history_entropy[i-1])
+                 for i in range(1, len(session_history_entropy))]
+        max_diff = max(diffs) if diffs else 0.0
+        if max_diff > 0.3 and certainty_density > 0.4:
+            contradiction_risk = round(min(1.0, max_diff * certainty_density), 4)
+            flags.append("session_entropy_contradiction")
+
+    calibration_score = round(min(1.0, max(0.0, (
+        confidence_evidence_gap * 0.20 +
+        assertion_density * 0.15 +
+        (1.0 - session_maturity) * 0.10 +
+        length_certainty_risk * 0.10 +
+        compound_risk * 0.15 +
+        baseline_deviation * 0.10 +
+        certainty_hedge_imbalance * 0.10 +
+        regulatory_claim_risk * 0.05 +
+        temporal_risk * 0.03 +
+        contradiction_risk * 0.02
+    ))), 4)
+
+    if agent_id:
+        hist = _agent_calibration_history.setdefault(agent_id, [])
+        hist.append(calibration_score)
+        if len(hist) > 20:
+            _agent_calibration_history[agent_id] = hist[-20:]
+
+    if calibration_score >= 0.70:
+        status = "SEVERELY_OVERCONFIDENT"
+    elif calibration_score >= 0.50:
+        status = "OVERCONFIDENT"
+    elif calibration_score >= 0.30:
+        status = "MILDLY_OVERCONFIDENT"
+    else:
+        status = "CALIBRATED"
+
+    return {
+        "score": calibration_score,
+        "status": status,
+        "flags": flags,
+        "components": {
+            "confidence_evidence_gap": confidence_evidence_gap,
+            "assertion_density": assertion_density,
+            "session_maturity": session_maturity,
+            "length_certainty_risk": length_certainty_risk,
+            "compound_risk": compound_risk,
+            "baseline_deviation": baseline_deviation,
+            "certainty_hedge_imbalance": certainty_hedge_imbalance,
+            "regulatory_claim_risk": regulatory_claim_risk,
+            "temporal_risk": temporal_risk,
+            "contradiction_risk": contradiction_risk,
+        },
+        "vocabulary": {
+            "certainty_count": certainty_count,
+            "hedge_count": hedge_count,
+            "regulatory_claim_count": reg_claim_count,
+            "temporal_claim_count": temporal_count,
+            "output_word_count": word_ct,
+        },
+        "regulatory_flags": regulatory_flags,
+        "evidence_quality": evidence_quality,
+        "asean_relevance": {
+            "pdpa_malaysia": regulatory_claim_risk > 0.2 or temporal_risk > 0.3,
+            "singapore_mgf": compound_risk > 0.5 or assertion_density > 0.6,
+            "vietnam_ai_law": calibration_score > 0.5,
+        },
+    }
 @app.get("/health")
 def health() -> Dict[str, Any]:
     cb_snapshot = circuit_breaker.status()
@@ -1042,7 +1227,43 @@ async def intercept(payload: InterceptRequest, request: Request) -> Dict[str, An
         policy_total_turns=policy_total_turns,
         baselined=baselined,
     )
-
+    # ------------------------------------------------------------------
+    # Phase 11 — Calibration Scoring Layer
+    # ------------------------------------------------------------------
+    session_entropy_history = [
+        float(e.get("entropy") or 0.0)
+        for e in session_turns
+        if e.get("entropy") is not None
+    ]
+    calibration = compute_calibration(
+        output_text=payload.output_text,
+        input_text=payload.input_text,
+        bdi_score=bdi_score,
+        drift_score=drift_score,
+        entropy=entropy,
+        baselined=baselined,
+        turns_analyzed=drift_result.get("turns_analyzed") or 0,
+        is_registered=is_registered,
+        session_history_entropy=session_entropy_history,
+        agent_id=payload.agent_id,
+    )
+    if calibration["status"] in ("SEVERELY_OVERCONFIDENT", "OVERCONFIDENT"):
+        feed.add(
+            PulseEvent(
+                kind="alert",
+                text=f"Calibration failure: {calibration['status']} (score={calibration['score']})",
+                data={
+                    "decision": "alert",
+                    "status_code": 200,
+                    "severity": "HIGH" if calibration["status"] == "SEVERELY_OVERCONFIDENT" else "MEDIUM",
+                    "trigger_type": "calibration_failure",
+                    "calibration_score": calibration["score"],
+                    "flags": calibration["flags"],
+                    "agent_id": payload.agent_id,
+                    "session_id": payload.session_id,
+                },
+            )
+        )
     # ------------------------------------------------------------------
     # Phase 6 Stage 2 — Org Policy Enforcement
     # Load org policies and check input text against them.
@@ -1124,6 +1345,7 @@ async def intercept(payload: InterceptRequest, request: Request) -> Dict[str, An
                 "trust_divergence": trust_divergence,
                 "threat_classification": threat_classification,
                 "policy_violations": policy_violations,
+                "calibration": calibration,
                 "legal_holds": [h["id"] for h in holds],
             },
         )
@@ -1200,6 +1422,7 @@ async def intercept(payload: InterceptRequest, request: Request) -> Dict[str, An
         },
         "threat_classification": threat_classification,
         "policy_violations": policy_violations,
+        "calibration": calibration,
         "legal_holds": [h["id"] for h in holds],
         "exfiltration": {
             "risk_score": exfiltration_risk_score,
