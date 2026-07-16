@@ -478,14 +478,8 @@ const API = 'https://pulse-proxy-8dqx.onrender.com';
 let ALL = [], EXFIL_ALERTS = [], filter = 'all', search = '', selIdx = -1, dateFrom = '', dateTo = '';
 let cemFilter = null; // Phase 5: active jurisdiction filter
 
-// Phase 9 — Multi-Tenancy: read org from URL, resolve to API key
-const ORG_KEY_MAP = {
-  'org_alpha': 'pk_live_alpha_abc123',
-  'org_beta':  'pk_live_beta_def456',
-};
-const urlOrg = new URLSearchParams(window.location.search).get('org');
-const ORG_API_KEY = urlOrg ? (ORG_KEY_MAP[urlOrg] || null) : null;
-const ORG_ID = urlOrg || 'demo-org';
+/// Phase 10 — API key from Settings (localStorage)
+let ORG_API_KEY = localStorage.getItem('pulse_api_key') || null;
 
 function apiFetch(path, opts = {}) {
   const headers = Object.assign({'Content-Type': 'application/json'}, opts.headers || {});
@@ -1032,6 +1026,16 @@ function renderSettings(){
       <div class="settings-row"><span class="settings-key">Allows Requests</span><span class="settings-val" style="color:${cb.allows_requests?'var(--ok)':'var(--danger)'}">${cb.allows_requests?'Yes':'No'}</span></div>
     </div>
     <div class="settings-card">
+      <div class="inv-sec-title" style="margin-bottom:8px">◎ Organisation API Key</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5">Paste your API key to scope this dashboard to your organisation's events only. Leave blank to view demo data.</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input id="api-key-input" type="password" placeholder="pulse_…" value="${ORG_API_KEY||''}" style="flex:1;background:var(--bg4);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:11px;font-family:'JetBrains Mono',monospace;outline:none"/>
+        <button onclick="saveApiKey()" style="background:var(--accent);color:#000;border:none;border-radius:6px;padding:8px 14px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">Save</button>
+        <button onclick="clearApiKey()" style="background:var(--bg4);border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:8px 10px;font-size:11px;cursor:pointer">Clear</button>
+      </div>
+      <div id="api-key-status" style="font-size:10px;margin-top:6px;color:var(--ok)">${ORG_API_KEY?'✓ API key active — showing your organisation data':''}</div>
+    </div>
+    <div class="settings-card">
       <div class="inv-sec-title" style="margin-bottom:8px">◎ Quick Links</div>
       <div class="settings-row"><span class="settings-key">Ledger Integrity</span><a href="${API}/ledger/integrity" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">audit_logs chain →</a></div>
       <div class="settings-row"><span class="settings-key">AI Events Integrity</span><a href="${API}/ledger/integrity/ai_events" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">ai_events chain →</a></div>
@@ -1385,6 +1389,25 @@ async function sendToDPO(){
     }
   }catch(err){alert('Failed to send notification: '+err.message);}
   btn.disabled=false; btn.textContent=orig;
+}
+  function saveApiKey(){
+  const val = document.getElementById('api-key-input').value.trim();
+  if(!val){ clearApiKey(); return; }
+  localStorage.setItem('pulse_api_key', val);
+  ORG_API_KEY = val;
+  document.getElementById('api-key-status').textContent = '✓ API key saved — reloading your data…';
+  document.getElementById('api-key-status').style.color = 'var(--ok)';
+  setTimeout(()=>load(), 800);
+}
+
+function clearApiKey(){
+  localStorage.removeItem('pulse_api_key');
+  ORG_API_KEY = null;
+  const input = document.getElementById('api-key-input');
+  if(input) input.value = '';
+  const status = document.getElementById('api-key-status');
+  if(status){ status.textContent = 'API key cleared — showing demo data'; status.style.color = 'var(--muted)'; }
+  setTimeout(()=>load(), 800);
 }
   load(); setInterval(load,10000);
 </script>
