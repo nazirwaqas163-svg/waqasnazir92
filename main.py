@@ -1,4 +1,5 @@
 import os
+import secrets
 import json
 import re
 import time
@@ -10,6 +11,9 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional, Union
 
 import httpx
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, StreamingResponse
@@ -1673,13 +1677,52 @@ class LegalHoldCreateRequest(BaseModel):
 
 class LegalHoldReleaseRequest(BaseModel):
     released_by: str = "dashboard"
+class OrgRegistrationRequest(BaseModel):
+    org_name: str
+    email: str
 
+class OrgRegistrationResponse(BaseModel):
+    org_id: str
+    api_key: str
+    dashboard_url: str
+    message: str
 class OrgPolicyRequest(BaseModel):
     org_id: str
     policy_id: str
     name: str
     rules: Dict[str, Any]
+def generate_org_id(org_name: str) -> str:
+    slug = re.sub(r'[^a-z0-9]+', '_', org_name.lower()).strip('_')[:20]
+    suffix = secrets.token_hex(3)
+    return f"{slug}_{suffix}"
 
+
+def generate_api_key() -> str:
+    return f"pulse_{secrets.token_hex(32)}"
+
+
+def send_welcome_email(to_email: str, org_name: str, api_key: str, org_id: str) -> bool:
+    smtp_host = os.getenv("PULSE_SMTP_HOST")
+    smtp_port = int(os.getenv("PULSE_SMTP_PORT", "587"))
+    smtp_user = os.getenv("PULSE_SMTP_USER")
+    smtp_pass = os.getenv("PULSE_SMTP_PASS")
+    smtp_from = os.getenv("PULSE_SMTP_FROM", smtp_user)
+    if not all([smtp_host, smtp_user, smtp_pass]):
+        return False
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = "Welcome to Pulse — Your API Key & Dashboard Access"
+        msg["From"] = smtp_from
+        msg["To"] = to_email
+        body = f"Welcome to Pulse, {org_name}!\n\nOrg ID: {org_id}\nAPI Key: {api_key}\n\nDashboard: https://pulse-dashboard-cx7x.onrender.com"
+        msg.attach(MIMEText(body, "plain"))
+        with smtplib.SMTP(smtp_host, smtp_port) as server:
+            server.starttls()
+            server.login(smtp_user, smtp_pass)
+            server.sendmail(smtp_from, [to_email], msg.as_string())
+        return True
+    except Exception:
+        return False
 @app.post("/org/policies")
 async def create_org_policy(payload: OrgPolicyRequest) -> Dict[str, Any]:
     """Create or update org policy. Stored durably in Supabase."""
@@ -2508,3 +2551,61 @@ align-items:center;justify-content:center;height:100vh;margin:0;}
 </body></html>"""
 
     return HTMLResponse(content=html)
+@app.post("/orgs/register", response_model=OrgRegistrationResponse)
+async def register_org(request: OrgRegistrationRequest):
+    org_name = request.org_name.strip()
+    email = request.email.strip().lower()
+    if not org_name:
+        raise HTTPException(status_code=422, detail="org_name is required")
+    if not email or "@" not in email:
+        raise HTTPException(status_code=422, detail="Valid email is required")
+    org_id = generate_org_id(org_name)
+    api_key = generate_api_key()
+    dashboard_url = "https://pulse-dashboard-cx7x.onrender.com"
+    try:
+        headers = {
+            "apikey": supabase_audit_client.key or "",
+            "authorization": f"Bearer {supabase_audit_client.key}",
+            "content-type": "application/json",
+        }
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                f"{supabase_audit_client.url}/rest/v1/orgs",
+                headers=headers,
+                json={"org_id": org_id, "name": org_name, "api_key": api_key, "email": email, "active": True},
+            )
+            resp.raise_for_status()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Failed to create organisation")
+    email_sent = send_welcome_email(email, org_name, api_key, org_id)
+    if email_sent:
+        message = f"Organisation '{org_name}' created. Welcome email sent to {email}."
+    else:
+        message = f"Organisation '{org_name}' created. Save your API key — it will not be shown again."
+    return OrgRegistrationResponse(
+        org_id=org_id,
+        api_key=api_key,
+        dashboard_url=dashboard_url,
+        message=message
+    )
+
+
+@app.get("/orgs")
+async def list_orgs():
+    try:
+        headers = {
+            "apikey": supabase_audit_client.key or "",
+            "authorization": f"Bearer {supabase_audit_client.key}",
+            "content-type": "application/json",
+        }
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                f"{supabase_audit_client.url}/rest/v1/orgs",
+                headers=headers,
+                params={"select": "org_id,name,email,active,created_at", "order": "created_at.desc"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        return {"orgs": data, "count": len(data)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Failed to retrieve organisations")
