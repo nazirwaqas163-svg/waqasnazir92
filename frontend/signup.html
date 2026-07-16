@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pulse — Start Your Free Trial</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:         #0a0f1e;
+      --surface:    #0d1b2a;
+      --border:     #1e2d40;
+      --accent:     #00d4ff;
+      --accent-dim: #0099bb;
+      --text:       #e8eaf0;
+      --muted:      #8892a4;
+      --success-bg: #0a2e1a;
+      --success:    #00c853;
+      --error-bg:   #2e0a0a;
+      --error:      #ff5252;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    /* ── Header ── */
+    .header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    .logo {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: 3px;
+      color: var(--accent);
+    }
+    .tagline {
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 4px;
+      letter-spacing: 0.5px;
+    }
+
+    /* ── Card ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 40px;
+      width: 100%;
+      max-width: 440px;
+    }
+
+    .card-title {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .card-sub {
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 28px;
+    }
+
+    /* ── Form ── */
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    input[type="text"],
+    input[type="email"] {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+      color: var(--text);
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+      margin-bottom: 20px;
+    }
+    input[type="text"]:focus,
+    input[type="email"]:focus {
+      border-color: var(--accent);
+    }
+    input::placeholder { color: var(--muted); }
+
+    button[type="submit"] {
+      width: 100%;
+      background: var(--accent);
+      color: #0a0f1e;
+      border: none;
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s, opacity 0.2s;
+      letter-spacing: 0.3px;
+    }
+    button[type="submit"]:hover { background: var(--accent-dim); }
+    button[type="submit"]:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ── Success / Error states ── */
+    .alert {
+      border-radius: 8px;
+      padding: 16px;
+      font-size: 13px;
+      margin-bottom: 20px;
+      display: none;
+      line-height: 1.5;
+    }
+    .alert.error   { background: var(--error-bg);   border: 1px solid var(--error);   color: var(--error); }
+    .alert.success { background: var(--success-bg); border: 1px solid var(--success); color: var(--success); }
+    .alert.show    { display: block; }
+
+    /* ── Key display (post-success) ── */
+    .key-block {
+      display: none;
+      margin-top: 28px;
+    }
+    .key-block.show { display: block; }
+
+    .key-row {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+    .key-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .key-value {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      color: var(--accent);
+      word-break: break-all;
+    }
+    .key-warning {
+      font-size: 12px;
+      color: #f59e0b;
+      background: #2d1f00;
+      border: 1px solid #78450a;
+      border-radius: 6px;
+      padding: 10px 12px;
+      margin-top: 4px;
+    }
+
+    .copy-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--muted);
+      font-size: 11px;
+      padding: 4px 10px;
+      cursor: pointer;
+      float: right;
+      margin-top: -2px;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .copy-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+    .dashboard-link {
+      display: block;
+      margin-top: 20px;
+      text-align: center;
+      background: transparent;
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      padding: 12px;
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+    .dashboard-link:hover { background: rgba(0,212,255,0.08); }
+
+    /* ── Trust badges ── */
+    .badges {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 24px;
+      justify-content: center;
+    }
+    .badge {
+      background: rgba(0,212,255,0.07);
+      border: 1px solid rgba(0,212,255,0.2);
+      border-radius: 20px;
+      padding: 4px 12px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .login-link {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .login-link a { color: var(--accent); text-decoration: none; }
+
+    /* ── Loading spinner ── */
+    .spinner {
+      display: none;
+      width: 18px; height: 18px;
+      border: 2px solid rgba(0,0,0,0.2);
+      border-top-color: #0a0f1e;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin: 0 auto;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    button[type="submit"].loading .btn-text { display: none; }
+    button[type="submit"].loading .spinner { display: inline-block; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="logo">PULSE</div>
+    <div class="tagline">AI Agent Governance Middleware · ASEAN-Native</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Start your free trial</div>
+    <div class="card-sub">14-day free trial · No credit card required · Your API key delivered instantly</div>
+
+    <div class="alert error" id="errorAlert"></div>
+
+    <div id="formSection">
+      <label for="orgName">Organisation name</label>
+      <input type="text" id="orgName" placeholder="e.g. Maybank AI Team" autocomplete="organization" required>
+
+      <label for="email">Work email</label>
+      <input type="email" id="email" placeholder="you@company.com.my" autocomplete="email" required>
+
+      <button type="submit" id="submitBtn" onclick="handleRegister()">
+        <span class="btn-text">Get My API Key →</span>
+        <span class="spinner"></span>
+      </button>
+    </div>
+
+    <!-- Post-registration success view -->
+    <div class="key-block" id="keyBlock">
+      <div class="alert success show" id="successAlert"></div>
+
+      <div class="key-row">
+        <div class="key-label">
+          Organisation ID
+          <button class="copy-btn" onclick="copyText('orgIdVal', this)">Copy</button>
+        </div>
+        <div class="key-value" id="orgIdVal"></div>
+      </div>
+
+      <div class="key-row">
+        <div class="key-label">
+          API Key
+          <button class="copy-btn" onclick="copyText('apiKeyVal', this)">Copy</button>
+        </div>
+        <div class="key-value" id="apiKeyVal"></div>
+        <div class="key-warning">⚠ Save this key now. It will not be shown again.</div>
+      </div>
+
+      <a class="dashboard-link" id="dashboardLink" href="#" target="_blank">Open Dashboard →</a>
+    </div>
+
+    <div class="login-link" id="loginLine">
+      Already have an account? <a href="https://pulse-dashboard-cx7x.onrender.com">Go to dashboard</a>
+    </div>
+  </div>
+
+  <div class="badges">
+    <span class="badge">PDPA Malaysia</span>
+    <span class="badge">Singapore MGF</span>
+    <span class="badge">Vietnam AI Law</span>
+    <span class="badge">ISO/IEC 42001</span>
+    <span class="badge">0% false positive</span>
+  </div>
+
+  <script>
+    const API_BASE = "https://pulse-proxy-8dqx.onrender.com";
+
+    async function handleRegister() {
+      const orgName = document.getElementById("orgName").value.trim();
+      const email   = document.getElementById("email").value.trim();
+      const btn     = document.getElementById("submitBtn");
+      const errBox  = document.getElementById("errorAlert");
+
+      // Reset error
+      errBox.classList.remove("show");
+      errBox.textContent = "";
+
+      // Validate
+      if (!orgName) { showError("Please enter your organisation name."); return; }
+      if (!email || !email.includes("@")) { showError("Please enter a valid email address."); return; }
+
+      // Loading state
+      btn.classList.add("loading");
+      btn.disabled = true;
+
+      try {
+        const res = await fetch(`${API_BASE}/orgs/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ org_name: orgName, email: email })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          showError(data.detail || "Registration failed. Please try again.");
+          return;
+        }
+
+        // Success
+        document.getElementById("formSection").style.display = "none";
+        document.getElementById("loginLine").style.display = "none";
+
+        document.getElementById("orgIdVal").textContent  = data.org_id;
+        document.getElementById("apiKeyVal").textContent = data.api_key;
+        document.getElementById("dashboardLink").href     = data.dashboard_url;
+
+        document.getElementById("successAlert").textContent = data.message;
+        document.getElementById("keyBlock").classList.add("show");
+
+      } catch (err) {
+        showError("Connection error. Please check your internet and try again.");
+        console.error(err);
+      } finally {
+        btn.classList.remove("loading");
+        btn.disabled = false;
+      }
+    }
+
+    function showError(msg) {
+      const box = document.getElementById("errorAlert");
+      box.textContent = msg;
+      box.classList.add("show");
+    }
+
+    function copyText(elementId, btn) {
+      const text = document.getElementById(elementId).textContent;
+      navigator.clipboard.writeText(text).then(() => {
+        btn.textContent = "Copied!";
+        setTimeout(() => btn.textContent = "Copy", 1800);
+      }).catch(() => {
+        // Fallback for older browsers
+        const el = document.getElementById(elementId);
+        const range = document.createRange();
+        range.selectNode(el);
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+        document.execCommand("copy");
+        btn.textContent = "Copied!";
+        setTimeout(() => btn.textContent = "Copy", 1800);
+      });
+    }
+
+    // Allow Enter key to submit
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") handleRegister();
+    });
+  </script>
+
+</body>
+</html>
