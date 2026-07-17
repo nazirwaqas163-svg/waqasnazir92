@@ -2832,3 +2832,182 @@ async def list_orgs():
         return {"orgs": data, "count": len(data)}
     except Exception as e:
         raise HTTPException(status_code=500, detail="Failed to retrieve organisations")
+
+def get_org_from_request(request: Request) -> str:
+    """Return org_id from X-API-Key header, or 'demo-org' if not present."""
+    api_key = request.headers.get("x-api-key")
+    if not api_key:
+        return "demo-org"
+    cached = _org_cache.get(api_key)
+    if cached and time.monotonic() - cached["ts"] < ORG_CACHE_TTL:
+        return cached["org"].get("org_id", "demo-org")
+    return "demo-org"
+
+# ══════════════════════════════════════════════════════════════
+# PHASE 12 — INCIDENT REPLAY ENGINE
+# ══════════════════════════════════════════════════════════════
+
+def _compute_replay_bdi_band(bdi_score: float) -> str:
+    if bdi_score is None:
+        return "UNKNOWN"
+    if bdi_score >= 0.85:
+        return "CRITICAL"
+    if bdi_score >= 0.65:
+        return "HIGH"
+    if bdi_score >= 0.40:
+        return "ELEVATED"
+    return "STABLE"
+
+
+def _compute_replay_entropy_band(entropy: float) -> str:
+    if entropy is None:
+        return "UNKNOWN"
+    if entropy >= 0.85:
+        return "CRITICAL"
+    if entropy >= 0.65:
+        return "HIGH"
+    if entropy >= 0.40:
+        return "ELEVATED"
+    return "STABLE"
+
+
+def _build_replay_step(event: dict, turn_index: int) -> dict:
+    bdi = event.get("bdi_score")
+    entropy = event.get("entropy")
+    bdi_band = _compute_replay_bdi_band(bdi)
+    entropy_band = _compute_replay_entropy_band(entropy)
+    drift_flagged = bdi_band in ("HIGH", "CRITICAL") or entropy_band in ("HIGH", "CRITICAL")
+    return {
+        "turn": turn_index + 1,
+        "event_id": event.get("event_id"),
+        "timestamp": event.get("timestamp"),
+        "agent_id": event.get("agent_id"),
+        "session_id": event.get("session_id"),
+        "action": event.get("action", "intercept"),
+        "status": event.get("status", "unknown"),
+        "jurisdiction": event.get("jurisdiction"),
+        "bdi_score": bdi,
+        "bdi_band": bdi_band,
+        "entropy": entropy,
+        "entropy_band": entropy_band,
+        "drift_flagged": drift_flagged,
+        "input_preview": (event.get("input_text") or "")[:200],
+        "output_preview": (event.get("output_text") or "")[:200],
+        "chain_intact": bool(event.get("row_hash")),
+        "raw": event,
+    }
+
+
+@app.post("/replay/flag")
+async def flag_session_for_replay_endpoint(
+    request: Request,
+    session_id: str = Body(..., embed=True),
+    trigger_reason: str = Body("manual", embed=True),
+    flagged_by: str = Body("dashboard", embed=True),
+):
+    org_id = get_org_from_request(request)
+    from audit import flag_session_for_replay
+    record = await flag_session_for_replay(
+        session_id=session_id,
+        org_id=org_id,
+        trigger_reason=trigger_reason,
+        flagged_by=flagged_by,
+    )
+    return {
+        "status": "flagged",
+        "session_id": session_id,
+        "org_id": org_id,
+        "trigger_reason": trigger_reason,
+        "record": record,
+        "_readonly_note": "Flagging does not modify live session state.",
+    }
+
+
+@app.get("/replay")
+async def list_replay_sessions(
+    request: Request,
+    status: str = Query(None),
+):
+    org_id = get_org_from_request(request)
+    from audit import get_replay_sessions
+    sessions = await get_replay_sessions(org_id=org_id, status=status)
+    return {
+        "org_id": org_id,
+        "count": len(sessions),
+        "status_filter": status,
+        "sessions": sessions,
+    }
+
+
+@app.get("/replay/{session_id}")
+async def get_session_replay(
+    session_id: str,
+    request: Request,
+    raw: bool = Query(False),
+):
+    org_id = get_org_from_request(request)
+    from audit import get_replay_session_events
+    events = await get_replay_session_events(session_id=session_id, org_id=org_id)
+    if not events:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No events found for session '{session_id}' in org '{org_id}'.",
+        )
+    steps = [_build_replay_step(ev, i) for i, ev in enumerate(events)]
+    bdi_scores = [s["bdi_score"] for s in steps if s["bdi_score"] is not None]
+    entropies = [s["entropy"] for s in steps if s["entropy"] is not None]
+    drift_flags = [s for s in steps if s["drift_flagged"]]
+    bdi_trajectory = "stable"
+    if len(bdi_scores) >= 2:
+        if bdi_scores[-1] > bdi_scores[0] + 0.20:
+            bdi_trajectory = "escalating"
+        elif bdi_scores[-1] < bdi_scores[0] - 0.20:
+            bdi_trajectory = "de-escalating"
+    jurisdiction = next((s["jurisdiction"] for s in steps if s.get("jurisdiction")), "UNKNOWN")
+    summary = {
+        "session_id": session_id,
+        "org_id": org_id,
+        "jurisdiction": jurisdiction,
+        "total_turns": len(steps),
+        "drift_flagged_turns": len(drift_flags),
+        "bdi_peak": round(max(bdi_scores), 4) if bdi_scores else None,
+        "bdi_start": round(bdi_scores[0], 4) if bdi_scores else None,
+        "bdi_end": round(bdi_scores[-1], 4) if bdi_scores else None,
+        "bdi_trajectory": bdi_trajectory,
+        "entropy_peak": round(max(entropies), 4) if entropies else None,
+        "entropy_avg": round(sum(entropies) / len(entropies), 4) if entropies else None,
+        "hash_chain_intact": all(s["chain_intact"] for s in steps),
+        "first_event_at": steps[0]["timestamp"] if steps else None,
+        "last_event_at": steps[-1]["timestamp"] if steps else None,
+        "_readonly": True,
+        "_isolation": "org_scoped — cross-org replay blocked at DB query level",
+    }
+    if raw:
+        return {"summary": summary, "events_raw": events}
+    return {"summary": summary, "action_chain": steps}
+
+
+@app.post("/replay/{session_id}/mark-reviewed")
+async def mark_replay_session_reviewed(
+    session_id: str,
+    request: Request,
+    reviewed_by: str = Body("dashboard", embed=True),
+    notes: str = Body("", embed=True),
+):
+    org_id = get_org_from_request(request)
+    from audit import mark_replay_reviewed
+    success = await mark_replay_reviewed(
+        session_id=session_id,
+        org_id=org_id,
+        reviewed_by=reviewed_by,
+        notes=notes,
+    )
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to mark session as reviewed.")
+    return {
+        "status": "reviewed",
+        "session_id": session_id,
+        "org_id": org_id,
+        "reviewed_by": reviewed_by,
+        "notes": notes,
+    }
