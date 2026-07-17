@@ -706,3 +706,132 @@ class SupabaseAuditClient:
 
 
 supabase_audit_client = SupabaseAuditClient(SUPABASE_URL, SUPABASE_KEY)
+
+
+# ── Phase 12: Replay Sessions ────────────────────────────────
+
+async def flag_session_for_replay(
+    session_id: str,
+    org_id: str,
+    trigger_reason: str = "manual",
+    flagged_by: str = "system",
+) -> dict:
+    if not supabase_audit_client.configured:
+        return {}
+    row = {
+        "session_id": session_id,
+        "org_id": org_id,
+        "flagged_by": flagged_by,
+        "trigger_reason": trigger_reason,
+        "status": "pending",
+        "flagged_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+            response = await client.post(
+                f"{supabase_audit_client.url}/rest/v1/replay_sessions",
+                headers={
+                    "apikey": supabase_audit_client.key or "",
+                    "authorization": f"Bearer {supabase_audit_client.key}",
+                    "content-type": "application/json",
+                    "prefer": "return=representation",
+                },
+                json=row,
+            )
+            if response.status_code in (200, 201):
+                data = response.json()
+                return data[0] if data else row
+            return {}
+    except Exception as e:
+        logger.error(f"flag_session_for_replay error: {e}")
+        return {}
+
+
+async def get_replay_sessions(org_id: str, status: str = None) -> list:
+    if not supabase_audit_client.configured:
+        return []
+    params = {
+        "org_id": f"eq.{org_id}",
+        "order": "flagged_at.desc",
+        "limit": "100",
+        "select": "*",
+    }
+    if status:
+        params["status"] = f"eq.{status}"
+    try:
+        async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+            response = await client.get(
+                f"{supabase_audit_client.url}/rest/v1/replay_sessions",
+                headers={
+                    "apikey": supabase_audit_client.key or "",
+                    "authorization": f"Bearer {supabase_audit_client.key}",
+                },
+                params=params,
+            )
+            return response.json() if response.status_code == 200 else []
+    except Exception as e:
+        logger.error(f"get_replay_sessions error: {e}")
+        return []
+
+
+async def get_replay_session_events(session_id: str, org_id: str) -> list:
+    if not supabase_audit_client.configured:
+        return []
+    try:
+        async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+            response = await client.get(
+                f"{supabase_audit_client.url}/rest/v1/ai_events",
+                headers={
+                    "apikey": supabase_audit_client.key or "",
+                    "authorization": f"Bearer {supabase_audit_client.key}",
+                },
+                params={
+                    "session_id": f"eq.{session_id}",
+                    "org_id": f"eq.{org_id}",
+                    "order": "timestamp.asc",
+                    "select": (
+                        "event_id,timestamp,agent_id,session_id,org_id,"
+                        "action,bdi_score,entropy,status,jurisdiction,"
+                        "input_text,output_text,metadata,prev_hash,row_hash"
+                    ),
+                },
+            )
+            return response.json() if response.status_code == 200 else []
+    except Exception as e:
+        logger.error(f"get_replay_session_events error: {e}")
+        return []
+
+
+async def mark_replay_reviewed(
+    session_id: str,
+    org_id: str,
+    reviewed_by: str = "dashboard",
+    notes: str = "",
+) -> bool:
+    if not supabase_audit_client.configured:
+        return False
+    try:
+        async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+            response = await client.patch(
+                f"{supabase_audit_client.url}/rest/v1/replay_sessions",
+                headers={
+                    "apikey": supabase_audit_client.key or "",
+                    "authorization": f"Bearer {supabase_audit_client.key}",
+                    "content-type": "application/json",
+                },
+                params={
+                    "session_id": f"eq.{session_id}",
+                    "org_id": f"eq.{org_id}",
+                },
+                json={
+                    "status": "reviewed",
+                    "reviewed_at": datetime.now(timezone.utc).isoformat(),
+                    "reviewed_by": reviewed_by,
+                    "notes": notes,
+                },
+            )
+            return response.status_code in (200, 204)
+    except Exception as e:
+        logger.error(f"mark_replay_reviewed error: {e}")
+        return False
