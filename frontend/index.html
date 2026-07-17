@@ -1325,12 +1325,12 @@ async function load(){
   }
 }
 
-// Default the date filter to today on first load
+// Date filter defaults to empty — show all events on load
 window.addEventListener('DOMContentLoaded',function(){
-  const today=new Date().toISOString().slice(0,10);
-  dateFrom=today;
+  dateFrom=''; dateTo='';
   const df=document.getElementById('date-from');
-  if(df)df.value=today;
+  const dt=document.getElementById('date-to');
+  if(df)df.value=''; if(dt)dt.value='';
 });
 
 /* SHARE VIEWER LINK */
