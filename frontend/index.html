@@ -1326,11 +1326,11 @@ async function load(){
 }
 
 // Date filter defaults to empty — show all events on load
-window.addEventListener('DOMContentLoaded',function(){
-  dateFrom=''; dateTo='';
-  const df=document.getElementById('date-from');
-  const dt=document.getElementById('date-to');
-  if(df)df.value=''; if(dt)dt.value='';
+window.addEventListener('DOMContentLoaded', function() {
+    const today = new Date().toISOString().slice(0, 10);
+    dateFrom = today;
+    const df = document.getElementById('date-from');
+    if (df) df.value = today;
 });
 
 /* SHARE VIEWER LINK */
