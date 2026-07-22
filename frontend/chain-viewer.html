@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Pulse — Event Chain Viewer</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@300;400;500;600&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#080c14;--bg2:#0d1117;--bg3:#111827;--bg4:#1a2235;--bg5:#1f2a3d;
+  --border:#1e2d45;--border2:#253550;
+  --text:#e2e8f0;--muted:#64748b;--muted2:#475569;
+  --accent:#00d4ff;
+  --ok:#10b981;--warn:#f59e0b;--danger:#ef4444;--critical:#ff6b35;
+}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);height:100vh;overflow:hidden;display:flex;flex-direction:column}
+
+/* ── TOPBAR ── */
+.topbar{height:46px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 18px;gap:14px;flex-shrink:0;z-index:10}
+.topbar-logo{width:26px;height:26px;background:var(--accent);border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;color:#000}
+.topbar-title{font-size:13px;font-weight:600;color:var(--text)}
+.topbar-sub{font-size:11px;color:var(--muted)}
+.topbar-back{margin-left:auto;background:var(--bg4);border:1px solid var(--border);border-radius:5px;padding:4px 10px;color:var(--muted);cursor:pointer;font-size:10px;font-family:'Inter',sans-serif;transition:all 0.12s;text-decoration:none;display:flex;align-items:center;gap:5px}
+.topbar-back:hover{color:var(--accent);border-color:rgba(0,212,255,0.3)}
+
+/* ── LAYOUT ── */
+.main{flex:1;display:flex;overflow:hidden}
+#canvas-wrap{flex:1;position:relative;cursor:grab}
+#canvas-wrap:active{cursor:grabbing}
+#canvas-wrap canvas{display:block}
+
+/* ── SIDE PANEL ── */
+.side{width:280px;background:var(--bg2);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;flex-shrink:0}
+.side-hdr{padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+.side-hdr-title{font-size:10px;text-transform:uppercase;letter-spacing:0.09em;color:var(--muted);font-weight:600;margin-bottom:3px}
+.side-hdr-val{font-size:14px;font-weight:600;color:var(--text)}
+.side-body{flex:1;overflow-y:auto;padding:14px}
+.side-body::-webkit-scrollbar{width:3px}
+.side-body::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.side-sec{margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border)}
+.side-sec:last-child{border-bottom:none}
+.side-sec-title{font-size:9px;text-transform:uppercase;letter-spacing:0.09em;color:var(--muted);font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:5px}
+.side-sec-title::before{content:'';width:4px;height:4px;border-radius:50%;background:var(--accent);display:inline-block}
+.kv{display:flex;justify-content:space-between;align-items:flex-start;padding:4px 0;border-bottom:1px solid rgba(30,45,69,0.4);font-size:10px}
+.kv:last-child{border-bottom:none}
+.kv-key{color:var(--muted)}
+.kv-val{color:var(--text);font-family:'JetBrains Mono',monospace;font-size:10px;text-align:right;max-width:160px;word-break:break-all}
+.badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:999px;font-size:9px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase}
+.badge.critical{background:rgba(255,107,53,0.12);color:#ff6b35;border:1px solid rgba(255,107,53,0.3)}
+.badge.elevated{background:rgba(245,158,11,0.1);color:#f59e0b;border:1px solid rgba(245,158,11,0.25)}
+.badge.stable{background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.25)}
+.policy-row{padding:7px 10px;border-radius:7px;margin-bottom:5px;border:1px solid transparent}
+.policy-row.MY{background:rgba(255,107,53,0.06);border-color:rgba(255,107,53,0.25)}
+.policy-row.SG{background:rgba(14,165,233,0.06);border-color:rgba(14,165,233,0.25)}
+.policy-row.VN{background:rgba(16,185,129,0.06);border-color:rgba(16,185,129,0.25)}
+.policy-row.ORG{background:rgba(139,92,246,0.06);border-color:rgba(139,92,246,0.25)}
+.policy-jur{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:2px}
+.policy-clause{font-size:10px;color:var(--muted)}
+.policy-jur.MY{color:#ff6b35}.policy-jur.SG{color:#0ea5e9}.policy-jur.VN{color:#10b981}.policy-jur.ORG{color:#a78bfa}
+.node-detail{background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:6px;cursor:pointer;transition:all 0.12s}
+.node-detail:hover{border-color:var(--accent)}
+.node-detail.selected{border-color:var(--accent);background:rgba(0,212,255,0.06)}
+.node-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;display:inline-block;margin-right:6px}
+.hint{font-size:10px;color:var(--muted2);text-align:center;padding:20px;line-height:1.6}
+
+/* ── CONTROLS OVERLAY ── */
+.controls{position:absolute;bottom:16px;left:16px;display:flex;flex-direction:column;gap:6px;z-index:5}
+.ctrl-btn{width:32px;height:32px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);font-size:14px;transition:all 0.12s;user-select:none}
+.ctrl-btn:hover{color:var(--accent);border-color:rgba(0,212,255,0.3)}
+.ctrl-hint{position:absolute;bottom:16px;right:16px;font-size:9px;color:var(--muted2);text-align:right;line-height:1.8;pointer-events:none}
+
+/* ── LOADING ── */
+#loading{position:absolute;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:20}
+.spin{width:20px;height:20px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#no-data{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-logo">P</div>
+  <div class="topbar-title">Event Chain Viewer</div>
+  <div class="topbar-sub" id="tb-sub">Loading…</div>
+  <a class="topbar-back" href="javascript:window.close()">← Close</a>
+</div>
+
+<div class="main">
+  <div id="canvas-wrap">
+    <div id="loading">
+      <div class="spin"></div>
+      <div style="font-size:12px;color:var(--muted)">Building 3D graph…</div>
+    </div>
+    <div id="no-data">
+      <div style="font-size:28px;opacity:0.3">⬡</div>
+      <div style="font-size:13px">No event data found.</div>
+      <div style="font-size:11px;margin-top:4px">Open this page from the dashboard chain panel.</div>
+    </div>
+    <div class="controls">
+      <div class="ctrl-btn" id="btn-reset" title="Reset camera">⊙</div>
+      <div class="ctrl-btn" id="btn-zoom-in" title="Zoom in">+</div>
+      <div class="ctrl-btn" id="btn-zoom-out" title="Zoom out">−</div>
+    </div>
+    <div class="ctrl-hint">Drag to rotate · Scroll to zoom · Click node to inspect</div>
+  </div>
+
+  <div class="side">
+    <div class="side-hdr">
+      <div class="side-hdr-title">Selected Node</div>
+      <div class="side-hdr-val" id="sel-title">Click a node to inspect</div>
+    </div>
+    <div class="side-body" id="side-body">
+      <div class="hint">Click any node in the 3D graph to see its details here.</div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ── POLICY DEFINITIONS ──
+const POLICY_CLAUSES = {
+  MY:  { label: 'PDPA MY',        clause: 'Art. 7 — Breach Notification',    color: '#ff6b35' },
+  SG:  { label: 'SGP MGF',        clause: 'Clause 2.5 — Incident Disclosure', color: '#0ea5e9' },
+  VN:  { label: 'VN AI Law',      clause: 'Sec. 12 — AI Incident Report',     color: '#10b981' },
+  ORG: { label: 'Company Policy', clause: 'Custom Rule — Data Policy',         color: '#a78bfa' }
+};
+
+// ── LOAD EVENT DATA FROM localStorage ──
+let eventData = null;
+try {
+  const raw = localStorage.getItem('pulse_chain_event');
+  if (raw) eventData = JSON.parse(raw);
+} catch(_) {}
+
+if (!eventData) {
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('no-data').style.display = 'flex';
+} else {
+  initScene(eventData);
+}
+
+function sev(bd, en) {
+  if (en >= 0.7 || bd >= 0.65) return 'critical';
+  if (en >= 0.4 || bd >= 0.35) return 'elevated';
+  return 'stable';
+}
+
+function detectJurisdictions(data) {
+  const jurs = [], s = sev(data.bdi_score || 0, data.entropy || 0);
+  const isExfil = data.is_exfiltration || false;
+  const text = (data.text || '').toLowerCase();
+  if (isExfil || s === 'critical') jurs.push('MY');
+  if (s === 'critical' || s === 'elevated') jurs.push('SG');
+  if (s === 'critical') jurs.push('VN');
+  if (text.includes('email') || text.includes('customer_id') || text.includes('phone') || text.includes('policy')) jurs.push('ORG');
+  if (!jurs.length) jurs.push('SG');
+  return [...new Set(jurs)];
+}
+
+function getActions(data) {
+  const actions = [], s = sev(data.bdi_score || 0, data.entropy || 0), isExfil = data.is_exfiltration || false;
+  if (isExfil || s === 'critical') actions.push({ label: 'Legal Hold',      color: '#ef4444', icon: '🔒' });
+  if (s === 'critical' || isExfil) actions.push({ label: 'Webhook',         color: '#f59e0b', icon: '📡' });
+  if (s === 'critical')            actions.push({ label: 'Agent Isolated',   color: '#ff6b35', icon: '⊘' });
+  if (isExfil)                     actions.push({ label: 'Incident Report',  color: '#00d4ff', icon: '📄' });
+  if (!actions.length)             actions.push({ label: 'Allowed',          color: '#10b981', icon: '✓' });
+  return actions;
+}
+
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1,3),16)/255;
+  const g = parseInt(hex.slice(3,5),16)/255;
+  const b = parseInt(hex.slice(5,7),16)/255;
+  return { r, g, b };
+}
+
+function colorToThree(hex) {
+  return new THREE.Color(hex);
+}
+
+// ── THREE.JS SCENE ──
+function initScene(data) {
+  const wrap = document.getElementById('canvas-wrap');
+  const W = wrap.clientWidth, H = wrap.clientHeight;
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setSize(W, H);
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setClearColor(0x080c14, 1);
+  wrap.appendChild(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(55, W / H, 0.1, 1000);
+  camera.position.set(0, 0, 14);
+
+  // Ambient + point lights
+  scene.add(new THREE.AmbientLight(0xffffff, 0.3));
+  const pLight = new THREE.PointLight(0x00d4ff, 1.2, 40);
+  pLight.position.set(0, 5, 8);
+  scene.add(pLight);
+
+  // ── BUILD GRAPH NODES ──
+  const severity = sev(data.bdi_score || 0, data.entropy || 0);
+  const isViolation = severity === 'critical' || severity === 'elevated' || data.is_exfiltration;
+  const jurs = detectJurisdictions(data);
+  const actions = getActions(data);
+  const evColor = severity === 'critical' ? '#ff6b35' : severity === 'elevated' ? '#f59e0b' : '#10b981';
+
+  const nodeObjects = []; // {mesh, label, data, glowMesh}
+  const edges = [];       // {from, to, color}
+
+  function makeNode({ pos, radius, color, emissive, label, sublabel, nodeData, violated }) {
+    const geo = new THREE.SphereGeometry(radius, 32, 32);
+    const rgb = hexToRgb(color);
+    const mat = new THREE.MeshPhongMaterial({
+      color: colorToThree(color),
+      emissive: colorToThree(emissive || color),
+      emissiveIntensity: violated ? 0.45 : 0.12,
+      transparent: true,
+      opacity: violated ? 0.95 : 0.82,
+      shininess: 80
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(...pos);
+    scene.add(mesh);
+
+    // Glow halo for violated nodes
+    let glowMesh = null;
+    if (violated) {
+      const glowGeo = new THREE.SphereGeometry(radius * 1.55, 24, 24);
+      const glowMat = new THREE.MeshBasicMaterial({
+        color: colorToThree(color),
+        transparent: true,
+        opacity: 0.08,
+        side: THREE.BackSide
+      });
+      glowMesh = new THREE.Mesh(glowGeo, glowMat);
+      glowMesh.position.set(...pos);
+      scene.add(glowMesh);
+    }
+
+    nodeObjects.push({ mesh, glowMesh, label, sublabel, nodeData, violated, color, radius });
+    return mesh;
+  }
+
+  function makeEdge(fromMesh, toMesh, color, dashed = false) {
+    const from = fromMesh.position, to = toMesh.position;
+    const points = [new THREE.Vector3(from.x, from.y, from.z), new THREE.Vector3(to.x, to.y, to.z)];
+    const geo = new THREE.BufferGeometry().setFromPoints(points);
+    const mat = new THREE.LineBasicMaterial({ color: colorToThree(color), transparent: true, opacity: dashed ? 0.35 : 0.55 });
+    const line = new THREE.Line(geo, mat);
+    scene.add(line);
+    edges.push(line);
+
+    // Arrow tip
+    const dir = new THREE.Vector3().subVectors(to, from).normalize();
+    const arrowHelper = new THREE.ArrowHelper(dir, from, from.distanceTo(to) - toMesh.geometry.parameters.radius - 0.1, colorToThree(color), 0.4, 0.22);
+    arrowHelper.line.material.transparent = true;
+    arrowHelper.line.material.opacity = 0;
+    arrowHelper.cone.material.transparent = true;
+    arrowHelper.cone.material.opacity = dashed ? 0.3 : 0.6;
+    scene.add(arrowHelper);
+  }
+
+  // Agent node — top center
+  const agentMesh = makeNode({
+    pos: [0, 4.5, 0], radius: 0.7,
+    color: '#00d4ff', emissive: '#00d4ff',
+    label: data.agent_id || 'unknown',
+    sublabel: 'AI Agent',
+    nodeData: { type: 'agent', agent_id: data.agent_id, session_id: data.session_id },
+    violated: false
+  });
+
+  // Event node — center
+  const evRadius = isViolation ? 1.0 : 0.75;
+  const eventMesh = makeNode({
+    pos: [0, 0, 0], radius: evRadius,
+    color: evColor, emissive: evColor,
+    label: data.event_id || 'EV-????',
+    sublabel: `BDI ${Math.round((data.bdi_score||0)*100)}% · E${(data.entropy||0).toFixed(2)}`,
+    nodeData: { type: 'event', ...data },
+    violated: isViolation
+  });
+  makeEdge(agentMesh, eventMesh, isViolation ? evColor : '#253550');
+
+  // Action nodes — arc below event
+  const actSpread = Math.min(3.2, actions.length * 1.1);
+  actions.forEach((act, i) => {
+    const t = actions.length === 1 ? 0 : (i / (actions.length - 1)) - 0.5;
+    const ax = t * actSpread * 2;
+    const ay = -3.8;
+    const az = (Math.abs(t) * 0.8);
+    const aMesh = makeNode({
+      pos: [ax, ay, az], radius: 0.5,
+      color: act.color, emissive: act.color,
+      label: act.label, sublabel: act.icon,
+      nodeData: { type: 'action', label: act.label, color: act.color },
+      violated: false
+    });
+    makeEdge(eventMesh, aMesh, act.color);
+  });
+
+  // Jurisdiction satellite nodes — orbit around event in 3D
+  if (isViolation && jurs.length > 0) {
+    const orbitR = 3.2;
+    jurs.forEach((jur, i) => {
+      const pc = POLICY_CLAUSES[jur];
+      if (!pc) return;
+      const angle = (i / jurs.length) * Math.PI * 2 - Math.PI / 2;
+      const jx = Math.cos(angle) * orbitR;
+      const jy = Math.sin(angle) * orbitR * 0.5;
+      const jz = Math.sin(angle) * orbitR * 0.6;
+      const jMesh = makeNode({
+        pos: [jx, jy, jz], radius: 0.42,
+        color: pc.color, emissive: pc.color,
+        label: pc.label, sublabel: pc.clause,
+        nodeData: { type: 'jurisdiction', jur, ...pc },
+        violated: true
+      });
+      makeEdge(eventMesh, jMesh, pc.color, true);
+    });
+  }
+
+  // Particle field (background stars)
+  const starGeo = new THREE.BufferGeometry();
+  const starVerts = [];
+  for (let i = 0; i < 600; i++) {
+    starVerts.push((Math.random() - 0.5) * 80, (Math.random() - 0.5) * 80, (Math.random() - 0.5) * 80);
+  }
+  starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starVerts, 3));
+  const starMat = new THREE.PointsMaterial({ color: 0x1e2d45, size: 0.12 });
+  scene.add(new THREE.Points(starGeo, starMat));
+
+  // Update topbar
+  document.getElementById('tb-sub').textContent = `${data.event_id || '—'} · ${severity.toUpperCase()} · ${data.agent_id || '—'}`;
+
+  // Build side panel summary
+  buildSidePanel(data, severity, jurs, actions, isViolation);
+  document.getElementById('loading').style.display = 'none';
+
+  // ── ORBIT CONTROLS (manual) ──
+  let isDragging = false, prevMouse = { x: 0, y: 0 };
+  let theta = 0, phi = Math.PI / 2, radius3d = 14;
+  const target = new THREE.Vector3(0, 0, 0);
+  const MIN_R = 5, MAX_R = 30;
+
+  function updateCamera() {
+    camera.position.x = target.x + radius3d * Math.sin(phi) * Math.sin(theta);
+    camera.position.y = target.y + radius3d * Math.cos(phi);
+    camera.position.z = target.z + radius3d * Math.sin(phi) * Math.cos(theta);
+    camera.lookAt(target);
+  }
+  updateCamera();
+
+  wrap.addEventListener('mousedown', e => { isDragging = true; prevMouse = { x: e.clientX, y: e.clientY }; });
+  window.addEventListener('mouseup', () => { isDragging = false; });
+  window.addEventListener('mousemove', e => {
+    if (!isDragging) return;
+    const dx = e.clientX - prevMouse.x, dy = e.clientY - prevMouse.y;
+    theta -= dx * 0.008;
+    phi = Math.max(0.15, Math.min(Math.PI - 0.15, phi + dy * 0.008));
+    prevMouse = { x: e.clientX, y: e.clientY };
+    updateCamera();
+  });
+  wrap.addEventListener('wheel', e => {
+    e.preventDefault();
+    radius3d = Math.max(MIN_R, Math.min(MAX_R, radius3d + e.deltaY * 0.018));
+    updateCamera();
+  }, { passive: false });
+
+  // Touch support
+  let lastTouch = null;
+  wrap.addEventListener('touchstart', e => { lastTouch = e.touches[0]; });
+  wrap.addEventListener('touchmove', e => {
+    if (!lastTouch) return;
+    const t = e.touches[0];
+    const dx = t.clientX - lastTouch.clientX, dy = t.clientY - lastTouch.clientY;
+    theta -= dx * 0.01; phi = Math.max(0.15, Math.min(Math.PI - 0.15, phi + dy * 0.01));
+    lastTouch = t; updateCamera(); e.preventDefault();
+  }, { passive: false });
+
+  // Control buttons
+  document.getElementById('btn-reset').addEventListener('click', () => {
+    theta = 0; phi = Math.PI / 2; radius3d = 14; updateCamera();
+  });
+  document.getElementById('btn-zoom-in').addEventListener('click', () => {
+    radius3d = Math.max(MIN_R, radius3d - 2); updateCamera();
+  });
+  document.getElementById('btn-zoom-out').addEventListener('click', () => {
+    radius3d = Math.min(MAX_R, radius3d + 2); updateCamera();
+  });
+
+  // ── RAYCASTING (node click) ──
+  const raycaster = new THREE.Raycaster();
+  const mouse = new THREE.Vector2();
+  let selectedNode = null;
+
+  wrap.addEventListener('click', e => {
+    const rect = wrap.getBoundingClientRect();
+    mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+    const meshes = nodeObjects.map(n => n.mesh);
+    const hits = raycaster.intersectObjects(meshes);
+    if (hits.length) {
+      const hit = hits[0].object;
+      const node = nodeObjects.find(n => n.mesh === hit);
+      if (node) selectNode(node);
+    }
+  });
+
+  function selectNode(node) {
+    // Reset previous
+    nodeObjects.forEach(n => {
+      n.mesh.material.emissiveIntensity = n.violated ? 0.45 : 0.12;
+    });
+    // Highlight selected
+    node.mesh.material.emissiveIntensity = 0.75;
+    selectedNode = node;
+    showNodeDetail(node);
+  }
+
+  function showNodeDetail(node) {
+    document.getElementById('sel-title').textContent = node.label;
+    const d = node.nodeData;
+    let html = '';
+
+    if (d.type === 'agent') {
+      html += `<div class="side-sec">
+        <div class="side-sec-title">Agent Identity</div>
+        <div class="kv"><span class="kv-key">Agent ID</span><span class="kv-val">${d.agent_id || '—'}</span></div>
+        <div class="kv"><span class="kv-key">Session</span><span class="kv-val">${(d.session_id||'—').slice(0,20)}…</span></div>
+      </div>`;
+    } else if (d.type === 'event') {
+      const s = sev(d.bdi_score||0, d.entropy||0);
+      html += `<div class="side-sec">
+        <div class="side-sec-title">Event Details</div>
+        <div class="kv"><span class="kv-key">Event ID</span><span class="kv-val" style="color:var(--accent)">${d.event_id||'—'}</span></div>
+        <div class="kv"><span class="kv-key">Severity</span><span class="kv-val"><span class="badge ${s}">${s}</span></span></div>
+        <div class="kv"><span class="kv-key">BDI Score</span><span class="kv-val" style="color:${s==='critical'?'var(--danger)':s==='elevated'?'var(--warn)':'var(--ok)'}">${Math.round((d.bdi_score||0)*100)}%</span></div>
+        <div class="kv"><span class="kv-key">Entropy</span><span class="kv-val">${(d.entropy||0).toFixed(3)}</span></div>
+        <div class="kv"><span class="kv-key">Exfiltration</span><span class="kv-val" style="color:${d.is_exfiltration?'var(--danger)':'var(--ok)'}">${d.is_exfiltration?'DETECTED':'None'}</span></div>
+      </div>`;
+      if (d.text) {
+        html += `<div class="side-sec">
+          <div class="side-sec-title">Event Text</div>
+          <div style="font-size:10px;color:var(--muted);line-height:1.5">${d.text.slice(0,200)}${d.text.length>200?'…':''}</div>
+        </div>`;
+      }
+    } else if (d.type === 'jurisdiction') {
+      html += `<div class="side-sec">
+        <div class="side-sec-title">Policy Violation</div>
+        <div class="policy-row ${d.jur}">
+          <div class="policy-jur ${d.jur}">${d.label}</div>
+          <div class="policy-clause">${d.clause}</div>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-top:8px;line-height:1.5">This jurisdiction was triggered by the event's severity and data exposure pattern.</div>
+      </div>`;
+    } else if (d.type === 'action') {
+      html += `<div class="side-sec">
+        <div class="side-sec-title">Enforcement Action</div>
+        <div class="kv"><span class="kv-key">Action</span><span class="kv-val" style="color:${d.color}">${d.label}</span></div>
+        <div style="font-size:10px;color:var(--muted);margin-top:8px;line-height:1.5">Auto-triggered by Pulse governance engine on breach detection.</div>
+      </div>`;
+    }
+
+    document.getElementById('side-body').innerHTML = html || '<div class="hint">No details available.</div>';
+  }
+
+  // ── ANIMATE ──
+  let t = 0;
+  function animate() {
+    requestAnimationFrame(animate);
+    t += 0.012;
+
+    // Pulse glow on violated nodes
+    nodeObjects.forEach(n => {
+      if (n.violated && n.glowMesh) {
+        const pulse = 0.06 + Math.sin(t * 1.8) * 0.04;
+        n.glowMesh.material.opacity = pulse;
+        n.mesh.material.emissiveIntensity = (selectedNode === n ? 0.75 : 0.45) + Math.sin(t * 2) * 0.06;
+      }
+    });
+
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  // Resize
+  window.addEventListener('resize', () => {
+    const W = wrap.clientWidth, H = wrap.clientHeight;
+    camera.aspect = W / H;
+    camera.updateProjectionMatrix();
+    renderer.setSize(W, H);
+  });
+}
+
+// ── SIDE PANEL SUMMARY (non-selected state) ──
+function buildSidePanel(data, severity, jurs, actions, isViolation) {
+  const agentId = data.agent_id || 'unknown';
+  const bd = data.bdi_score || 0, en = data.entropy || 0;
+
+  let html = `<div class="side-sec">
+    <div class="side-sec-title">Event Summary</div>
+    <div class="kv"><span class="kv-key">Event</span><span class="kv-val" style="color:var(--accent)">${data.event_id||'—'}</span></div>
+    <div class="kv"><span class="kv-key">Agent</span><span class="kv-val">${agentId}</span></div>
+    <div class="kv"><span class="kv-key">Severity</span><span class="kv-val"><span class="badge ${severity}">${severity}</span></span></div>
+    <div class="kv"><span class="kv-key">BDI</span><span class="kv-val">${Math.round(bd*100)}%</span></div>
+    <div class="kv"><span class="kv-key">Entropy</span><span class="kv-val">${en.toFixed(3)}</span></div>
+  </div>`;
+
+  if (isViolation && jurs.length) {
+    html += `<div class="side-sec"><div class="side-sec-title">Policies Violated</div>`;
+    jurs.forEach(jur => {
+      const pc = POLICY_CLAUSES[jur];
+      if (!pc) return;
+      html += `<div class="policy-row ${jur}">
+        <div class="policy-jur ${jur}">${pc.label}</div>
+        <div class="policy-clause">${pc.clause}</div>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+
+  html += `<div class="side-sec"><div class="side-sec-title">Enforcement Chain</div>`;
+  actions.forEach(act => {
+    html += `<div class="kv"><span class="kv-key">${act.icon} ${act.label}</span><span class="kv-val" style="color:${act.color}">auto-triggered</span></div>`;
+  });
+  html += `</div>`;
+
+  html += `<div class="side-sec" style="border-bottom:none">
+    <div class="side-sec-title">Navigation</div>
+    <div style="font-size:10px;color:var(--muted2);line-height:1.8">
+      🖱 Drag — Orbit<br>
+      ⚲ Scroll — Zoom<br>
+      ↙ Click node — Inspect<br>
+      ⊙ Reset — Reset camera
+    </div>
+  </div>`;
+
+  document.getElementById('side-body').innerHTML = html;
+}
+</script>
+</body>
+</html>
