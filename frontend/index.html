@@ -195,32 +195,29 @@ svg.hm{width:100%;height:55px}
 .act-full.act-chain:hover{background:rgba(0,212,255,0.1)}
 .act-full.act-chain.active{border-color:var(--accent);background:rgba(0,212,255,0.12);color:var(--accent)}
 
-/* ── PHASE 13: CHAIN PANEL ── */
+/* ── PHASE 13: CHAIN PANEL (SVG NETWORK GRAPH) ── */
 .chain-panel{width:0;overflow:hidden;border-left:1px solid var(--border);display:flex;flex-direction:column;transition:width 0.25s ease;flex-shrink:0;background:var(--bg2)}
-.chain-panel.open{width:390px;overflow-y:hidden}
+.chain-panel.open{width:420px;overflow-y:hidden}
 .chain-hdr{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
 .chain-hdr-title{font-size:10px;text-transform:uppercase;letter-spacing:0.09em;color:var(--muted);font-weight:600;display:flex;align-items:center;gap:5px}
 .chain-hdr-title::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--accent);display:inline-block}
-.chain-body{flex:1;overflow-y:auto;padding:14px;min-height:0}
+.chain-body{flex:1;overflow-y:auto;padding:0;min-height:0;display:flex;flex-direction:column}
 .chain-body::-webkit-scrollbar{width:3px}
 .chain-body::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
-.jur-badge{display:inline-flex;align-items:center;padding:1px 6px;border-radius:999px;font-size:8px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase}
-.jur-MY{background:rgba(255,107,53,0.15);color:#ff6b35;border:1px solid rgba(255,107,53,0.35)}
-.jur-SG{background:rgba(14,165,233,0.15);color:#0ea5e9;border:1px solid rgba(14,165,233,0.35)}
-.jur-VN{background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.35)}
-.jur-ORG{background:rgba(139,92,246,0.15);color:#a78bfa;border:1px solid rgba(139,92,246,0.35)}
-.chain-node{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:4px}
-.chain-node.node-critical{border-color:rgba(255,107,53,0.4);background:rgba(255,107,53,0.05)}
-.chain-node.node-elevated{border-color:rgba(245,158,11,0.3);background:rgba(245,158,11,0.04)}
-.chain-node.node-stable{border-color:rgba(16,185,129,0.2);background:rgba(16,185,129,0.03)}
-.chain-node.node-action{border-color:rgba(139,92,246,0.3);background:rgba(139,92,246,0.05)}
-.chain-node.node-agent{border-color:rgba(0,212,255,0.25);background:rgba(0,212,255,0.04)}
-.chain-edge{display:flex;align-items:center;justify-content:center;height:22px;position:relative}
-.chain-edge::before{content:'';position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--border2)}
-.chain-edge-arrow{width:18px;height:18px;border-radius:50%;background:var(--bg4);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--muted);z-index:1;position:relative}
-.chain-legend{display:flex;flex-wrap:wrap;gap:6px;padding:10px 12px;background:var(--bg4);border:1px solid var(--border);border-radius:7px;margin-bottom:12px}
-.chain-legend-item{display:flex;align-items:center;gap:4px;font-size:9px;color:var(--muted)}
-.chain-legend-dot{width:6px;height:6px;border-radius:50%}
+.chain-svg-wrap{flex:1;position:relative;min-height:320px}
+.chain-svg-wrap svg{width:100%;height:100%;position:absolute;inset:0}
+.chain-meta{padding:12px 14px;border-top:1px solid var(--border);flex-shrink:0;background:var(--bg3)}
+.chain-meta-row{display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap}
+.chain-meta-row:last-child{margin-bottom:0}
+.chain-pill{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;font-size:9px;font-weight:700;letter-spacing:0.04em}
+.chain-pill-MY{background:rgba(255,107,53,0.15);color:#ff6b35;border:1px solid rgba(255,107,53,0.4)}
+.chain-pill-SG{background:rgba(14,165,233,0.15);color:#0ea5e9;border:1px solid rgba(14,165,233,0.4)}
+.chain-pill-VN{background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.4)}
+.chain-pill-ORG{background:rgba(139,92,246,0.15);color:#a78bfa;border:1px solid rgba(139,92,246,0.4)}
+.chain-lineage{padding:10px 14px;border-top:1px solid var(--border);flex-shrink:0}
+.chain-lineage-title{font-size:9px;text-transform:uppercase;letter-spacing:0.09em;color:var(--muted);font-weight:600;margin-bottom:7px}
+.chain-turn{display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid rgba(30,45,69,0.3)}
+.chain-turn:last-child{border-bottom:none}
 
 /* AGENT CARDS */
 .agent-card{background:var(--bg3);border:1px solid var(--border);border-radius:9px;margin-bottom:8px;overflow:hidden}
@@ -840,6 +837,14 @@ function closeChainView() {
   if (btn) { btn.textContent = '⬡ View Event Chain'; btn.classList.remove('active'); }
 }
 
+/* ── PHASE 13: POLICY VIOLATION MAP ── */
+const POLICY_CLAUSES = {
+  MY: { label: 'PDPA MY', clause: 'Art. 7 — Breach Notification', color: '#ff6b35', glow: 'rgba(255,107,53,0.4)' },
+  SG: { label: 'SGP MGF', clause: 'Clause 2.5 — Incident Disclosure', color: '#0ea5e9', glow: 'rgba(14,165,233,0.4)' },
+  VN: { label: 'VN AI Law', clause: 'Sec. 12 — AI Incident Report', color: '#10b981', glow: 'rgba(16,185,129,0.4)' },
+  ORG: { label: 'Company Policy', clause: 'Custom Rule — Data Policy', color: '#a78bfa', glow: 'rgba(139,92,246,0.4)' }
+};
+
 function detectJurisdictions(e) {
   const jurs = [], s = sev(e), isExfil = isExfiltration(e), text = (e.text || '').toLowerCase();
   if (isExfil || s === 'critical') jurs.push('MY');
@@ -850,24 +855,82 @@ function detectJurisdictions(e) {
   return [...new Set(jurs)];
 }
 
-function jurLabel(code) {
-  return { MY: 'PDPA MY', SG: 'SGP MGF', VN: 'VN AI Law', ORG: 'Company Policy' }[code] || code;
-}
-
-function nodeClass(s) {
-  if (s === 'critical') return 'node-critical';
-  if (s === 'elevated') return 'node-elevated';
-  return 'node-stable';
-}
-
 function chainActions(e) {
   const actions = [], s = sev(e), isExfil = isExfiltration(e);
-  if (isExfil || s === 'critical') actions.push({ icon: '🔒', label: 'Legal Hold Opened', color: 'var(--danger)' });
-  if (s === 'critical' || isExfil) actions.push({ icon: '📡', label: 'Webhook Fired', color: 'var(--warn)' });
-  if (s === 'critical') actions.push({ icon: '⊘', label: 'Agent Isolated', color: 'var(--critical)' });
-  if (isExfil) actions.push({ icon: '📄', label: 'Incident Report Generated', color: 'var(--accent)' });
-  if (!actions.length) actions.push({ icon: '✓', label: 'Request Allowed — No Action', color: 'var(--ok)' });
+  if (isExfil || s === 'critical') actions.push({ icon: '🔒', label: 'Legal Hold', color: '#ef4444', type: 'action' });
+  if (s === 'critical' || isExfil) actions.push({ icon: '📡', label: 'Webhook', color: '#f59e0b', type: 'action' });
+  if (s === 'critical') actions.push({ icon: '⊘', label: 'Agent Isolated', color: '#ff6b35', type: 'action' });
+  if (isExfil) actions.push({ icon: '📄', label: 'Incident Report', color: '#00d4ff', type: 'action' });
+  if (!actions.length) actions.push({ icon: '✓', label: 'Allowed', color: '#10b981', type: 'action' });
   return actions;
+}
+
+function buildChainSVG(nodes, edges, W, H) {
+  // nodes: [{id, x, y, r, fill, stroke, glow, label, sublabel, violated, clauseLabel, clauseColor}]
+  // edges: [{from, to, color, dashed}]
+  let svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">`;
+  svg += `<defs>`;
+  nodes.forEach(n => {
+    if (n.glow) {
+      svg += `<filter id="glow-${n.id}" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation="4" result="blur"/>
+        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>`;
+    }
+  });
+  svg += `</defs>`;
+
+  // Draw edges first
+  edges.forEach(edge => {
+    const from = nodes.find(n => n.id === edge.from);
+    const to = nodes.find(n => n.id === edge.to);
+    if (!from || !to) return;
+    const dash = edge.dashed ? 'stroke-dasharray="4 3"' : '';
+    svg += `<line x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" stroke="${edge.color}" stroke-width="${edge.width||1.5}" ${dash} opacity="0.7"/>`;
+    // Arrow tip
+    const dx = to.x - from.x, dy = to.y - from.y;
+    const len = Math.sqrt(dx*dx+dy*dy);
+    if (len > 0) {
+      const ux = dx/len, uy = dy/len;
+      const ax = to.x - ux*to.r, ay = to.y - uy*to.r;
+      const px = -uy*4, py = ux*4;
+      svg += `<polygon points="${ax},${ay} ${ax-ux*8+px},${ay-uy*8+py} ${ax-ux*8-px},${ay-uy*8-py}" fill="${edge.color}" opacity="0.8"/>`;
+    }
+  });
+
+  // Draw nodes
+  nodes.forEach(n => {
+    const glowAttr = n.glow ? `filter="url(#glow-${n.id})"` : '';
+    svg += `<circle cx="${n.x}" cy="${n.y}" r="${n.r}" fill="${n.fill}" stroke="${n.stroke}" stroke-width="${n.violated?2:1.5}" ${glowAttr} opacity="${n.violated?1:0.85}"/>`;
+
+    // Icon or short text inside node
+    if (n.icon) {
+      svg += `<text x="${n.x}" y="${n.y+4}" text-anchor="middle" font-size="13" font-family="Inter,sans-serif">${n.icon}</text>`;
+    } else if (n.initials) {
+      svg += `<text x="${n.x}" y="${n.y+4}" text-anchor="middle" font-size="${n.r>16?11:9}" font-weight="700" fill="${n.stroke}" font-family="JetBrains Mono,monospace">${n.initials}</text>`;
+    }
+
+    // Label below node
+    if (n.label) {
+      svg += `<text x="${n.x}" y="${n.y+n.r+13}" text-anchor="middle" font-size="9" fill="#e2e8f0" font-family="Inter,sans-serif" font-weight="600">${n.label}</text>`;
+    }
+    if (n.sublabel) {
+      svg += `<text x="${n.x}" y="${n.y+n.r+24}" text-anchor="middle" font-size="8" fill="#64748b" font-family="Inter,sans-serif">${n.sublabel}</text>`;
+    }
+
+    // Violation clause label — shown only on violated nodes, above the node
+    if (n.violated && n.clauseLabel) {
+      const cw = n.clauseLabel.length * 5.2 + 16;
+      const cx = Math.max(cw/2+4, Math.min(W-cw/2-4, n.x));
+      const cy = n.y - n.r - 18;
+      svg += `<rect x="${cx-cw/2}" y="${cy-10}" width="${cw}" height="14" rx="3" fill="${n.clauseColor}" opacity="0.18"/>`;
+      svg += `<rect x="${cx-cw/2}" y="${cy-10}" width="${cw}" height="14" rx="3" fill="none" stroke="${n.clauseColor}" stroke-width="1" opacity="0.6"/>`;
+      svg += `<text x="${cx}" y="${cy+1}" text-anchor="middle" font-size="7.5" font-weight="700" fill="${n.clauseColor}" font-family="Inter,sans-serif" letter-spacing="0.03em">${n.clauseLabel}</text>`;
+    }
+  });
+
+  svg += `</svg>`;
+  return svg;
 }
 
 async function openChainView(e) {
@@ -878,14 +941,15 @@ async function openChainView(e) {
   btn.textContent = '⬡ Close Chain'; btn.classList.add('active');
 
   const body = document.getElementById('chain-body');
-  body.innerHTML = '<div class="loading"><div class="spin"></div>Building chain…</div>';
+  body.innerHTML = '<div class="loading" style="margin-top:60px"><div class="spin"></div>Building graph…</div>';
 
   const s = sev(e), idx = ALL.indexOf(e);
   const evIdStr = 'EV-' + String(ALL.length - idx).padStart(4, '0');
-  const jurs = detectJurisdictions(e), actions = chainActions(e);
+  const jurs = detectJurisdictions(e), acts = chainActions(e);
   const agentId = e.data?.agent_id || 'unknown';
   const sessionId = e.raw?.session_id || null;
   const bd = e.data?.bdi_score ?? 0, en = e.data?.entropy ?? 0;
+  const isViolation = s === 'critical' || s === 'elevated' || isExfiltration(e);
 
   let siblings = [];
   if (sessionId) {
@@ -895,84 +959,138 @@ async function openChainView(e) {
     } catch (_) {}
   }
 
-  let html = '';
+  // ── Build SVG graph ──
+  const W = 390, H = 300;
+  const cx = W / 2;
 
-  // Legend
-  html += `<div class="chain-legend">
-    <span class="chain-legend-item"><span class="chain-legend-dot" style="background:#ff6b35"></span>PDPA MY</span>
-    <span class="chain-legend-item"><span class="chain-legend-dot" style="background:#0ea5e9"></span>SGP MGF</span>
-    <span class="chain-legend-item"><span class="chain-legend-dot" style="background:#10b981"></span>VN AI Law</span>
-    <span class="chain-legend-item"><span class="chain-legend-dot" style="background:#a78bfa"></span>Company Policy</span>
-  </div>`;
+  // Node positions — agent top-center, event middle, actions spread below
+  const nodeMap = {};
 
-  // Root — Agent node
-  html += `<div class="chain-node node-agent">
-    <div style="display:flex;align-items:center;gap:7px;margin-bottom:3px">
-      <div class="avatar" style="background:rgba(0,212,255,0.12);color:var(--accent);width:18px;height:18px;font-size:8px;border-radius:4px">${agentId.slice(0,2).toUpperCase()}</div>
-      <span style="font-size:10px;font-weight:600;color:var(--text)">${agentId}</span>
-      <span class="badge stable" style="font-size:8px;padding:1px 5px">agent</span>
-    </div>
-    <div style="font-size:9px;color:var(--muted)">Session: <span style="color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:9px">${sessionId ? sessionId.slice(0,20)+'…' : 'unknown'}</span></div>
-  </div>`;
+  // Agent node
+  nodeMap['agent'] = {
+    id: 'agent', x: cx, y: 52, r: 20,
+    fill: 'rgba(0,212,255,0.08)', stroke: '#00d4ff',
+    initials: agentId.slice(0,2).toUpperCase(),
+    label: agentId.length > 14 ? agentId.slice(0,14)+'…' : agentId,
+    sublabel: 'agent',
+    violated: false
+  };
 
-  html += `<div class="chain-edge"><div class="chain-edge-arrow">↓</div></div>`;
+  // Event node — larger if violation
+  const evR = isViolation ? 26 : 20;
+  const evColor = s === 'critical' ? '#ff6b35' : s === 'elevated' ? '#f59e0b' : '#10b981';
+  const evGlow = s === 'critical' ? 'rgba(255,107,53,0.5)' : s === 'elevated' ? 'rgba(245,158,11,0.4)' : null;
+  nodeMap['event'] = {
+    id: 'event', x: cx, y: 148, r: evR,
+    fill: isViolation ? `${evColor}22` : 'rgba(30,42,61,0.8)',
+    stroke: evColor, glow: evGlow,
+    initials: evIdStr.slice(3),
+    label: evIdStr,
+    sublabel: `BDI ${Math.round(bd*100)}% · E${en.toFixed(2)}`,
+    violated: isViolation,
+    clauseLabel: isViolation && jurs.length ? POLICY_CLAUSES[jurs[0]]?.clause : null,
+    clauseColor: isViolation && jurs.length ? POLICY_CLAUSES[jurs[0]]?.color : null
+  };
 
-  // Trigger event node
-  html += `<div class="chain-node ${nodeClass(s)}">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
-      <span style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--accent)">${evIdStr}</span>
-      <span class="badge ${s}">${s}</span>
-    </div>
-    <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px">
-      ${jurs.map(j => `<span class="jur-badge jur-${j}">${jurLabel(j)}</span>`).join('')}
-    </div>
-    <div style="display:flex;gap:14px;margin-bottom:${e.text ? '5px' : '0'}">
-      <span style="font-size:9px;color:var(--muted)">BDI <strong style="color:${bdiC(bd)};font-family:'JetBrains Mono',monospace">${Math.round(bd*100)}%</strong></span>
-      <span style="font-size:9px;color:var(--muted)">Entropy <strong style="font-family:'JetBrains Mono',monospace;color:${entC(en)}">${en.toFixed(2)}</strong></span>
-    </div>
-    ${e.text ? `<div style="font-size:9px;color:var(--muted2);line-height:1.4;border-top:1px solid var(--border);padding-top:5px;margin-top:2px">${e.text.slice(0,90)}${e.text.length>90?'…':''}</div>` : ''}
-  </div>`;
-
-  // Enforcement action chain
-  actions.forEach((act) => {
-    html += `<div class="chain-edge"><div class="chain-edge-arrow" style="border-color:rgba(139,92,246,0.3)">↓</div></div>`;
-    html += `<div class="chain-node node-action">
-      <div style="display:flex;align-items:center;gap:8px">
-        <span style="font-size:13px;line-height:1">${act.icon}</span>
-        <span style="font-size:10px;font-weight:500;color:${act.color}">${act.label}</span>
-      </div>
-    </div>`;
+  // Action nodes — spread horizontally below event
+  const actionY = 248;
+  const totalActs = acts.length;
+  acts.forEach((act, i) => {
+    const spacing = Math.min(80, (W - 60) / Math.max(totalActs, 1));
+    const startX = cx - ((totalActs - 1) * spacing) / 2;
+    const ax = startX + i * spacing;
+    nodeMap[`act_${i}`] = {
+      id: `act_${i}`, x: ax, y: actionY, r: 16,
+      fill: `${act.color}18`, stroke: act.color,
+      icon: act.icon,
+      label: act.label,
+      violated: false
+    };
   });
 
-  // Session history strip (if available)
+  // Policy violation satellite nodes — orbit around event node
+  // Only shown when violation detected, positioned around the event node
+  if (isViolation && jurs.length > 1) {
+    const orbitR = 72;
+    const angleStep = (Math.PI * 0.8) / Math.max(jurs.length - 1, 1);
+    const startAngle = Math.PI + Math.PI * 0.1;
+    jurs.slice(1).forEach((jur, i) => {
+      const pc = POLICY_CLAUSES[jur];
+      if (!pc) return;
+      const angle = startAngle + i * angleStep;
+      const px = nodeMap['event'].x + Math.cos(angle) * orbitR;
+      const py = nodeMap['event'].y + Math.sin(angle) * orbitR;
+      nodeMap[`jur_${jur}`] = {
+        id: `jur_${jur}`, x: Math.max(20, Math.min(W-20, px)), y: Math.max(20, Math.min(H-20, py)), r: 12,
+        fill: `${pc.color}18`, stroke: pc.color, glow: pc.glow,
+        initials: jur,
+        label: '',
+        violated: true,
+        clauseLabel: pc.clause,
+        clauseColor: pc.color
+      };
+    });
+  }
+
+  const nodes = Object.values(nodeMap);
+
+  // ── Build edges ──
+  const edges = [];
+  // Agent → Event
+  edges.push({ from: 'agent', to: 'event', color: isViolation ? evColor : '#253550', width: isViolation ? 2 : 1.5, dashed: false });
+  // Event → Actions
+  acts.forEach((act, i) => {
+    edges.push({ from: 'event', to: `act_${i}`, color: act.color, width: 1.5, dashed: false });
+  });
+  // Event → Satellite jurisdiction nodes
+  if (isViolation && jurs.length > 1) {
+    jurs.slice(1).forEach(jur => {
+      if (nodeMap[`jur_${jur}`]) {
+        edges.push({ from: 'event', to: `jur_${jur}`, color: POLICY_CLAUSES[jur]?.color || '#64748b', width: 1, dashed: true });
+      }
+    });
+  }
+
+  const svgHtml = buildChainSVG(nodes, edges, W, H);
+
+  // ── Violation summary pills ──
+  let metaHtml = '';
+  if (isViolation && jurs.length) {
+    metaHtml += `<div class="chain-meta">
+      <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.09em;color:var(--muted);font-weight:600;margin-bottom:7px">⚑ Policies Violated</div>`;
+    jurs.forEach(jur => {
+      const pc = POLICY_CLAUSES[jur];
+      if (!pc) return;
+      metaHtml += `<div class="chain-meta-row">
+        <span class="chain-pill chain-pill-${jur}">${pc.label}</span>
+        <span style="font-size:9px;color:var(--muted)">${pc.clause}</span>
+      </div>`;
+    });
+    metaHtml += `</div>`;
+  }
+
+  // ── Session lineage strip ──
+  let lineageHtml = '';
   if (siblings.length > 1) {
-    html += `<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
-      <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.09em;color:var(--muted);font-weight:600;margin-bottom:10px">◎ Session Lineage — ${siblings.length} turns</div>`;
+    lineageHtml = `<div class="chain-lineage">
+      <div class="chain-lineage-title">Session Lineage — ${siblings.length} turns</div>`;
     siblings.forEach((turn, i) => {
       const tEn = turn.entropy ?? 0, tBdi = turn.bdi_score ?? 0;
       const tSev = (tEn >= 0.7 || tBdi >= 0.65) ? 'critical' : (tEn >= 0.4 || tBdi >= 0.35) ? 'elevated' : 'stable';
-      const bc = tSev === 'critical' ? 'var(--danger)' : tSev === 'elevated' ? 'var(--warn)' : 'var(--ok)';
-      const turnJurs = [];
-      if (tSev === 'critical') { turnJurs.push('MY'); turnJurs.push('SG'); turnJurs.push('VN'); }
-      else if (tSev === 'elevated') turnJurs.push('SG');
-      html += `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid rgba(30,45,69,0.35)">
+      const bc = tSev === 'critical' ? '#ef4444' : tSev === 'elevated' ? '#f59e0b' : '#10b981';
+      lineageHtml += `<div class="chain-turn">
         <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);width:26px;flex-shrink:0">T+${i+1}</span>
         <div style="flex:1;height:3px;background:var(--border2);border-radius:2px;overflow:hidden">
-          <div style="height:100%;width:${Math.round(tBdi*100)}%;background:${bc};border-radius:2px;transition:width 0.3s"></div>
+          <div style="height:100%;width:${Math.round(tBdi*100)}%;background:${bc};border-radius:2px"></div>
         </div>
         <span style="font-size:9px;font-family:'JetBrains Mono',monospace;color:${bc};width:28px;text-align:right;flex-shrink:0">${Math.round(tBdi*100)}%</span>
-        <div style="display:flex;gap:3px;flex-shrink:0">
-          ${turnJurs.map(j=>`<span class="jur-badge jur-${j}" style="font-size:7px;padding:0 4px">${j}</span>`).join('')}
-        </div>
         <span class="badge ${tSev}" style="font-size:7px;padding:1px 4px;flex-shrink:0">${tSev}</span>
       </div>`;
     });
-    html += `</div>`;
-  } else {
-    html += `<div style="margin-top:14px;padding:10px 12px;background:var(--bg4);border:1px solid var(--border);border-radius:7px;font-size:10px;color:var(--muted);text-align:center">No session lineage available for this event.</div>`;
+    lineageHtml += `</div>`;
   }
 
-  body.innerHTML = html;
+  body.innerHTML = `<div class="chain-svg-wrap" style="height:${H}px;min-height:${H}px">${svgHtml}</div>${metaHtml}${lineageHtml}`;
 }
 
 /* REMEDIATE */
