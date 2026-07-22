@@ -139,9 +139,12 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 .loading{display:flex;align-items:center;justify-content:center;gap:8px;padding:32px;color:var(--muted);font-size:12px}
 .spin{width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-.inv{width:0;background:var(--bg2);border-left:1px solid var(--border);overflow:hidden;flex-shrink:0;transition:width 0.25s ease;display:flex;flex-direction:column}
+
+/* ── INVESTIGATOR DRAWER ── */
+.inv{width:0;background:var(--bg2);border-left:1px solid var(--border);overflow:hidden;flex-shrink:0;transition:width 0.25s ease;display:flex;flex-direction:row}
 .inv.open{width:480px}
-.inv-inner{width:480px;overflow-y:auto;display:flex;flex-direction:column;height:100%}
+.inv.open.chain-open{width:900px}
+.inv-inner{width:480px;overflow-y:auto;display:flex;flex-direction:column;height:100%;flex-shrink:0}
 .inv-inner::-webkit-scrollbar{width:3px}
 .inv-inner::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
 .inv-hdr{padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0;position:relative}
@@ -188,6 +191,37 @@ svg.hm{width:100%;height:55px}
 .act-full:hover{border-color:var(--accent);color:var(--accent)}
 .act-full.act-danger{border-color:rgba(239,68,68,0.3);color:var(--danger);background:var(--danger-bg)}
 .act-full.act-danger:hover{border-color:var(--danger)}
+.act-full.act-chain{border-color:rgba(0,212,255,0.3);color:var(--accent);background:rgba(0,212,255,0.05)}
+.act-full.act-chain:hover{background:rgba(0,212,255,0.1)}
+.act-full.act-chain.active{border-color:var(--accent);background:rgba(0,212,255,0.12);color:var(--accent)}
+
+/* ── PHASE 13: CHAIN PANEL ── */
+.chain-panel{width:0;overflow:hidden;border-left:1px solid var(--border);display:flex;flex-direction:column;transition:width 0.25s ease;flex-shrink:0;background:var(--bg2)}
+.chain-panel.open{width:390px;overflow-y:hidden}
+.chain-hdr{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.chain-hdr-title{font-size:10px;text-transform:uppercase;letter-spacing:0.09em;color:var(--muted);font-weight:600;display:flex;align-items:center;gap:5px}
+.chain-hdr-title::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--accent);display:inline-block}
+.chain-body{flex:1;overflow-y:auto;padding:14px;min-height:0}
+.chain-body::-webkit-scrollbar{width:3px}
+.chain-body::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.jur-badge{display:inline-flex;align-items:center;padding:1px 6px;border-radius:999px;font-size:8px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase}
+.jur-MY{background:rgba(255,107,53,0.15);color:#ff6b35;border:1px solid rgba(255,107,53,0.35)}
+.jur-SG{background:rgba(14,165,233,0.15);color:#0ea5e9;border:1px solid rgba(14,165,233,0.35)}
+.jur-VN{background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.35)}
+.jur-ORG{background:rgba(139,92,246,0.15);color:#a78bfa;border:1px solid rgba(139,92,246,0.35)}
+.chain-node{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:4px}
+.chain-node.node-critical{border-color:rgba(255,107,53,0.4);background:rgba(255,107,53,0.05)}
+.chain-node.node-elevated{border-color:rgba(245,158,11,0.3);background:rgba(245,158,11,0.04)}
+.chain-node.node-stable{border-color:rgba(16,185,129,0.2);background:rgba(16,185,129,0.03)}
+.chain-node.node-action{border-color:rgba(139,92,246,0.3);background:rgba(139,92,246,0.05)}
+.chain-node.node-agent{border-color:rgba(0,212,255,0.25);background:rgba(0,212,255,0.04)}
+.chain-edge{display:flex;align-items:center;justify-content:center;height:22px;position:relative}
+.chain-edge::before{content:'';position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--border2)}
+.chain-edge-arrow{width:18px;height:18px;border-radius:50%;background:var(--bg4);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--muted);z-index:1;position:relative}
+.chain-legend{display:flex;flex-wrap:wrap;gap:6px;padding:10px 12px;background:var(--bg4);border:1px solid var(--border);border-radius:7px;margin-bottom:12px}
+.chain-legend-item{display:flex;align-items:center;gap:4px;font-size:9px;color:var(--muted)}
+.chain-legend-dot{width:6px;height:6px;border-radius:50%}
+
 /* AGENT CARDS */
 .agent-card{background:var(--bg3);border:1px solid var(--border);border-radius:9px;margin-bottom:8px;overflow:hidden}
 .agent-hdr{display:flex;align-items:center;gap:12px;padding:12px 14px;cursor:pointer;transition:background 0.1s}
@@ -275,7 +309,6 @@ svg.hm{width:100%;height:55px}
           <div style="font-size:10px;color:var(--muted)">Click a jurisdiction to filter events below</div>
         </div>
         <div class="cem-row" id="cem-cards">
-          <!-- rendered by renderCEM() -->
           <div class="cem-card cem-high"><div class="loading"><div class="spin"></div></div></div>
           <div class="cem-card cem-medium"><div class="loading"><div class="spin"></div></div></div>
           <div class="cem-card cem-low"><div class="loading"><div class="spin"></div></div></div>
@@ -414,8 +447,9 @@ svg.hm{width:100%;height:55px}
       </div>
     </div>
 
-    <!-- INVESTIGATOR -->
+    <!-- INVESTIGATOR + CHAIN PANEL (side by side inside .inv) -->
     <div class="inv" id="inv">
+      <!-- LEFT: Investigator -->
       <div class="inv-inner">
         <div class="inv-hdr">
           <div class="inv-sev" id="i-sev">STABLE</div>
@@ -475,6 +509,19 @@ svg.hm{width:100%;height:55px}
           <button class="act-full" id="btn-sealed-pdf" onclick="downloadSealedPDF()">⬇ Download Sealed Evidence PDF</button>
           <button class="act-full" id="btn-viewer-link" onclick="shareViewerLink()">🔗 Share Audit Viewer Link</button>
           <button class="act-full" id="btn-send-dpo" onclick="sendToDPO()">✉ Send PDPA Notification to DPO</button>
+          <!-- PHASE 13: Chain Graph toggle -->
+          <button class="act-full act-chain" id="btn-chain" onclick="toggleChainView()">⬡ View Event Chain</button>
+        </div>
+      </div>
+
+      <!-- RIGHT: Chain Panel (Phase 13) -->
+      <div class="chain-panel" id="chain-panel">
+        <div class="chain-hdr">
+          <div class="chain-hdr-title">Event Chain Graph</div>
+          <button class="close-btn" style="position:static" onclick="closeChainView()">✕</button>
+        </div>
+        <div class="chain-body" id="chain-body">
+          <div class="empty"><div class="empty-icon">⬡</div><div>Select an event to view its chain.</div></div>
         </div>
       </div>
     </div>
@@ -486,9 +533,8 @@ svg.hm{width:100%;height:55px}
 <script>
 const API = 'https://pulse-proxy-8dqx.onrender.com';
 let ALL = [], EXFIL_ALERTS = [], filter = 'all', search = '', selIdx = -1, dateFrom = '', dateTo = '';
-let cemFilter = null; // Phase 5: active jurisdiction filter
+let cemFilter = null;
 
-/// Phase 10 — API key from Settings (localStorage)
 let ORG_API_KEY = localStorage.getItem('pulse_api_key') || null;
 
 function apiFetch(path, opts = {}) {
@@ -497,338 +543,129 @@ function apiFetch(path, opts = {}) {
   return fetch(API + path, Object.assign({}, opts, {headers}));
 }
 
-// ── PHASE 5: CEM DATA & RENDERING ──
+// ── PHASE 5: CEM ──
 const CEM_FRAMEWORKS = [
-  {
-    key: 'pdpa',
-    jurisdiction: 'MY',
-    framework: 'PDPA Malaysia',
-    obligation: 'Notify PDPC of personal data breach within 24 hours of detection.',
-    window_hours: 24,
-    keywords: ['pdpa','malaysia','personal data','data breach','MY'],
-  },
-  {
-    key: 'mgf',
-    jurisdiction: 'SG',
-    framework: 'Singapore Model AI Governance',
-    obligation: 'Incident review, corrective action, and stakeholder notification within 72 hours.',
-    window_hours: 72,
-    keywords: ['mgf','singapore','model ai','SG','governance'],
-  },
-  {
-    key: 'vietnam',
-    jurisdiction: 'VN',
-    framework: 'Vietnam AI Law',
-    obligation: 'Report AI system incident to competent authority within 72 hours.',
-    window_hours: 72,
-    keywords: ['vietnam','VN','ai law'],
-  },
-  {
-    key: 'company',
-    jurisdiction: 'ORG',
-    framework: 'Company Policy',
-    obligation: 'Custom org policies enforced by Pulse before agent execution.',
-    window_hours: null,
-    keywords: ['customer_id','email','phone','policy','org','company','custom'],
-  }
+  {key:'pdpa',jurisdiction:'MY',framework:'PDPA Malaysia',obligation:'Notify PDPC of personal data breach within 24 hours of detection.',window_hours:24,keywords:['pdpa','malaysia','personal data','data breach','MY']},
+  {key:'mgf',jurisdiction:'SG',framework:'Singapore Model AI Governance',obligation:'Incident review, corrective action, and stakeholder notification within 72 hours.',window_hours:72,keywords:['mgf','singapore','model ai','SG','governance']},
+  {key:'vietnam',jurisdiction:'VN',framework:'Vietnam AI Law',obligation:'Report AI system incident to competent authority within 72 hours.',window_hours:72,keywords:['vietnam','VN','ai law']},
+  {key:'company',jurisdiction:'ORG',framework:'Company Policy',obligation:'Custom org policies enforced by Pulse before agent execution.',window_hours:null,keywords:['customer_id','email','phone','policy','org','company','custom']}
 ];
 
-function cemRiskLevel(critCount, exfilCount, totalCrit) {
-  if (critCount > 20 || exfilCount > 0) return 'high';
-  if (critCount > 5) return 'medium';
-  return 'low';
-}
+function cemRiskLevel(critCount,exfilCount){if(critCount>20||exfilCount>0)return 'high';if(critCount>5)return 'medium';return 'low';}
+function cemRiskLabel(level){return{high:'HIGH',medium:'MEDIUM',low:'LOW'}[level]||'LOW';}
+function cemAgentCount(fw,events){const agents=new Set();events.forEach(e=>{const s=sev(e);if(s==='critical'||isExfiltration(e)){const agent=e.data?.agent_id||e.raw?.agent_id;if(agent)agents.add(agent);}});return agents.size;}
+const POLICY_KEYWORDS=['customer_id','email','phone'];
+function cemPolicyViolations(events){return events.filter(e=>{const text=(e.text||'').toLowerCase();return POLICY_KEYWORDS.some(kw=>text.includes(kw));}).length;}
+function cemPolicyAgents(events){return new Set(events.filter(e=>{const text=(e.text||'').toLowerCase();return POLICY_KEYWORDS.some(kw=>text.includes(kw));}).map(e=>e.data?.agent_id||e.raw?.agent_id).filter(Boolean)).size;}
 
-function cemRiskLabel(level) {
-  return {high:'HIGH',medium:'MEDIUM',low:'LOW'}[level] || 'LOW';
-}
-
-function cemAgentCount(fw, events) {
-  // Count distinct agents with critical/exfil events relevant to this jurisdiction
-  const agents = new Set();
-  events.forEach(e => {
-    const s = sev(e);
-    if (s === 'critical' || isExfiltration(e)) {
-      const agent = e.data?.agent_id || e.raw?.agent_id;
-      if (agent) agents.add(agent);
-    }
-  });
-  return agents.size;
-}
-
-// Phase 6 Stage 3 — count policy violations from event text
-const POLICY_KEYWORDS = ['customer_id','email','phone'];
-function cemPolicyViolations(events) {
-  return events.filter(e => {
-    const text = (e.text || '').toLowerCase();
-    return POLICY_KEYWORDS.some(kw => text.includes(kw));
-  }).length;
-}
-function cemPolicyAgents(events) {
-  return new Set(
-    events.filter(e => {
-      const text = (e.text || '').toLowerCase();
-      return POLICY_KEYWORDS.some(kw => text.includes(kw));
-    }).map(e => e.data?.agent_id || e.raw?.agent_id).filter(Boolean)
-  ).size;
-}
-
-function renderCEM() {
-  const events = ALL;
-  const crits = events.filter(e => sev(e) === 'critical').length;
-  const exfils = events.filter(e => isExfiltration(e)).length;
-  const policyViolations = cemPolicyViolations(events);
-  const policyAgents = cemPolicyAgents(events);
-
-  // Distribute risk across frameworks — PDPA gets exfil weight, MGF gets crit weight, VN mirrors MGF
-  const fwData = [
-    { ...CEM_FRAMEWORKS[0], critCount: Math.ceil(crits * 0.5), exfilCount: exfils, agents: cemAgentCount(CEM_FRAMEWORKS[0], events) },
-    { ...CEM_FRAMEWORKS[1], critCount: Math.ceil(crits * 0.7), exfilCount: Math.floor(exfils * 0.6), agents: cemAgentCount(CEM_FRAMEWORKS[1], events) },
-    { ...CEM_FRAMEWORKS[2], critCount: Math.floor(crits * 0.4), exfilCount: Math.floor(exfils * 0.4), agents: Math.max(0, cemAgentCount(CEM_FRAMEWORKS[2], events) - 1) },
-    { ...CEM_FRAMEWORKS[3], critCount: policyViolations, exfilCount: 0, agents: policyAgents },
+function renderCEM(){
+  const events=ALL,crits=events.filter(e=>sev(e)==='critical').length,exfils=events.filter(e=>isExfiltration(e)).length;
+  const policyViolations=cemPolicyViolations(events),policyAgents=cemPolicyAgents(events);
+  const fwData=[
+    {...CEM_FRAMEWORKS[0],critCount:Math.ceil(crits*0.5),exfilCount:exfils,agents:cemAgentCount(CEM_FRAMEWORKS[0],events)},
+    {...CEM_FRAMEWORKS[1],critCount:Math.ceil(crits*0.7),exfilCount:Math.floor(exfils*0.6),agents:cemAgentCount(CEM_FRAMEWORKS[1],events)},
+    {...CEM_FRAMEWORKS[2],critCount:Math.floor(crits*0.4),exfilCount:Math.floor(exfils*0.4),agents:Math.max(0,cemAgentCount(CEM_FRAMEWORKS[2],events)-1)},
+    {...CEM_FRAMEWORKS[3],critCount:policyViolations,exfilCount:0,agents:policyAgents},
   ];
-
-  const html = fwData.map(fw => {
-    const level = cemRiskLevel(fw.critCount, fw.exfilCount, crits);
-    const isActive = cemFilter === fw.key;
-    const dotColor = level === 'high' ? 'var(--critical)' : level === 'medium' ? 'var(--warn)' : 'var(--ok)';
-    const windowLabel = fw.window_hours ? `${fw.jurisdiction} · ${fw.window_hours}hr window` : `${fw.jurisdiction} · Custom Rules`;
-    const statusText = fw.key === 'company'
-      ? (level === 'high' ? 'Policy violations detected' : level === 'medium' ? 'Some violations flagged' : 'No policy violations')
-      : (level === 'high' ? 'Immediate notification required' : level === 'medium' ? 'Monitor — approaching threshold' : 'Within compliance window');
-    const statsHtml = fw.key === 'company'
-      ? `<div class="cem-stats">
-        <div class="cem-stat"><span class="cem-stat-val" style="color:${fw.critCount>0?'var(--danger)':'var(--ok)'}">${fw.critCount}</span><span class="cem-stat-lbl">Violations</span></div>
-        <div class="cem-stat"><span class="cem-stat-val" style="color:var(--accent)">${fw.agents}</span><span class="cem-stat-lbl">Agents</span></div>
-        <div class="cem-stat"><span class="cem-stat-val" style="color:var(--ok)">1</span><span class="cem-stat-lbl">Policies</span></div>
-      </div>`
-      : `<div class="cem-stats">
-        <div class="cem-stat"><span class="cem-stat-val" style="color:${fw.critCount>0?'var(--danger)':'var(--ok)'}">${fw.critCount}</span><span class="cem-stat-lbl">Critical</span></div>
-        <div class="cem-stat"><span class="cem-stat-val" style="color:${fw.exfilCount>0?'var(--critical)':'var(--ok)'}">${fw.exfilCount}</span><span class="cem-stat-lbl">Exfiltration</span></div>
-        <div class="cem-stat"><span class="cem-stat-val" style="color:var(--accent)">${fw.agents}</span><span class="cem-stat-lbl">Agents</span></div>
-      </div>`;
-    return `<div class="cem-card cem-${level}${isActive?' cem-active':''}" onclick="toggleCEMFilter('${fw.key}','${fw.framework}')">
-      <div class="cem-top">
-        <span class="cem-jurisdiction">${windowLabel}</span>
-        <span class="cem-risk-badge ${level}">${cemRiskLabel(level)} RISK</span>
-      </div>
-      <div class="cem-framework">${fw.framework}</div>
-      <div class="cem-obligation">${fw.obligation}</div>
-      ${statsHtml}
-      <div class="cem-window">
-        <span class="cem-window-dot" style="background:${dotColor}"></span>
-        ${statusText}
-      </div>
-    </div>`;
+  const html=fwData.map(fw=>{
+    const level=cemRiskLevel(fw.critCount,fw.exfilCount),isActive=cemFilter===fw.key;
+    const dotColor=level==='high'?'var(--critical)':level==='medium'?'var(--warn)':'var(--ok)';
+    const windowLabel=fw.window_hours?`${fw.jurisdiction} · ${fw.window_hours}hr window`:`${fw.jurisdiction} · Custom Rules`;
+    const statusText=fw.key==='company'?(level==='high'?'Policy violations detected':level==='medium'?'Some violations flagged':'No policy violations'):(level==='high'?'Immediate notification required':level==='medium'?'Monitor — approaching threshold':'Within compliance window');
+    const statsHtml=fw.key==='company'?`<div class="cem-stats"><div class="cem-stat"><span class="cem-stat-val" style="color:${fw.critCount>0?'var(--danger)':'var(--ok)'}">${fw.critCount}</span><span class="cem-stat-lbl">Violations</span></div><div class="cem-stat"><span class="cem-stat-val" style="color:var(--accent)">${fw.agents}</span><span class="cem-stat-lbl">Agents</span></div><div class="cem-stat"><span class="cem-stat-val" style="color:var(--ok)">1</span><span class="cem-stat-lbl">Policies</span></div></div>`:`<div class="cem-stats"><div class="cem-stat"><span class="cem-stat-val" style="color:${fw.critCount>0?'var(--danger)':'var(--ok)'}">${fw.critCount}</span><span class="cem-stat-lbl">Critical</span></div><div class="cem-stat"><span class="cem-stat-val" style="color:${fw.exfilCount>0?'var(--critical)':'var(--ok)'}">${fw.exfilCount}</span><span class="cem-stat-lbl">Exfiltration</span></div><div class="cem-stat"><span class="cem-stat-val" style="color:var(--accent)">${fw.agents}</span><span class="cem-stat-lbl">Agents</span></div></div>`;
+    return `<div class="cem-card cem-${level}${isActive?' cem-active':''}" onclick="toggleCEMFilter('${fw.key}','${fw.framework}')"><div class="cem-top"><span class="cem-jurisdiction">${windowLabel}</span><span class="cem-risk-badge ${level}">${cemRiskLabel(level)} RISK</span></div><div class="cem-framework">${fw.framework}</div><div class="cem-obligation">${fw.obligation}</div>${statsHtml}<div class="cem-window"><span class="cem-window-dot" style="background:${dotColor}"></span>${statusText}</div></div>`;
   }).join('');
-
-  document.getElementById('cem-cards').innerHTML = html;
+  document.getElementById('cem-cards').innerHTML=html;
 }
 
-function toggleCEMFilter(key, label) {
-  if (cemFilter === key) {
-    clearCEMFilter();
-    return;
-  }
-  cemFilter = key;
-  const bar = document.getElementById('cem-filter-bar');
-  bar.style.display = 'flex';
-  document.getElementById('cem-filter-label').textContent = `Showing events relevant to ${label}`;
-  renderCEM();
-  refresh();
-}
+function toggleCEMFilter(key,label){if(cemFilter===key){clearCEMFilter();return;}cemFilter=key;const bar=document.getElementById('cem-filter-bar');bar.style.display='flex';document.getElementById('cem-filter-label').textContent=`Showing events relevant to ${label}`;renderCEM();refresh();}
+function clearCEMFilter(){cemFilter=null;document.getElementById('cem-filter-bar').style.display='none';renderCEM();refresh();}
+function matchesCEMFilter(e){if(!cemFilter)return true;const fw=CEM_FRAMEWORKS.find(f=>f.key===cemFilter);if(!fw)return true;const s=sev(e),isExfil=isExfiltration(e);if(fw.key==='company'){const text=(e.text||'').toLowerCase();return fw.keywords.some(k=>text.includes(k.toLowerCase()));}if(s==='critical'||isExfil)return true;const text=(e.text||'').toLowerCase();return fw.keywords.some(k=>text.includes(k.toLowerCase()));}
 
-function clearCEMFilter() {
-  cemFilter = null;
-  document.getElementById('cem-filter-bar').style.display = 'none';
-  renderCEM();
-  refresh();
-}
+function tick(){document.getElementById('clock').textContent=new Date().toISOString().replace('T',' ').slice(0,19)+' UTC';}
+tick();setInterval(tick,1000);
 
-// CEM jurisdiction filter — maps framework key to agent/text heuristics
-function matchesCEMFilter(e) {
-  if (!cemFilter) return true;
-  const fw = CEM_FRAMEWORKS.find(f => f.key === cemFilter);
-  if (!fw) return true;
-  const s = sev(e);
-  const isExfil = isExfiltration(e);
-  if (fw.key === 'company') {
-    const text = (e.text || '').toLowerCase();
-    return fw.keywords.some(k => text.includes(k.toLowerCase()));
-  }
-  // For any jurisdiction, show critical and exfil events (they all trigger ASEAN obligations)
-  // plus any text matching the jurisdiction keywords
-  if (s === 'critical' || isExfil) return true;
-  const text = (e.text || '').toLowerCase();
-  return fw.keywords.some(k => text.includes(k.toLowerCase()));
-}
+function sev(e){const en=e.data?.entropy??0,bd=e.data?.bdi_score??0;if(en>=0.7||bd>=0.65)return 'critical';if(en>=0.4||bd>=0.35)return 'elevated';return 'stable';}
+function bdiC(v){return v>=0.65?'var(--danger)':v>=0.35?'var(--warn)':'var(--ok)';}
+function entC(v){return v>=0.7?'var(--danger)':v>=0.4?'var(--warn)':'var(--muted)';}
+function pulseClass(s){return s==='critical'?'err':s==='elevated'?'warn':'ok';}
+function pulseIcon(s){return s==='critical'?'✕':s==='elevated'?'!':'✓';}
+function evId(ridx){return 'EV-'+String(ALL.length-ridx).padStart(4,'0');}
+function sameDay(a,b){return a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();}
+function dayLabel(d){const now=new Date(),yest=new Date(now);yest.setDate(now.getDate()-1);if(sameDay(d,now))return 'Today — '+d.toLocaleDateString(undefined,{month:'long',day:'numeric',year:'numeric'});if(sameDay(d,yest))return 'Yesterday — '+d.toLocaleDateString(undefined,{month:'long',day:'numeric',year:'numeric'});return d.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric',year:'numeric'});}
 
-function tick(){
-  document.getElementById('clock').textContent = new Date().toISOString().replace('T',' ').slice(0,19)+' UTC';
-}
-tick(); setInterval(tick,1000);
+const avatarCfg={input:{bg:'rgba(14,165,233,0.15)',color:'#0ea5e9',label:'AI'},output:{bg:'rgba(139,92,246,0.15)',color:'#8b5cf6',label:'SY'},governance:{bg:'rgba(239,68,68,0.15)',color:'#ef4444',label:'CB'},stream_end:{bg:'rgba(100,116,139,0.15)',color:'#64748b',label:'ST'},exfiltration:{bg:'rgba(255,107,53,0.15)',color:'#ff6b35',label:'XF'}};
+function avatarFor(k){const c=avatarCfg[k]||{bg:'rgba(100,116,139,0.15)',color:'#64748b',label:'??'};return `<div class="avatar" style="background:${c.bg};color:${c.color}">${c.label}</div>`;}
+function actorName(k){return{input:'AI Agent',output:'Model Response',governance:'Circuit Breaker',stream_end:'Stream End',exfiltration:'Data Exfiltration'}[k]||k;}
+function shortText(t){return t?(t.length>65?t.slice(0,65)+'…':t):'(no description)';}
 
-function sev(e){
-  const en=e.data?.entropy??0, bd=e.data?.bdi_score??0;
-  if(en>=0.7||bd>=0.65) return 'critical';
-  if(en>=0.4||bd>=0.35) return 'elevated';
-  return 'stable';
-}
-function bdiC(v){return v>=0.65?'var(--danger)':v>=0.35?'var(--warn)':'var(--ok)'}
-function entC(v){return v>=0.7?'var(--danger)':v>=0.4?'var(--warn)':'var(--muted)'}
-function pulseClass(s){return s==='critical'?'err':s==='elevated'?'warn':'ok'}
-function pulseIcon(s){return s==='critical'?'✕':s==='elevated'?'!':'✓'}
-function evId(ridx){return 'EV-'+String(ALL.length-ridx).padStart(4,'0')}
-function sameDay(a,b){return a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate()}
-function dayLabel(d){
-  const now=new Date(), yest=new Date(now);
-  yest.setDate(now.getDate()-1);
-  if(sameDay(d,now)) return 'Today — '+d.toLocaleDateString(undefined,{month:'long',day:'numeric',year:'numeric'});
-  if(sameDay(d,yest)) return 'Yesterday — '+d.toLocaleDateString(undefined,{month:'long',day:'numeric',year:'numeric'});
-  return d.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric',year:'numeric'});
-}
+function exfiltrationHeuristic(text){const t=(text||'').toLowerCase();return(t.includes('export')&&(t.includes('external')||t.includes('endpoint')||t.includes('exfiltrat')))||t.includes('data exfiltration')||(t.includes('leak')&&t.includes('customer'))||(t.includes('pricing table')&&t.includes('endpoint'));}
+function isExfiltration(e){return !!(e.data?.exfiltration?.alert||e.data?.exfiltration_alert);}
 
-const avatarCfg={
-  input:{bg:'rgba(14,165,233,0.15)',color:'#0ea5e9',label:'AI'},
-  output:{bg:'rgba(139,92,246,0.15)',color:'#8b5cf6',label:'SY'},
-  governance:{bg:'rgba(239,68,68,0.15)',color:'#ef4444',label:'CB'},
-  stream_end:{bg:'rgba(100,116,139,0.15)',color:'#64748b',label:'ST'},
-  exfiltration:{bg:'rgba(255,107,53,0.15)',color:'#ff6b35',label:'XF'}
-};
-function avatarFor(k){const c=avatarCfg[k]||{bg:'rgba(100,116,139,0.15)',color:'#64748b',label:'??'};return `<div class="avatar" style="background:${c.bg};color:${c.color}">${c.label}</div>`}
-function actorName(k){return{input:'AI Agent',output:'Model Response',governance:'Circuit Breaker',stream_end:'Stream End',exfiltration:'Data Exfiltration'}[k]||k}
-function shortText(t){return t?(t.length>65?t.slice(0,65)+'…':t):'(no description)'}
-
-function exfiltrationHeuristic(text){
-  const t=(text||'').toLowerCase();
-  return (t.includes('export')&&(t.includes('external')||t.includes('endpoint')||t.includes('exfiltrat')))||
-    t.includes('data exfiltration')||(t.includes('leak')&&t.includes('customer'))||
-    (t.includes('pricing table')&&t.includes('endpoint'));
-}
-
-function isExfiltration(e){
-  return !!(e.data?.exfiltration?.alert||e.data?.exfiltration_alert);
-}
-
-function attachExfiltration(events, alerts){
+function attachExfiltration(events,alerts){
   const exfilAlerts=(alerts||[]).filter(a=>a.kind==='alert'&&a.data?.trigger_type==='exfiltration');
   return events.map(ev=>{
-    const agent=ev.data?.agent_id||ev.raw?.agent_id;
-    const session=ev.raw?.session_id;
-    const evTime=ev.created_at?new Date(ev.created_at).getTime():0;
-    let match=exfilAlerts.find(a=>{
-      const ad=a.data||{};
-      if(ad.agent_id&&agent&&ad.agent_id!==agent) return false;
-      if(ad.session_id&&session&&ad.session_id!==session) return false;
-      if(a.created_at&&evTime){
-        const dt=Math.abs(new Date(a.created_at).getTime()-evTime);
-        if(dt>120000) return false;
-      }
-      return true;
-    });
-    const heuristic=exfiltrationHeuristic(ev.text);
-    const alert=!!(match||heuristic);
-    const risk=match?.data?.risk_score??(heuristic?0.7:null);
-    const components=match?.data?.components||{};
-    ev.data=Object.assign({},ev.data,{
-      exfiltration:{alert,risk_score:risk,components,source:match?'api':'heuristic'},
-      exfiltration_alert:alert
-    });
-    if(alert) ev.kind='exfiltration';
+    const agent=ev.data?.agent_id||ev.raw?.agent_id,session=ev.raw?.session_id,evTime=ev.created_at?new Date(ev.created_at).getTime():0;
+    let match=exfilAlerts.find(a=>{const ad=a.data||{};if(ad.agent_id&&agent&&ad.agent_id!==agent)return false;if(ad.session_id&&session&&ad.session_id!==session)return false;if(a.created_at&&evTime){const dt=Math.abs(new Date(a.created_at).getTime()-evTime);if(dt>120000)return false;}return true;});
+    const heuristic=exfiltrationHeuristic(ev.text),alert=!!(match||heuristic),risk=match?.data?.risk_score??(heuristic?0.7:null),components=match?.data?.components||{};
+    ev.data=Object.assign({},ev.data,{exfiltration:{alert,risk_score:risk,components,source:match?'api':'heuristic'},exfiltration_alert:alert});
+    if(alert)ev.kind='exfiltration';
     return ev;
   });
 }
 
-function transformAiEvent(row){
-  const blocked=row.status==='blocked';
-  const text=row.output_text||row.input_text||'';
-  return {kind:blocked?'governance':'input', text, created_at:row.created_at||row.timestamp,
-    data:{entropy:row.entropy??0, bdi_score:row.bdi_score??0, agent_id:row.agent_id||'unknown', session_id:row.session_id||null},
-    raw:row};
-}
+function transformAiEvent(row){const blocked=row.status==='blocked',text=row.output_text||row.input_text||'';return{kind:blocked?'governance':'input',text,created_at:row.created_at||row.timestamp,data:{entropy:row.entropy??0,bdi_score:row.bdi_score??0,agent_id:row.agent_id||'unknown',session_id:row.session_id||null},raw:row};}
 
 function renderRows(evs){
   const tb=document.getElementById('tbody');
   document.getElementById('evt-cnt').textContent=`${evs.length} of ${ALL.length} events`;
   if(!evs.length){tb.innerHTML='<div class="empty"><div class="empty-icon">◎</div><div>No events match this filter.</div><div style="font-size:11px;margin-top:6px;color:var(--muted2)">Try clearing the jurisdiction filter or adjusting your date range.</div></div>';return;}
-  let html='', lastDay=null;
+  let html='',lastDay=null;
   evs.forEach(e=>{
-    const s=sev(e), bd=e.data?.bdi_score??0, en=e.data?.entropy??0;
-    const dt=e.created_at?new Date(e.created_at):null;
-    const ts=dt?dt.toLocaleString():'—';
-    const bpct=Math.round(bd*100), ridx=ALL.indexOf(e);
+    const s=sev(e),bd=e.data?.bdi_score??0,en=e.data?.entropy??0,dt=e.created_at?new Date(e.created_at):null,ts=dt?dt.toLocaleString():'—',bpct=Math.round(bd*100),ridx=ALL.indexOf(e);
     if(dt&&(!lastDay||!sameDay(dt,lastDay))){html+=`<div class="day-divider">${dayLabel(dt)}</div>`;lastDay=dt;}
-    html+=`<div class="evt-row${selIdx===ridx?' selected':''}" onclick="openInv(${ridx})">
-      <div><div class="evt-id"><strong>${evId(ridx)}</strong></div><div class="evt-ts">${ts}</div></div>
-      <div class="actor-wrap">${avatarFor(e.kind)}<div style="min-width:0"><div class="actor-name">${actorName(e.kind)}</div><div class="actor-desc">${shortText(e.text)}</div></div></div>
-      <div style="display:flex;flex-direction:column;gap:3px"><span class="badge ${s}">${s}</span>${isExfiltration(e)?'<span class="badge exfiltration">exfiltration</span>':''}</div>
-      <div class="bdi-wrap"><div class="bdi-track"><div class="bdi-fill" style="width:${bpct}%;background:${bdiC(bd)}"></div></div><span class="mono-val" style="color:${bdiC(bd)}">${bpct}%</span></div>
-      <div class="mono-val" style="color:${entC(en)}">${en.toFixed(2)}</div>
-      <div><div class="pulse-dot ${pulseClass(s)}">${pulseIcon(s)}</div></div>
-    </div>`;
+    html+=`<div class="evt-row${selIdx===ridx?' selected':''}" onclick="openInv(${ridx})"><div><div class="evt-id"><strong>${evId(ridx)}</strong></div><div class="evt-ts">${ts}</div></div><div class="actor-wrap">${avatarFor(e.kind)}<div style="min-width:0"><div class="actor-name">${actorName(e.kind)}</div><div class="actor-desc">${shortText(e.text)}</div></div></div><div style="display:flex;flex-direction:column;gap:3px"><span class="badge ${s}">${s}</span>${isExfiltration(e)?'<span class="badge exfiltration">exfiltration</span>':''}</div><div class="bdi-wrap"><div class="bdi-track"><div class="bdi-fill" style="width:${bpct}%;background:${bdiC(bd)}"></div></div><span class="mono-val" style="color:${bdiC(bd)}">${bpct}%</span></div><div class="mono-val" style="color:${entC(en)}">${en.toFixed(2)}</div><div><div class="pulse-dot ${pulseClass(s)}">${pulseIcon(s)}</div></div></div>`;
   });
   tb.innerHTML=html;
 }
 
 function filtered(){
   let r=ALL;
-  if(filter==='exfiltration') r=r.filter(e=>isExfiltration(e));
-  else if(filter!=='all') r=r.filter(e=>sev(e)===filter);
-  if(search) r=r.filter(e=>{const q=search.toLowerCase();return(e.text||'').toLowerCase().includes(q)||(e.kind||'').includes(q)||(isExfiltration(e)&&'exfiltration'.includes(q))});
-  if(dateFrom) r=r.filter(e=>e.created_at&&e.created_at.slice(0,10)>=dateFrom);
-  if(dateTo) r=r.filter(e=>e.created_at&&e.created_at.slice(0,10)<=dateTo);
-  // Phase 5: CEM jurisdiction filter
-  if(cemFilter) r=r.filter(e=>matchesCEMFilter(e));
+  if(filter==='exfiltration')r=r.filter(e=>isExfiltration(e));
+  else if(filter!=='all')r=r.filter(e=>sev(e)===filter);
+  if(search)r=r.filter(e=>{const q=search.toLowerCase();return(e.text||'').toLowerCase().includes(q)||(e.kind||'').includes(q)||(isExfiltration(e)&&'exfiltration'.includes(q));});
+  if(dateFrom)r=r.filter(e=>e.created_at&&e.created_at.slice(0,10)>=dateFrom);
+  if(dateTo)r=r.filter(e=>e.created_at&&e.created_at.slice(0,10)<=dateTo);
+  if(cemFilter)r=r.filter(e=>matchesCEMFilter(e));
   return r;
 }
 
 function updateKpis(evs){
-  const tot=evs.length, crits=evs.filter(e=>sev(e)==='critical').length;
-  const exfils=evs.filter(e=>isExfiltration(e)).length;
-  const avgE=tot?evs.reduce((s,e)=>s+(e.data?.entropy??0),0)/tot:0;
+  const tot=evs.length,crits=evs.filter(e=>sev(e)==='critical').length,exfils=evs.filter(e=>isExfiltration(e)).length,avgE=tot?evs.reduce((s,e)=>s+(e.data?.entropy??0),0)/tot:0;
   document.getElementById('k-total').textContent=tot;
   document.getElementById('k-total-sub').textContent=crits+' critical · '+exfils+' exfiltration';
   document.getElementById('k-crit').textContent=crits;
   document.getElementById('k-ent').textContent=avgE.toFixed(2);
-  const ke=document.getElementById('k-exfil');
-  ke.textContent=exfils; ke.className='kpi-val '+(exfils>0?'c-red':'c-green');
+  const ke=document.getElementById('k-exfil');ke.textContent=exfils;ke.className='kpi-val '+(exfils>0?'c-red':'c-green');
 }
 
 function refresh(){const f=filtered();renderRows(f);updateKpis(f);}
 
 /* ── VIEW SWITCHING ── */
 document.querySelectorAll('.nav-btn[data-view]').forEach(b=>b.addEventListener('click',()=>switchView(b.dataset.view)));
-
-const VIEW_LOADERS={
-  'agents':()=>{if(!lastTopology)loadAgents();},
-  'analytics':()=>{if(!lastDrift)loadAnalytics();},
-  'circuit-breaker':()=>loadCircuitBreaker(),
-  'compliance':()=>{if(!lastDeadlines)loadCompliance();},
-  'settings':()=>{if(!lastHealth)loadSettings();}
-};
-
+const VIEW_LOADERS={'agents':()=>{if(!lastTopology)loadAgents();},'analytics':()=>{if(!lastDrift)loadAnalytics();},'circuit-breaker':()=>loadCircuitBreaker(),'compliance':()=>{if(!lastDeadlines)loadCompliance();},'settings':()=>{if(!lastHealth)loadSettings();}};
 function switchView(view){
   document.querySelectorAll('.nav-btn[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===view));
-  ['ledger','agents','analytics','circuit-breaker','compliance','settings'].forEach(v=>{
-    const el=document.getElementById('view-'+v);
-    if(el) el.style.display=v===view?'':'none';
-  });
+  ['ledger','agents','analytics','circuit-breaker','compliance','settings'].forEach(v=>{const el=document.getElementById('view-'+v);if(el)el.style.display=v===view?'':'none';});
   closeInv();
-  if(VIEW_LOADERS[view]) VIEW_LOADERS[view]();
+  if(VIEW_LOADERS[view])VIEW_LOADERS[view]();
 }
 
-/* ── PASSPORT DOWNLOAD ── */
-async function downloadPassport(agentId){
-  const url=API+'/agents/'+encodeURIComponent(agentId)+'/passport?format=pdf';
-  const a=document.createElement('a');
-  a.href=url;
-  a.download='pulse-passport-'+agentId+'.pdf';
-  a.target='_blank';
-  a.click();
-}
+/* ── PASSPORT ── */
+async function downloadPassport(agentId){const url=API+'/agents/'+encodeURIComponent(agentId)+'/passport?format=pdf';const a=document.createElement('a');a.href=url;a.download='pulse-passport-'+agentId+'.pdf';a.target='_blank';a.click();}
 
 /* ── AGENTS ── */
-let lastTopology=null, agentsOpen=new Set();
+let lastTopology=null,agentsOpen=new Set();
 function bandClass(b){if(b==='critical')return 'critical';if(b==='elevated'||b==='caution')return 'elevated';if(b==='unregistered')return 'unreg';return 'stable';}
 
 async function loadAgents(){
@@ -841,705 +678,456 @@ async function loadAgents(){
 function toggleAgent(id){if(agentsOpen.has(id))agentsOpen.delete(id);else agentsOpen.add(id);renderAgents();}
 
 async function renderAgents(){
-  const data=lastTopology; if(!data) return;
+  const data=lastTopology;if(!data)return;
   const box=document.getElementById('agents-body');
-  const nodes=data.nodes||[], agents=nodes.filter(n=>n.type==='agent'), sessions=nodes.filter(n=>n.type==='session'), sum=data.summary||{};
+  const nodes=data.nodes||[],agents=nodes.filter(n=>n.type==='agent'),sessions=nodes.filter(n=>n.type==='session'),sum=data.summary||{};
   document.getElementById('ag-agents').textContent=sum.agents??agents.length;
   document.getElementById('ag-sessions').textContent=sum.sessions??sessions.length;
-  const unreg=document.getElementById('ag-unreg'); unreg.textContent=sum.unregistered_agents??0; unreg.className='kpi-val '+((sum.unregistered_agents||0)>0?'c-red':'c-green');
-  const crit=document.getElementById('ag-critsess'); crit.textContent=sum.critical_sessions??0; crit.className='kpi-val '+((sum.critical_sessions||0)>0?'c-red':'c-green');
+  const unreg=document.getElementById('ag-unreg');unreg.textContent=sum.unregistered_agents??0;unreg.className='kpi-val '+((sum.unregistered_agents||0)>0?'c-red':'c-green');
+  const crit=document.getElementById('ag-critsess');crit.textContent=sum.critical_sessions??0;crit.className='kpi-val '+((sum.critical_sessions||0)>0?'c-red':'c-green');
   document.getElementById('ag-edges').textContent=sum.edges??(data.edges||[]).length;
   if(!agents.length){box.innerHTML='<div class="empty"><div class="empty-icon">◎</div><div>No agents seen yet.</div></div>';return;}
   const order={critical:0,elevated:1,caution:1,unregistered:2,stable:3};
   const sorted=agents.slice().sort((a,b)=>(order[a.risk_band]??9)-(order[b.risk_band]??9)||(b.events||0)-(a.events||0));
   let isolatedSet=new Set();
-  try{
-    const isoResp=await apiFetch('/agents/isolated?active_only=true',{cache:'no-store'});
-    const isoData=isoResp.ok?await isoResp.json():{isolated_agents:[]};
-    (isoData.isolated_agents||[]).forEach(r=>isolatedSet.add(r.agent_id));
-  }catch(_){}
+  try{const isoResp=await apiFetch('/agents/isolated?active_only=true',{cache:'no-store'});const isoData=isoResp.ok?await isoResp.json():{isolated_agents:[]};(isoData.isolated_agents||[]).forEach(r=>isolatedSet.add(r.agent_id));}catch(_){}
   box.innerHTML=sorted.map(a=>{
-    const aSessions=sessions.filter(s=>s.agent_id===a.agent_id);
-    const blockedRatio=a.events?Math.round((a.blocked/a.events)*100):0;
-    const isOpen=agentsOpen.has(a.agent_id);
-    const sessRows=aSessions.length?aSessions.map(s=>{
-      const lineage=s.parent_session_id?`<div style="font-size:9px;color:var(--muted);margin-top:2px">↳ spawned from ${s.parent_session_id}</div>`:'';
-      const ds=s.drift_status||'unknown';
-      return `<div class="sess-row"><div class="sess-id">${s.session_id}${lineage}</div><div class="mono-val">${s.turns??0} turns</div><div class="mono-val" style="color:${(s.blocked||0)>0?'var(--danger)':'var(--muted)'}">${s.blocked??0} blocked</div><div><span class="badge ${ds==='critical'?'critical':ds==='elevated'?'elevated':'stable'}">${ds}</span></div><div><span class="badge ${bandClass(s.risk_band)}">${s.risk_band||'unknown'}</span></div></div>`;
-    }).join(''):'<div style="padding:8px 0;color:var(--muted);font-size:11px">No sessions recorded.</div>';
+    const aSessions=sessions.filter(s=>s.agent_id===a.agent_id),blockedRatio=a.events?Math.round((a.blocked/a.events)*100):0,isOpen=agentsOpen.has(a.agent_id);
+    const sessRows=aSessions.length?aSessions.map(s=>{const lineage=s.parent_session_id?`<div style="font-size:9px;color:var(--muted);margin-top:2px">↳ spawned from ${s.parent_session_id}</div>`:'';const ds=s.drift_status||'unknown';return `<div class="sess-row"><div class="sess-id">${s.session_id}${lineage}</div><div class="mono-val">${s.turns??0} turns</div><div class="mono-val" style="color:${(s.blocked||0)>0?'var(--danger)':'var(--muted)'}">${s.blocked??0} blocked</div><div><span class="badge ${ds==='critical'?'critical':ds==='elevated'?'elevated':'stable'}">${ds}</span></div><div><span class="badge ${bandClass(s.risk_band)}">${s.risk_band||'unknown'}</span></div></div>`;}).join(''):'<div style="padding:8px 0;color:var(--muted);font-size:11px">No sessions recorded.</div>';
     return `<div class="agent-card"><div class="agent-hdr" onclick="toggleAgent('${a.agent_id}')"><div class="avatar" style="background:rgba(0,212,255,0.12);color:var(--accent)">${(a.agent_id||'??').slice(0,2).toUpperCase()}</div><div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-weight:600;font-size:12px">${a.agent_id}</span><span class="badge ${a.registered?'stable':'unreg'}">${a.registered?'registered':'unregistered'}</span>${isolatedSet.has(a.agent_id)?'<span class="badge critical" style="margin-left:4px">⊘ isolated</span>':''}<span class="badge ${bandClass(a.risk_band)}">${a.risk_band||'unknown'}</span></div><div style="font-size:10px;color:var(--muted);margin-top:3px">${a.events??0} events · ${a.blocked??0} blocked (${blockedRatio}%) · ${aSessions.length} session${aSessions.length===1?'':'s'}</div></div><div class="chevron">${isOpen?'▾':'▸'}</div><button onclick="event.stopPropagation();downloadPassport('${a.agent_id}')" style="background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.2);color:var(--accent);border-radius:5px;padding:3px 8px;font-size:9px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:'Inter',sans-serif">⬇ Passport</button></div><div class="agent-body" style="display:${isOpen?'block':'none'}"><div class="sess-hdr"><div>Session</div><div>Turns</div><div>Blocked</div><div>Drift</div><div>Risk</div></div>${sessRows}</div></div>`;
   }).join('');
 }
 
 /* ── ANALYTICS ── */
 let lastDrift=null;
-
 async function loadAnalytics(){
   const box=document.getElementById('analytics-body');
   box.innerHTML='<div class="loading"><div class="spin"></div>Loading drift analytics…</div>';
   try{
     const driftData=await apiFetch('/drift/recent?limit=100',{cache:'no-store'}).then(r=>r.json());
-    const sessions=driftData.sessions||[];
-    const driftMap={};
-    sessions.forEach(s=>{
-      driftMap[s.session_id]={score:s.drift_score??0,status:s.drift_status||'unknown',turns_analyzed:s.turns_analyzed??0,agent_id:s.agent_id};
-    });
+    const sessions=driftData.sessions||[],driftMap={};
+    sessions.forEach(s=>{driftMap[s.session_id]={score:s.drift_score??0,status:s.drift_status||'unknown',turns_analyzed:s.turns_analyzed??0,agent_id:s.agent_id};});
     lastDrift={sessions:Object.keys(driftMap),drift:driftMap};
     renderAnalytics();
   }catch(err){box.innerHTML=`<div class="empty"><div style="color:var(--danger);font-size:20px">⚠</div><div style="color:var(--danger);margin-top:6px;font-weight:500">Could not load analytics</div><div style="font-size:11px;margin-top:4px;color:var(--muted2)">${err.message}</div></div>`;}
 }
 
 function renderAnalytics(){
-  const data=lastDrift; if(!data) return;
-  const box=document.getElementById('analytics-body');
-  const sessions=data.sessions||[], driftMap=data.drift||{};
-  if(!sessions.length){
-    ['an-sessions','an-critical','an-elevated','an-stable','an-avg'].forEach(id=>document.getElementById(id).textContent='0');
-    box.innerHTML='<div class="empty"><div class="empty-icon">◎</div><div>No drift sessions tracked yet.</div><div style="font-size:11px;margin-top:6px;color:var(--muted2)">Sessions appear here after agents send traffic through /intercept.</div></div>';
-    return;
-  }
+  const data=lastDrift;if(!data)return;
+  const box=document.getElementById('analytics-body'),sessions=data.sessions||[],driftMap=data.drift||{};
+  if(!sessions.length){['an-sessions','an-critical','an-elevated','an-stable','an-avg'].forEach(id=>document.getElementById(id).textContent='0');box.innerHTML='<div class="empty"><div class="empty-icon">◎</div><div>No drift sessions tracked yet.</div><div style="font-size:11px;margin-top:6px;color:var(--muted2)">Sessions appear here after agents send traffic through /intercept.</div></div>';return;}
   const entries=sessions.map(sid=>({sid,d:driftMap[sid]||{}}));
-  const critical=entries.filter(e=>e.d.status==='critical').length;
-  const elevated=entries.filter(e=>e.d.status==='elevated').length;
-  const stable=entries.filter(e=>e.d.status==='stable').length;
-  const avgScore=entries.reduce((a,e)=>a+(e.d.score||0),0)/entries.length;
+  const critical=entries.filter(e=>e.d.status==='critical').length,elevated=entries.filter(e=>e.d.status==='elevated').length,stable=entries.filter(e=>e.d.status==='stable').length,avgScore=entries.reduce((a,e)=>a+(e.d.score||0),0)/entries.length;
   document.getElementById('an-sessions').textContent=sessions.length;
-  const critEl=document.getElementById('an-critical'); critEl.textContent=critical; critEl.className='kpi-val '+(critical>0?'c-red':'c-green');
-  const elevEl=document.getElementById('an-elevated'); elevEl.textContent=elevated; elevEl.className='kpi-val '+(elevated>0?'c-amber':'c-green');
+  const critEl=document.getElementById('an-critical');critEl.textContent=critical;critEl.className='kpi-val '+(critical>0?'c-red':'c-green');
+  const elevEl=document.getElementById('an-elevated');elevEl.textContent=elevated;elevEl.className='kpi-val '+(elevated>0?'c-amber':'c-green');
   document.getElementById('an-stable').textContent=stable;
   document.getElementById('an-avg').textContent=avgScore.toFixed(2);
   const statusOrder={critical:0,elevated:1,stable:2};
   const sorted=entries.slice().sort((a,b)=>(statusOrder[a.d.status]??9)-(statusOrder[b.d.status]??9)||(b.d.score||0)-(a.d.score||0));
-  box.innerHTML=sorted.map(({sid,d})=>{
-    const sc=d.score||0, st=d.status||'unknown', turns=d.turns_analyzed||0;
-    const bc=st==='critical'?'var(--danger)':st==='elevated'?'var(--warn)':'var(--ok)';
-    return `<div class="drift-card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text)">${sid}</span><div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;font-family:'JetBrains Mono',monospace;color:${bc}">${sc.toFixed(2)}</span><span class="badge ${st==='critical'?'critical':st==='elevated'?'elevated':'stable'}">${st}</span></div></div><div style="font-size:10px;color:var(--muted);margin-bottom:6px">${turns} turn${turns===1?'':'s'} analyzed</div><div class="drift-bar-wrap"><div class="drift-bar" style="width:${Math.round(sc*100)}%;background:${bc}"></div></div></div>`;
-  }).join('');
+  box.innerHTML=sorted.map(({sid,d})=>{const sc=d.score||0,st=d.status||'unknown',turns=d.turns_analyzed||0,bc=st==='critical'?'var(--danger)':st==='elevated'?'var(--warn)':'var(--ok)';return `<div class="drift-card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text)">${sid}</span><div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;font-family:'JetBrains Mono',monospace;color:${bc}">${sc.toFixed(2)}</span><span class="badge ${st==='critical'?'critical':st==='elevated'?'elevated':'stable'}">${st}</span></div></div><div style="font-size:10px;color:var(--muted);margin-bottom:6px">${turns} turn${turns===1?'':'s'} analyzed</div><div class="drift-bar-wrap"><div class="drift-bar" style="width:${Math.round(sc*100)}%;background:${bc}"></div></div></div>`;}).join('');
 }
 
 /* ── CIRCUIT BREAKER ── */
 let lastCbStatus=null;
-
 async function loadCircuitBreaker(){
   const box=document.getElementById('cb-body');
   box.innerHTML='<div class="loading"><div class="spin"></div>Loading circuit breaker status…</div>';
   try{lastCbStatus=await apiFetch('/circuit-breaker/status',{cache:'no-store'}).then(r=>r.json());renderCircuitBreaker();}
   catch(err){box.innerHTML=`<div class="empty"><div style="color:var(--danger);font-size:20px">⚠</div><div style="color:var(--danger);margin-top:6px;font-weight:500">Could not load circuit breaker</div><div style="font-size:11px;margin-top:4px;color:var(--muted2)">${err.message}</div></div>`;}
 }
-
 function renderCircuitBreaker(){
-  const d=lastCbStatus; if(!d) return;
-  const box=document.getElementById('cb-body');
-  const state=d.state||'unknown';
-  const sc=state==='closed'?'var(--ok)':state==='open'?'var(--danger)':'var(--warn)';
-  const lf=d.last_failure, le=d.last_event;
-  box.innerHTML=`
-    <div class="cb-state-card">
-      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin-bottom:10px">Circuit Breaker State</div>
-      <div class="cb-state-val" style="color:${sc}">${state.toUpperCase()}</div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:14px">${state==='closed'?'Requests flowing normally.':state==='open'?'All requests blocked. Reset manually when ready.':'Testing — limited requests allowed.'}</div>
-      <div style="display:flex;justify-content:center;gap:20px;font-size:10px;color:var(--muted)">
-        <span>Failures: <strong style="color:var(--text)">${d.failure_count??0}</strong></span>
-        <span>Allows requests: <strong style="color:${d.allows_requests?'var(--ok)':'var(--danger)'}">${d.allows_requests?'Yes':'No'}</strong></span>
-      </div>
-    </div>
-    <div class="cb-btn-row">
-      <button class="cb-btn cb-btn-open" onclick="cbManualOpen()">⚡ Open — Block All Requests</button>
-      <button class="cb-btn cb-btn-close" onclick="cbManualClose()">✓ Reset to Closed</button>
-    </div>
-    ${lf?`<div class="settings-card"><div class="inv-sec-title" style="margin-bottom:8px">◎ Last Failure</div><div class="settings-row"><span class="settings-key">Reason</span><span class="settings-val" style="color:var(--warn)">${lf.reason||'—'}</span></div><div class="settings-row"><span class="settings-key">BDI Score</span><span class="settings-val">${((lf.bdi_score||0)*100).toFixed(0)}%</span></div><div class="settings-row"><span class="settings-key">Entropy</span><span class="settings-val">${(lf.entropy||0).toFixed(2)}</span></div></div>`:''}
-    ${le?`<div class="settings-card"><div class="inv-sec-title" style="margin-bottom:8px">◎ Last Event</div><div class="settings-row"><span class="settings-key">State</span><span class="settings-val" style="color:${sc}">${le.state||'—'}</span></div><div class="settings-row"><span class="settings-key">Reason</span><span class="settings-val">${le.reason||'—'}</span></div><div class="settings-row"><span class="settings-key">Timestamp</span><span class="settings-val">${le.timestamp?new Date(le.timestamp).toLocaleString():'—'}</span></div></div>`:''}
-  `;
+  const d=lastCbStatus;if(!d)return;
+  const box=document.getElementById('cb-body'),state=d.state||'unknown',sc=state==='closed'?'var(--ok)':state==='open'?'var(--danger)':'var(--warn)',lf=d.last_failure,le=d.last_event;
+  box.innerHTML=`<div class="cb-state-card"><div style="font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin-bottom:10px">Circuit Breaker State</div><div class="cb-state-val" style="color:${sc}">${state.toUpperCase()}</div><div style="font-size:11px;color:var(--muted);margin-bottom:14px">${state==='closed'?'Requests flowing normally.':state==='open'?'All requests blocked. Reset manually when ready.':'Testing — limited requests allowed.'}</div><div style="display:flex;justify-content:center;gap:20px;font-size:10px;color:var(--muted)"><span>Failures: <strong style="color:var(--text)">${d.failure_count??0}</strong></span><span>Allows requests: <strong style="color:${d.allows_requests?'var(--ok)':'var(--danger)'}">${d.allows_requests?'Yes':'No'}</strong></span></div></div><div class="cb-btn-row"><button class="cb-btn cb-btn-open" onclick="cbManualOpen()">⚡ Open — Block All Requests</button><button class="cb-btn cb-btn-close" onclick="cbManualClose()">✓ Reset to Closed</button></div>${lf?`<div class="settings-card"><div class="inv-sec-title" style="margin-bottom:8px">◎ Last Failure</div><div class="settings-row"><span class="settings-key">Reason</span><span class="settings-val" style="color:var(--warn)">${lf.reason||'—'}</span></div><div class="settings-row"><span class="settings-key">BDI Score</span><span class="settings-val">${((lf.bdi_score||0)*100).toFixed(0)}%</span></div><div class="settings-row"><span class="settings-key">Entropy</span><span class="settings-val">${(lf.entropy||0).toFixed(2)}</span></div></div>`:''}${le?`<div class="settings-card"><div class="inv-sec-title" style="margin-bottom:8px">◎ Last Event</div><div class="settings-row"><span class="settings-key">State</span><span class="settings-val" style="color:${sc}">${le.state||'—'}</span></div><div class="settings-row"><span class="settings-key">Reason</span><span class="settings-val">${le.reason||'—'}</span></div><div class="settings-row"><span class="settings-key">Timestamp</span><span class="settings-val">${le.timestamp?new Date(le.timestamp).toLocaleString():'—'}</span></div></div>`:''}`;
 }
-
-async function cbManualOpen(){
-  if(!confirm('Open the circuit breaker and block ALL agent requests?')) return;
-  try{await apiFetch('/circuit-breaker/open',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reason:'Manual open from dashboard',bdi_score:1.0,entropy:0.0})});loadCircuitBreaker();load();}
-  catch(err){alert('Failed: '+err.message);}
-}
-
-async function cbManualClose(){
-  if(!confirm('Reset the circuit breaker to CLOSED and allow requests?')) return;
-  try{await apiFetch('/circuit-breaker/close',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reason:'Manual reset from dashboard',bdi_score:0.0,entropy:0.0})});loadCircuitBreaker();load();}
-  catch(err){alert('Failed: '+err.message);}
-}
+async function cbManualOpen(){if(!confirm('Open the circuit breaker and block ALL agent requests?'))return;try{await apiFetch('/circuit-breaker/open',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reason:'Manual open from dashboard',bdi_score:1.0,entropy:0.0})});loadCircuitBreaker();load();}catch(err){alert('Failed: '+err.message);}}
+async function cbManualClose(){if(!confirm('Reset the circuit breaker to CLOSED and allow requests?'))return;try{await apiFetch('/circuit-breaker/close',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reason:'Manual reset from dashboard',bdi_score:0.0,entropy:0.0})});loadCircuitBreaker();load();}catch(err){alert('Failed: '+err.message);}}
 
 /* ── COMPLIANCE ── */
 let lastDeadlines=null;
-
 async function loadCompliance(){
   const box=document.getElementById('compliance-body');
   box.innerHTML='<div class="loading"><div class="spin"></div>Loading compliance deadlines…</div>';
-  try{
-    const incidentInput=document.getElementById('incident-time-input').value;
-    let url=API+'/compliance/deadlines?auto_hold=false';
-    if(incidentInput) url+='&incident_time='+encodeURIComponent(new Date(incidentInput).toISOString());
-    lastDeadlines=await fetch(url,{cache:'no-store'}).then(r=>r.json());
-    renderCompliance();
-  }catch(err){box.innerHTML=`<div class="empty"><div style="color:var(--danger);font-size:20px">⚠</div><div style="color:var(--danger);margin-top:6px;font-weight:500">Could not load deadlines</div><div style="font-size:11px;margin-top:4px;color:var(--muted2)">${err.message}</div></div>`;}
+  try{const incidentInput=document.getElementById('incident-time-input').value;let url=API+'/compliance/deadlines?auto_hold=false';if(incidentInput)url+='&incident_time='+encodeURIComponent(new Date(incidentInput).toISOString());lastDeadlines=await fetch(url,{cache:'no-store'}).then(r=>r.json());renderCompliance();}
+  catch(err){box.innerHTML=`<div class="empty"><div style="color:var(--danger);font-size:20px">⚠</div><div style="color:var(--danger);margin-top:6px;font-weight:500">Could not load deadlines</div><div style="font-size:11px;margin-top:4px;color:var(--muted2)">${err.message}</div></div>`;}
 }
-
 function renderCompliance(){
-  const data=lastDeadlines; if(!data) return;
-  const box=document.getElementById('compliance-body');
-  const deadlines=data.deadlines||[], overall=data.overall_status||'NOMINAL';
-  const oc=overall==='BREACHED'?'var(--danger)':overall==='CRITICAL'?'var(--critical)':overall==='WARNING'?'var(--warn)':'var(--ok)';
-  box.innerHTML=`
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:12px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:9px">
-      <span style="font-size:10px;text-transform:uppercase;letter-spacing:0.09em;color:var(--muted)">Overall Status</span>
-      <span style="font-size:14px;font-weight:700;color:${oc}">${overall}</span>
-      <span style="font-size:10px;color:var(--muted);margin-left:auto">Incident: ${new Date(data.incident_time).toLocaleString()}</span>
-    </div>
-    ${deadlines.map(d=>{
-      const st=d.status||'ACTIVE';
-      const bc=st==='BREACHED'?'var(--danger)':st==='CRITICAL'?'var(--critical)':st==='WARNING'?'var(--warn)':'var(--ok)';
-      const badgeC=st==='BREACHED'?'cb-breached':st==='CRITICAL'?'cb-critical':st==='WARNING'?'cb-warning':'cb-active';
-      const pct=Math.min(100,Math.round((d.elapsed_hours/d.window_hours)*100));
-      const hrs=d.hours_remaining;
-      const timeLeft=d.breached?'BREACHED':hrs<1?Math.round(hrs*60)+'m remaining':hrs.toFixed(1)+'h remaining';
-      return `<div class="compliance-card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><div><div style="font-size:12px;font-weight:600">${d.framework}</div><div style="font-size:10px;color:var(--muted);margin-top:2px">${d.jurisdiction} · ${d.window_hours}hr window</div></div><div style="text-align:right"><span class="comp-badge ${badgeC}">${st}</span><div style="font-size:10px;color:${bc};margin-top:4px;font-family:'JetBrains Mono',monospace">${timeLeft}</div></div></div><div style="font-size:10px;color:var(--muted);margin-bottom:8px;line-height:1.4">${d.obligation}</div><div class="comp-progress"><div class="comp-fill" style="width:${pct}%;background:${bc}"></div></div><div style="display:flex;justify-content:space-between;margin-top:4px;font-size:9px;color:var(--muted2)"><span>Elapsed: ${d.elapsed_hours.toFixed(1)}h</span><span>Window: ${d.window_hours}h</span></div></div>`;
-    }).join('')}
-  `;
+  const data=lastDeadlines;if(!data)return;
+  const box=document.getElementById('compliance-body'),deadlines=data.deadlines||[],overall=data.overall_status||'NOMINAL',oc=overall==='BREACHED'?'var(--danger)':overall==='CRITICAL'?'var(--critical)':overall==='WARNING'?'var(--warn)':'var(--ok)';
+  box.innerHTML=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:12px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:9px"><span style="font-size:10px;text-transform:uppercase;letter-spacing:0.09em;color:var(--muted)">Overall Status</span><span style="font-size:14px;font-weight:700;color:${oc}">${overall}</span><span style="font-size:10px;color:var(--muted);margin-left:auto">Incident: ${new Date(data.incident_time).toLocaleString()}</span></div>${deadlines.map(d=>{const st=d.status||'ACTIVE',bc=st==='BREACHED'?'var(--danger)':st==='CRITICAL'?'var(--critical)':st==='WARNING'?'var(--warn)':'var(--ok)',badgeC=st==='BREACHED'?'cb-breached':st==='CRITICAL'?'cb-critical':st==='WARNING'?'cb-warning':'cb-active',pct=Math.min(100,Math.round((d.elapsed_hours/d.window_hours)*100)),hrs=d.hours_remaining,timeLeft=d.breached?'BREACHED':hrs<1?Math.round(hrs*60)+'m remaining':hrs.toFixed(1)+'h remaining';return `<div class="compliance-card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><div><div style="font-size:12px;font-weight:600">${d.framework}</div><div style="font-size:10px;color:var(--muted);margin-top:2px">${d.jurisdiction} · ${d.window_hours}hr window</div></div><div style="text-align:right"><span class="comp-badge ${badgeC}">${st}</span><div style="font-size:10px;color:${bc};margin-top:4px;font-family:'JetBrains Mono',monospace">${timeLeft}</div></div></div><div style="font-size:10px;color:var(--muted);margin-bottom:8px;line-height:1.4">${d.obligation}</div><div class="comp-progress"><div class="comp-fill" style="width:${pct}%;background:${bc}"></div></div><div style="display:flex;justify-content:space-between;margin-top:4px;font-size:9px;color:var(--muted2)"><span>Elapsed: ${d.elapsed_hours.toFixed(1)}h</span><span>Window: ${d.window_hours}h</span></div></div>`;}).join('')}`;
 }
 
 /* ── SETTINGS ── */
 let lastHealth=null;
-
 async function loadSettings(){
   const box=document.getElementById('settings-body');
   box.innerHTML='<div class="loading"><div class="spin"></div>Loading system settings…</div>';
   try{lastHealth=await apiFetch('/health',{cache:'no-store'}).then(r=>r.json());renderSettings();}
   catch(err){box.innerHTML=`<div class="empty"><div style="color:var(--danger);font-size:20px">⚠</div><div style="color:var(--danger);margin-top:6px;font-weight:500">Could not load settings</div><div style="font-size:11px;margin-top:4px;color:var(--muted2)">${err.message}</div></div>`;}
 }
-
 function renderSettings(){
-  const h=lastHealth; if(!h) return;
-  const box=document.getElementById('settings-body');
-  const cb=h.circuit_breaker||{};
-  box.innerHTML=`
-    <div class="settings-card">
-      <div class="inv-sec-title" style="margin-bottom:8px">◎ Service</div>
-      <div class="settings-row"><span class="settings-key">Service</span><span class="settings-val">${h.service||'pulse-proxy'}</span></div>
-      <div class="settings-row"><span class="settings-key">Status</span><span class="settings-val" style="color:${h.ok?'var(--ok)':'var(--danger)'}">${h.ok?'HEALTHY':'UNREACHABLE'}</span></div>
-      <div class="settings-row"><span class="settings-key">Backend</span><span class="settings-val" style="font-size:10px">${API}</span></div>
-    </div>
-    <div class="settings-card">
-      <div class="inv-sec-title" style="margin-bottom:8px">◎ Pulse Configuration</div>
-      <div class="settings-row"><span class="settings-key">Shadow Mode</span><span class="settings-val" style="color:${h.shadow_mode?'var(--warn)':'var(--ok)'}">${h.shadow_mode?'ENABLED — log only, not blocking':'DISABLED — full enforcement'}</span></div>
-      <div class="settings-row"><span class="settings-key">Synthesis Engine</span><span class="settings-val" style="color:${h.synthesis_enabled?'var(--ok)':'var(--muted)'}">${h.synthesis_enabled?'ENABLED':'DISABLED'}</span></div>
-      <div class="settings-row"><span class="settings-key">Upstream LLM</span><span class="settings-val" style="color:${h.upstream_configured?'var(--ok)':'var(--muted)'}">${h.upstream_configured?'CONFIGURED':'Not configured — baseline fallback'}</span></div>
-      <div class="settings-row"><span class="settings-key">Events in feed</span><span class="settings-val">${h.events??0}</span></div>
-    </div>
-    <div class="settings-card">
-      <div class="inv-sec-title" style="margin-bottom:8px">◎ Circuit Breaker</div>
-      <div class="settings-row"><span class="settings-key">State</span><span class="settings-val" style="color:${cb.state==='closed'?'var(--ok)':cb.state==='open'?'var(--danger)':'var(--warn)'}">${(cb.state||'unknown').toUpperCase()}</span></div>
-      <div class="settings-row"><span class="settings-key">Allows Requests</span><span class="settings-val" style="color:${cb.allows_requests?'var(--ok)':'var(--danger)'}">${cb.allows_requests?'Yes':'No'}</span></div>
-    </div>
-    <div class="settings-card">
-      <div class="inv-sec-title" style="margin-bottom:8px">◎ Organisation API Key</div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5">Paste your API key to scope this dashboard to your organisation's events only. Leave blank to view demo data.</div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <input id="api-key-input" type="password" placeholder="pulse_…" value="${ORG_API_KEY||''}" style="flex:1;background:var(--bg4);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:11px;font-family:'JetBrains Mono',monospace;outline:none"/>
-        <button onclick="saveApiKey()" style="background:var(--accent);color:#000;border:none;border-radius:6px;padding:8px 14px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">Save</button>
-        <button onclick="clearApiKey()" style="background:var(--bg4);border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:8px 10px;font-size:11px;cursor:pointer">Clear</button>
-      </div>
-      <div id="api-key-status" style="font-size:10px;margin-top:6px;color:var(--ok)">${ORG_API_KEY?'✓ API key active — showing your organisation data':''}</div>
-    </div>
-    <div class="settings-card">
-      <div class="inv-sec-title" style="margin-bottom:8px">◎ Quick Links</div>
-      <div class="settings-row"><span class="settings-key">Ledger Integrity</span><a href="${API}/ledger/integrity" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">audit_logs chain →</a></div>
-      <div class="settings-row"><span class="settings-key">AI Events Integrity</span><a href="${API}/ledger/integrity/ai_events" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">ai_events chain →</a></div>
-      <div class="settings-row"><span class="settings-key">Swarm Detector</span><a href="${API}/swarm/detect" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">run detection →</a></div>
-      <div class="settings-row"><span class="settings-key">Active Legal Holds</span><a href="${API}/legal-hold?source=db" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">view holds →</a></div>
-      <div class="settings-row"><span class="settings-key">Org Policies</span><a href="${API}/org/policies?org_id=demo-org" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">view active policies →</a></div>
-      <div class="settings-row"><span class="settings-key">Isolated Agents</span><a href="${API}/agents/isolated" target="_blank" style="font-size:11px;color:var(--danger);text-decoration:none">view quarantined →</a></div>
-      <div class="settings-row"><span class="settings-key">Webhooks</span><a href="${API}/webhooks?org_id=demo-org" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">view registrations →</a></div>
-      <div class="settings-row"><span class="settings-key">Evidence Packages</span><a href="${API}/legal-hold?status=ACTIVE" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">view active holds →</a></div>
-    </div>
-    <div class="settings-card">
-      <div class="inv-sec-title" style="margin-bottom:8px">◎ Active Org Policies — demo-org</div>
-      <div id="org-policies-body"><div class="loading"><div class="spin"></div>Loading policies…</div></div>
-    </div>
-  `;
-  // Phase 6 Stage 3 — load and render active org policies
-  apiFetch('/org/policies?org_id=demo-org',{cache:'no-store'})
-    .then(r=>r.json())
-    .then(data=>{
-      const policies=data.policies||[];
-      const pb=document.getElementById('org-policies-body');
-      if(!pb) return;
-      if(!policies.length){pb.innerHTML='<div style="font-size:11px;color:var(--muted)">No active policies for demo-org.</div>';return;}
-      pb.innerHTML=policies.map(p=>{
-        const ruleHtml=Array.isArray(p.rules)?p.rules.map(r=>`<div style="font-size:10px;color:var(--muted);margin-top:3px">↳ <span style="color:${r.action==='block'?'var(--danger)':'var(--warn)'}">${r.action}</span> if output contains <strong style="color:var(--text)">${r.match||r.keyword||''}</strong></div>`).join(''):'';
-        return `<div style="padding:8px 0;border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:11px;font-weight:500">${p.name}</span><span class="badge stable">active</span></div><div style="font-size:10px;color:var(--muted);margin-top:2px">${p.description||p.policy_id}</div>${ruleHtml}</div>`;
-      }).join('');
-    }).catch(()=>{
-      const pb=document.getElementById('org-policies-body');
-      if(pb) pb.innerHTML='<div style="font-size:11px;color:var(--danger)">Could not load policies.</div>';
-    });
+  const h=lastHealth;if(!h)return;
+  const box=document.getElementById('settings-body'),cb=h.circuit_breaker||{};
+  box.innerHTML=`<div class="settings-card"><div class="inv-sec-title" style="margin-bottom:8px">◎ Service</div><div class="settings-row"><span class="settings-key">Service</span><span class="settings-val">${h.service||'pulse-proxy'}</span></div><div class="settings-row"><span class="settings-key">Status</span><span class="settings-val" style="color:${h.ok?'var(--ok)':'var(--danger)'}">${h.ok?'HEALTHY':'UNREACHABLE'}</span></div><div class="settings-row"><span class="settings-key">Backend</span><span class="settings-val" style="font-size:10px">${API}</span></div></div><div class="settings-card"><div class="inv-sec-title" style="margin-bottom:8px">◎ Pulse Configuration</div><div class="settings-row"><span class="settings-key">Shadow Mode</span><span class="settings-val" style="color:${h.shadow_mode?'var(--warn)':'var(--ok)'}">${h.shadow_mode?'ENABLED — log only, not blocking':'DISABLED — full enforcement'}</span></div><div class="settings-row"><span class="settings-key">Synthesis Engine</span><span class="settings-val" style="color:${h.synthesis_enabled?'var(--ok)':'var(--muted)'}">${h.synthesis_enabled?'ENABLED':'DISABLED'}</span></div><div class="settings-row"><span class="settings-key">Upstream LLM</span><span class="settings-val" style="color:${h.upstream_configured?'var(--ok)':'var(--muted)'}">${h.upstream_configured?'CONFIGURED':'Not configured — baseline fallback'}</span></div><div class="settings-row"><span class="settings-key">Events in feed</span><span class="settings-val">${h.events??0}</span></div></div><div class="settings-card"><div class="inv-sec-title" style="margin-bottom:8px">◎ Circuit Breaker</div><div class="settings-row"><span class="settings-key">State</span><span class="settings-val" style="color:${cb.state==='closed'?'var(--ok)':cb.state==='open'?'var(--danger)':'var(--warn)'}">${(cb.state||'unknown').toUpperCase()}</span></div><div class="settings-row"><span class="settings-key">Allows Requests</span><span class="settings-val" style="color:${cb.allows_requests?'var(--ok)':'var(--danger)'}">${cb.allows_requests?'Yes':'No'}</span></div></div><div class="settings-card"><div class="inv-sec-title" style="margin-bottom:8px">◎ Organisation API Key</div><div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5">Paste your API key to scope this dashboard to your organisation's events only. Leave blank to view demo data.</div><div style="display:flex;gap:8px;align-items:center"><input id="api-key-input" type="password" placeholder="pulse_…" value="${ORG_API_KEY||''}" style="flex:1;background:var(--bg4);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:11px;font-family:'JetBrains Mono',monospace;outline:none"/><button onclick="saveApiKey()" style="background:var(--accent);color:#000;border:none;border-radius:6px;padding:8px 14px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">Save</button><button onclick="clearApiKey()" style="background:var(--bg4);border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:8px 10px;font-size:11px;cursor:pointer">Clear</button></div><div id="api-key-status" style="font-size:10px;margin-top:6px;color:var(--ok)">${ORG_API_KEY?'✓ API key active — showing your organisation data':''}</div></div><div class="settings-card"><div class="inv-sec-title" style="margin-bottom:8px">◎ Quick Links</div><div class="settings-row"><span class="settings-key">Ledger Integrity</span><a href="${API}/ledger/integrity" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">audit_logs chain →</a></div><div class="settings-row"><span class="settings-key">AI Events Integrity</span><a href="${API}/ledger/integrity/ai_events" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">ai_events chain →</a></div><div class="settings-row"><span class="settings-key">Swarm Detector</span><a href="${API}/swarm/detect" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">run detection →</a></div><div class="settings-row"><span class="settings-key">Active Legal Holds</span><a href="${API}/legal-hold?source=db" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">view holds →</a></div><div class="settings-row"><span class="settings-key">Org Policies</span><a href="${API}/org/policies?org_id=demo-org" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">view active policies →</a></div><div class="settings-row"><span class="settings-key">Isolated Agents</span><a href="${API}/agents/isolated" target="_blank" style="font-size:11px;color:var(--danger);text-decoration:none">view quarantined →</a></div><div class="settings-row"><span class="settings-key">Webhooks</span><a href="${API}/webhooks?org_id=demo-org" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">view registrations →</a></div><div class="settings-row"><span class="settings-key">Evidence Packages</span><a href="${API}/legal-hold?status=ACTIVE" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">view active holds →</a></div></div><div class="settings-card"><div class="inv-sec-title" style="margin-bottom:8px">◎ Active Org Policies — demo-org</div><div id="org-policies-body"><div class="loading"><div class="spin"></div>Loading policies…</div></div></div>`;
+  apiFetch('/org/policies?org_id=demo-org',{cache:'no-store'}).then(r=>r.json()).then(data=>{const policies=data.policies||[],pb=document.getElementById('org-policies-body');if(!pb)return;if(!policies.length){pb.innerHTML='<div style="font-size:11px;color:var(--muted)">No active policies for demo-org.</div>';return;}pb.innerHTML=policies.map(p=>{const ruleHtml=Array.isArray(p.rules)?p.rules.map(r=>`<div style="font-size:10px;color:var(--muted);margin-top:3px">↳ <span style="color:${r.action==='block'?'var(--danger)':'var(--warn)'}">${r.action}</span> if output contains <strong style="color:var(--text)">${r.match||r.keyword||''}</strong></div>`).join(''):'';return `<div style="padding:8px 0;border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:11px;font-weight:500">${p.name}</span><span class="badge stable">active</span></div><div style="font-size:10px;color:var(--muted);margin-top:2px">${p.description||p.policy_id}</div>${ruleHtml}</div>`;}).join('');}).catch(()=>{const pb=document.getElementById('org-policies-body');if(pb)pb.innerHTML='<div style="font-size:11px;color:var(--danger)">Could not load policies.</div>';});
 }
 
 /* ── EVENT LISTENERS ── */
-document.querySelectorAll('.ftab').forEach(t=>t.addEventListener('click',()=>{
-  document.querySelectorAll('.ftab').forEach(x=>x.classList.remove('active'));
-  t.classList.add('active'); filter=t.dataset.f; refresh();
-}));
-document.getElementById('srch').addEventListener('input',e=>{search=e.target.value;refresh()});
-document.getElementById('date-from').addEventListener('change',e=>{dateFrom=e.target.value;refresh()});
-document.getElementById('date-to').addEventListener('change',e=>{dateTo=e.target.value;refresh()});
-document.getElementById('date-clear').addEventListener('click',()=>{
-  dateFrom=''; dateTo='';
-  document.getElementById('date-from').value='';
-  document.getElementById('date-to').value='';
-  refresh();
-});
+document.querySelectorAll('.ftab').forEach(t=>t.addEventListener('click',()=>{document.querySelectorAll('.ftab').forEach(x=>x.classList.remove('active'));t.classList.add('active');filter=t.dataset.f;refresh();}));
+document.getElementById('srch').addEventListener('input',e=>{search=e.target.value;refresh();});
+document.getElementById('date-from').addEventListener('change',e=>{dateFrom=e.target.value;refresh();});
+document.getElementById('date-to').addEventListener('change',e=>{dateTo=e.target.value;refresh();});
+document.getElementById('date-clear').addEventListener('click',()=>{dateFrom='';dateTo='';document.getElementById('date-from').value='';document.getElementById('date-to').value='';refresh();});
 
 /* ── INVESTIGATOR ── */
 function openInv(idx){
-  selIdx=idx; refresh();
-  const e=ALL[idx]; if(!e) return;
-  const s=sev(e), bd=e.data?.bdi_score??0, en=e.data?.entropy??0;
-  const ts=e.created_at?new Date(e.created_at).toLocaleString():'Unknown';
-  const si=document.getElementById('i-sev');
-  si.textContent=s.toUpperCase(); si.className='inv-sev '+s;
+  selIdx=idx;refresh();
+  const e=ALL[idx];if(!e)return;
+  const s=sev(e),bd=e.data?.bdi_score??0,en=e.data?.entropy??0,ts=e.created_at?new Date(e.created_at).toLocaleString():'Unknown';
+  const si=document.getElementById('i-sev');si.textContent=s.toUpperCase();si.className='inv-sev '+s;
   document.getElementById('i-title').textContent=`Investigator: ${evId(idx)}`;
-  document.getElementById('i-meta').innerHTML=`
-    <span>Agent: <strong>${e.data?.agent_id||'unknown'}</strong></span>
-    <span>Triggered: <strong>${ts}</strong></span>
-    <span>Entropy: <strong style="color:${entC(en)}">${en.toFixed(2)}</strong></span>`;
+  document.getElementById('i-meta').innerHTML=`<span>Agent: <strong>${e.data?.agent_id||'unknown'}</strong></span><span>Triggered: <strong>${ts}</strong></span><span>Entropy: <strong style="color:${entC(en)}">${en.toFixed(2)}</strong></span>`;
   const tags=['#'+e.kind];
-  if(en>=0.7) tags.push('#high-entropy');
-  if(bd>=0.65) tags.push('#bdi-critical');
-  if(s==='critical') tags.push('#auto-isolated');
-  if(e.kind==='governance') tags.push('#circuit-breaker');
-  if(isExfiltration(e)) tags.push('#exfiltration');
-  document.getElementById('i-tags').innerHTML=tags.map(t=>{
-    const cls=t==='#exfiltration'?'tag exfiltration':'tag';
-    return `<span class="${cls}">${t}</span>`;
-  }).join('');
-  const exfilSec=document.getElementById('i-exfil-sec'), exfilBody=document.getElementById('i-exfil-body');
-  if(isExfiltration(e)){
-    const ex=e.data.exfiltration||{};
-    const comp=ex.components||{};
-    exfilSec.style.display='block';
-    exfilBody.innerHTML=`
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-        <span class="badge exfiltration">EXFILTRATION DETECTED</span>
-        <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--critical)">risk ${(ex.risk_score??0).toFixed(2)}</span>
-      </div>
-      <div style="font-size:10px;color:var(--muted);line-height:1.5;margin-bottom:8px">Agent output matches data-export / external-endpoint exfiltration pattern. Source: ${ex.source||'api'}.</div>
-      <div class="settings-row"><span class="settings-key">Input anomaly</span><span class="settings-val">${(comp.input_anomaly??0).toFixed(2)}</span></div>
-      <div class="settings-row"><span class="settings-key">Token collapse</span><span class="settings-val">${(comp.token_collapse??0).toFixed(2)}</span></div>`;
-  } else { exfilSec.style.display='none'; exfilBody.innerHTML=''; }
+  if(en>=0.7)tags.push('#high-entropy');if(bd>=0.65)tags.push('#bdi-critical');if(s==='critical')tags.push('#auto-isolated');if(e.kind==='governance')tags.push('#circuit-breaker');if(isExfiltration(e))tags.push('#exfiltration');
+  document.getElementById('i-tags').innerHTML=tags.map(t=>{const cls=t==='#exfiltration'?'tag exfiltration':'tag';return `<span class="${cls}">${t}</span>`;}).join('');
+  const exfilSec=document.getElementById('i-exfil-sec'),exfilBody=document.getElementById('i-exfil-body');
+  if(isExfiltration(e)){const ex=e.data.exfiltration||{},comp=ex.components||{};exfilSec.style.display='block';exfilBody.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><span class="badge exfiltration">EXFILTRATION DETECTED</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--critical)">risk ${(ex.risk_score??0).toFixed(2)}</span></div><div style="font-size:10px;color:var(--muted);line-height:1.5;margin-bottom:8px">Agent output matches data-export / external-endpoint exfiltration pattern. Source: ${ex.source||'api'}.</div><div class="settings-row"><span class="settings-key">Input anomaly</span><span class="settings-val">${(comp.input_anomaly??0).toFixed(2)}</span></div><div class="settings-row"><span class="settings-key">Token collapse</span><span class="settings-val">${(comp.token_collapse??0).toFixed(2)}</span></div>`;}else{exfilSec.style.display='none';exfilBody.innerHTML='';}
   loadHeartMonitor(e);
-  const sig=Math.round((1-en)*100);
-  const sp=document.getElementById('i-signal');
-  sp.textContent=sig+'%'; sp.style.color=sig>60?'var(--ok)':sig>30?'var(--warn)':'var(--danger)';
-  const tl=[
-    {t:'T+0',c:'#10b981',x:'System Normal — Entropy baseline at '+(Math.max(0,en-0.25)).toFixed(2)},
-    {t:'T+1',c:'#f59e0b',x:'Anomaly Detected — Output distribution shifted from baseline'},
-    {t:'T+2',c:'#f59e0b',x:'Confidence Dropping — Token probability collapse '+Math.round(en*90)+'%'},
-  ];
-  if(s==='critical'){
-    tl.push({t:'T+3',c:'#ef4444',x:'LOCKDOWN — Entropy '+en.toFixed(2)+'. Model isolated. Rollback initiated'});
-    tl.push({t:'T+4',c:'#ef4444',x:'Alert Dispatched — CISO + Legal notified via PagerDuty'});
-    tl.push({t:'T+5',c:'#0ea5e9',x:'Recovery Complete — Stable state restored. Incident report generated.'});
-  } else {
-    tl.push({t:'T+3',c:'#10b981',x:'Recovery Complete — Stable state restored. Incident report generated.'});
-  }
+  const sig=Math.round((1-en)*100),sp=document.getElementById('i-signal');sp.textContent=sig+'%';sp.style.color=sig>60?'var(--ok)':sig>30?'var(--warn)':'var(--danger)';
+  const tl=[{t:'T+0',c:'#10b981',x:'System Normal — Entropy baseline at '+(Math.max(0,en-0.25)).toFixed(2)},{t:'T+1',c:'#f59e0b',x:'Anomaly Detected — Output distribution shifted from baseline'},{t:'T+2',c:'#f59e0b',x:'Confidence Dropping — Token probability collapse '+Math.round(en*90)+'%'}];
+  if(s==='critical'){tl.push({t:'T+3',c:'#ef4444',x:'LOCKDOWN — Entropy '+en.toFixed(2)+'. Model isolated. Rollback initiated'});tl.push({t:'T+4',c:'#ef4444',x:'Alert Dispatched — CISO + Legal notified via PagerDuty'});tl.push({t:'T+5',c:'#0ea5e9',x:'Recovery Complete — Stable state restored. Incident report generated.'});}else{tl.push({t:'T+3',c:'#10b981',x:'Recovery Complete — Stable state restored. Incident report generated.'});}
   document.getElementById('i-tl').innerHTML=tl.map(t=>`<li class="tl-item"><span class="tl-t">${t.t}</span><div class="tl-dot" style="background:${t.c}"></div><span class="tl-text">${t.x}</span></li>`).join('');
-  const regs=isExfiltration(e)?[
-    {n:'PDPA Malaysia — Data Breach',r:'HIGH',d:'Personal / customer data exported to external endpoint. 24-hour PDPC notification window.',a:'Isolate agent. Export evidence package. Notify DPO immediately.'},
-    {n:'Singapore MGF — Clause 2.5',r:'HIGH',d:'AI incident involving unauthorized data disclosure.',a:'File incident report within 72 hours.'},
-    {n:'Vietnam AI Law',r:'HIGH',d:'Report AI system incident involving data leakage to competent authority.',a:'Prepare incident summary. Notify compliance officer.'},
-  ]:s==='critical'?[
-    {n:'PDPA Malaysia',r:'HIGH',d:'Notify PDPC of personal data breach. 24-hour notification window from incident detection.',a:'Export evidence package. Submit to compliance officer immediately.'},
-    {n:'Singapore MGF — Clause 2.5',r:'HIGH',d:'Document and report AI incidents within the MGF 72-hour window.',a:'Export evidence package. Submit to compliance officer.'},
-    {n:'Vietnam AI Law',r:'HIGH',d:'Report AI system incident to the competent authority within 72 hours.',a:'Notify data protection officer. Prepare incident summary.'},
-  ]:s==='elevated'?[
-    {n:'Singapore MGF — Clause 2.1',r:'MED',d:'Ensure senior management oversight of AI decisions at elevated risk.',a:'Escalate to AI governance owner. Log decision rationale.'},
-    {n:'Singapore MGF — Clause 2.3',r:'MED',d:'Monitor AI system operations and log anomalous behaviour.',a:'Review session event chain. Verify no policy boundary crossed.'},
-  ]:[
-    {n:'PDPA Malaysia',r:'LOW',d:'Routine processing — no breach threshold reached.',a:'No action required. Continue standard logging.'},
-    {n:'ISO/IEC 42001',r:'LOW',d:'Log and assess AI management system activity.',a:'Event recorded to the immutable audit ledger.'},
-  ];
+  const regs=isExfiltration(e)?[{n:'PDPA Malaysia — Data Breach',r:'HIGH',d:'Personal / customer data exported to external endpoint. 24-hour PDPC notification window.',a:'Isolate agent. Export evidence package. Notify DPO immediately.'},{n:'Singapore MGF — Clause 2.5',r:'HIGH',d:'AI incident involving unauthorized data disclosure.',a:'File incident report within 72 hours.'},{n:'Vietnam AI Law',r:'HIGH',d:'Report AI system incident involving data leakage to competent authority.',a:'Prepare incident summary. Notify compliance officer.'}]:s==='critical'?[{n:'PDPA Malaysia',r:'HIGH',d:'Notify PDPC of personal data breach. 24-hour notification window from incident detection.',a:'Export evidence package. Submit to compliance officer immediately.'},{n:'Singapore MGF — Clause 2.5',r:'HIGH',d:'Document and report AI incidents within the MGF 72-hour window.',a:'Export evidence package. Submit to compliance officer.'},{n:'Vietnam AI Law',r:'HIGH',d:'Report AI system incident to the competent authority within 72 hours.',a:'Notify data protection officer. Prepare incident summary.'}]:s==='elevated'?[{n:'Singapore MGF — Clause 2.1',r:'MED',d:'Ensure senior management oversight of AI decisions at elevated risk.',a:'Escalate to AI governance owner. Log decision rationale.'},{n:'Singapore MGF — Clause 2.3',r:'MED',d:'Monitor AI system operations and log anomalous behaviour.',a:'Review session event chain. Verify no policy boundary crossed.'}]:[{n:'PDPA Malaysia',r:'LOW',d:'Routine processing — no breach threshold reached.',a:'No action required. Continue standard logging.'},{n:'ISO/IEC 42001',r:'LOW',d:'Log and assess AI management system activity.',a:'Event recorded to the immutable audit ledger.'}];
   document.getElementById('i-regs').innerHTML=regs.map(r=>`<div class="reg-card"><div class="reg-hdr"><span class="reg-name">${r.n}</span><span class="badge ${r.r==='HIGH'?'critical':r.r==='MED'?'elevated':'stable'}">${r.r}</span></div><div class="reg-desc">${r.d}</div><div class="reg-action">↳ ${r.a}</div></div>`).join('');
   const now=new Date();
-  document.getElementById('i-sla').innerHTML=`
-    <div class="sla-item"><div class="sla-hdr"><span class="sla-name">Acknowledge</span><span class="sla-met" style="color:var(--ok)">Met</span></div><div class="sla-bar"><div class="sla-fill" style="width:100%;background:var(--ok)"></div></div><div class="sla-due">Due: ${new Date(now.getTime()+86400000).toLocaleString()}</div></div>
-    <div class="sla-item"><div class="sla-hdr"><span class="sla-name">Resolve</span><span class="sla-met" style="color:var(--ok)">Met</span></div><div class="sla-bar"><div class="sla-fill" style="width:100%;background:var(--ok)"></div></div><div class="sla-due">Due: ${new Date(now.getTime()+259200000).toLocaleString()}</div></div>
-    <div class="sla-item"><div class="sla-hdr"><span class="sla-name">Report</span><span class="sla-met" style="color:var(--warn)">Pending</span></div><div class="sla-bar"><div class="sla-fill" style="width:35%;background:var(--warn)"></div></div><div class="sla-due">Due: ${new Date(now.getTime()+604800000).toLocaleString()}</div></div>`;
+  document.getElementById('i-sla').innerHTML=`<div class="sla-item"><div class="sla-hdr"><span class="sla-name">Acknowledge</span><span class="sla-met" style="color:var(--ok)">Met</span></div><div class="sla-bar"><div class="sla-fill" style="width:100%;background:var(--ok)"></div></div><div class="sla-due">Due: ${new Date(now.getTime()+86400000).toLocaleString()}</div></div><div class="sla-item"><div class="sla-hdr"><span class="sla-name">Resolve</span><span class="sla-met" style="color:var(--ok)">Met</span></div><div class="sla-bar"><div class="sla-fill" style="width:100%;background:var(--ok)"></div></div><div class="sla-due">Due: ${new Date(now.getTime()+259200000).toLocaleString()}</div></div><div class="sla-item"><div class="sla-hdr"><span class="sla-name">Report</span><span class="sla-met" style="color:var(--warn)">Pending</span></div><div class="sla-bar"><div class="sla-fill" style="width:35%;background:var(--warn)"></div></div><div class="sla-due">Due: ${new Date(now.getTime()+604800000).toLocaleString()}</div></div>`;
   document.getElementById('inv').classList.add('open');
+  // Reset chain btn label when reopening investigator
+  document.getElementById('btn-chain').textContent = '⬡ View Event Chain';
+  document.getElementById('btn-chain').classList.remove('active');
 }
 
 /* Heart Monitor */
 async function loadHeartMonitor(e){
-  const sessionId=e.raw?.session_id, en=e.data?.entropy??0, s=sev(e);
+  const sessionId=e.raw?.session_id,en=e.data?.entropy??0,s=sev(e);
   if(!sessionId){renderFlatHM(en,s);return;}
-  try{
-    const data=await apiFetch('/session/lineage/'+encodeURIComponent(sessionId),{cache:'no-store'}).then(r=>r.json());
-    const lineage=data.lineage||[];
-    const entropies=lineage.map(t=>t.entropy??0);
-    if(entropies.length<2){renderFlatHM(en,s);return;}
-    const pts=entropies.map((v,i)=>{
-      const x=(i/(entropies.length-1))*400;
-      const y=4+(1-v)*47;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    });
-    document.getElementById('hm-line').setAttribute('points',pts.join(' '));
-    const last=pts[pts.length-1].split(',');
-    document.getElementById('hm-dot').setAttribute('cx',last[0]);
-    document.getElementById('hm-dot').setAttribute('cy',last[1]);
-    document.getElementById('hm-left').textContent='← turn 1';
-    const peak=Math.max(...entropies);
-    document.getElementById('hm-spike').textContent=entropies.length+' turns · peak entropy '+peak.toFixed(2);
-  }catch(err){renderFlatHM(en,s);}
+  try{const data=await apiFetch('/session/lineage/'+encodeURIComponent(sessionId),{cache:'no-store'}).then(r=>r.json());const lineage=data.lineage||[];const entropies=lineage.map(t=>t.entropy??0);if(entropies.length<2){renderFlatHM(en,s);return;}const pts=entropies.map((v,i)=>{const x=(i/(entropies.length-1))*400,y=4+(1-v)*47;return `${x.toFixed(1)},${y.toFixed(1)}`;});document.getElementById('hm-line').setAttribute('points',pts.join(' '));const last=pts[pts.length-1].split(',');document.getElementById('hm-dot').setAttribute('cx',last[0]);document.getElementById('hm-dot').setAttribute('cy',last[1]);document.getElementById('hm-left').textContent='← turn 1';const peak=Math.max(...entropies);document.getElementById('hm-spike').textContent=entropies.length+' turns · peak entropy '+peak.toFixed(2);}
+  catch(err){renderFlatHM(en,s);}
 }
-
-function renderFlatHM(en,s){
-  const y=(4+(1-en)*47).toFixed(1);
-  const pts=Array.from({length:22},(_,i)=>`${(i*400/21).toFixed(1)},${y}`);
-  document.getElementById('hm-line').setAttribute('points',pts.join(' '));
-  document.getElementById('hm-dot').setAttribute('cx','400');
-  document.getElementById('hm-dot').setAttribute('cy',y);
-  document.getElementById('hm-left').textContent='← no session history';
-  document.getElementById('hm-spike').textContent=s==='critical'?'▼ Single high-entropy event':'';
-}
+function renderFlatHM(en,s){const y=(4+(1-en)*47).toFixed(1),pts=Array.from({length:22},(_,i)=>`${(i*400/21).toFixed(1)},${y}`);document.getElementById('hm-line').setAttribute('points',pts.join(' '));document.getElementById('hm-dot').setAttribute('cx','400');document.getElementById('hm-dot').setAttribute('cy',y);document.getElementById('hm-left').textContent='← no session history';document.getElementById('hm-spike').textContent=s==='critical'?'▼ Single high-entropy event':'';}
 
 function closeInv(){
+  closeChainView();
   document.getElementById('inv').classList.remove('open');
-  selIdx=-1; refresh();
+  selIdx=-1;refresh();
+}
+
+/* ── PHASE 13: EVENT CHAIN GRAPH ── */
+let chainOpen = false;
+
+function toggleChainView() {
+  if (chainOpen) { closeChainView(); return; }
+  if (selIdx < 0) { alert('Select an event first.'); return; }
+  openChainView(ALL[selIdx]);
+}
+
+function closeChainView() {
+  chainOpen = false;
+  document.getElementById('chain-panel').classList.remove('open');
+  document.getElementById('inv').classList.remove('chain-open');
+  const btn = document.getElementById('btn-chain');
+  if (btn) { btn.textContent = '⬡ View Event Chain'; btn.classList.remove('active'); }
+}
+
+function detectJurisdictions(e) {
+  const jurs = [], s = sev(e), isExfil = isExfiltration(e), text = (e.text || '').toLowerCase();
+  if (isExfil || s === 'critical') jurs.push('MY');
+  if (s === 'critical' || s === 'elevated') jurs.push('SG');
+  if (s === 'critical') jurs.push('VN');
+  if (text.includes('email') || text.includes('customer_id') || text.includes('phone') || text.includes('policy')) jurs.push('ORG');
+  if (!jurs.length) jurs.push('SG');
+  return [...new Set(jurs)];
+}
+
+function jurLabel(code) {
+  return { MY: 'PDPA MY', SG: 'SGP MGF', VN: 'VN AI Law', ORG: 'Company Policy' }[code] || code;
+}
+
+function nodeClass(s) {
+  if (s === 'critical') return 'node-critical';
+  if (s === 'elevated') return 'node-elevated';
+  return 'node-stable';
+}
+
+function chainActions(e) {
+  const actions = [], s = sev(e), isExfil = isExfiltration(e);
+  if (isExfil || s === 'critical') actions.push({ icon: '🔒', label: 'Legal Hold Opened', color: 'var(--danger)' });
+  if (s === 'critical' || isExfil) actions.push({ icon: '📡', label: 'Webhook Fired', color: 'var(--warn)' });
+  if (s === 'critical') actions.push({ icon: '⊘', label: 'Agent Isolated', color: 'var(--critical)' });
+  if (isExfil) actions.push({ icon: '📄', label: 'Incident Report Generated', color: 'var(--accent)' });
+  if (!actions.length) actions.push({ icon: '✓', label: 'Request Allowed — No Action', color: 'var(--ok)' });
+  return actions;
+}
+
+async function openChainView(e) {
+  chainOpen = true;
+  document.getElementById('chain-panel').classList.add('open');
+  document.getElementById('inv').classList.add('chain-open');
+  const btn = document.getElementById('btn-chain');
+  btn.textContent = '⬡ Close Chain'; btn.classList.add('active');
+
+  const body = document.getElementById('chain-body');
+  body.innerHTML = '<div class="loading"><div class="spin"></div>Building chain…</div>';
+
+  const s = sev(e), idx = ALL.indexOf(e);
+  const evIdStr = 'EV-' + String(ALL.length - idx).padStart(4, '0');
+  const jurs = detectJurisdictions(e), actions = chainActions(e);
+  const agentId = e.data?.agent_id || 'unknown';
+  const sessionId = e.raw?.session_id || null;
+  const bd = e.data?.bdi_score ?? 0, en = e.data?.entropy ?? 0;
+
+  let siblings = [];
+  if (sessionId) {
+    try {
+      const data = await apiFetch('/session/lineage/' + encodeURIComponent(sessionId), { cache: 'no-store' }).then(r => r.json());
+      siblings = (data.lineage || []).slice(0, 10);
+    } catch (_) {}
+  }
+
+  let html = '';
+
+  // Legend
+  html += `<div class="chain-legend">
+    <span class="chain-legend-item"><span class="chain-legend-dot" style="background:#ff6b35"></span>PDPA MY</span>
+    <span class="chain-legend-item"><span class="chain-legend-dot" style="background:#0ea5e9"></span>SGP MGF</span>
+    <span class="chain-legend-item"><span class="chain-legend-dot" style="background:#10b981"></span>VN AI Law</span>
+    <span class="chain-legend-item"><span class="chain-legend-dot" style="background:#a78bfa"></span>Company Policy</span>
+  </div>`;
+
+  // Root — Agent node
+  html += `<div class="chain-node node-agent">
+    <div style="display:flex;align-items:center;gap:7px;margin-bottom:3px">
+      <div class="avatar" style="background:rgba(0,212,255,0.12);color:var(--accent);width:18px;height:18px;font-size:8px;border-radius:4px">${agentId.slice(0,2).toUpperCase()}</div>
+      <span style="font-size:10px;font-weight:600;color:var(--text)">${agentId}</span>
+      <span class="badge stable" style="font-size:8px;padding:1px 5px">agent</span>
+    </div>
+    <div style="font-size:9px;color:var(--muted)">Session: <span style="color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:9px">${sessionId ? sessionId.slice(0,20)+'…' : 'unknown'}</span></div>
+  </div>`;
+
+  html += `<div class="chain-edge"><div class="chain-edge-arrow">↓</div></div>`;
+
+  // Trigger event node
+  html += `<div class="chain-node ${nodeClass(s)}">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
+      <span style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--accent)">${evIdStr}</span>
+      <span class="badge ${s}">${s}</span>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px">
+      ${jurs.map(j => `<span class="jur-badge jur-${j}">${jurLabel(j)}</span>`).join('')}
+    </div>
+    <div style="display:flex;gap:14px;margin-bottom:${e.text ? '5px' : '0'}">
+      <span style="font-size:9px;color:var(--muted)">BDI <strong style="color:${bdiC(bd)};font-family:'JetBrains Mono',monospace">${Math.round(bd*100)}%</strong></span>
+      <span style="font-size:9px;color:var(--muted)">Entropy <strong style="font-family:'JetBrains Mono',monospace;color:${entC(en)}">${en.toFixed(2)}</strong></span>
+    </div>
+    ${e.text ? `<div style="font-size:9px;color:var(--muted2);line-height:1.4;border-top:1px solid var(--border);padding-top:5px;margin-top:2px">${e.text.slice(0,90)}${e.text.length>90?'…':''}</div>` : ''}
+  </div>`;
+
+  // Enforcement action chain
+  actions.forEach((act) => {
+    html += `<div class="chain-edge"><div class="chain-edge-arrow" style="border-color:rgba(139,92,246,0.3)">↓</div></div>`;
+    html += `<div class="chain-node node-action">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:13px;line-height:1">${act.icon}</span>
+        <span style="font-size:10px;font-weight:500;color:${act.color}">${act.label}</span>
+      </div>
+    </div>`;
+  });
+
+  // Session history strip (if available)
+  if (siblings.length > 1) {
+    html += `<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+      <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.09em;color:var(--muted);font-weight:600;margin-bottom:10px">◎ Session Lineage — ${siblings.length} turns</div>`;
+    siblings.forEach((turn, i) => {
+      const tEn = turn.entropy ?? 0, tBdi = turn.bdi_score ?? 0;
+      const tSev = (tEn >= 0.7 || tBdi >= 0.65) ? 'critical' : (tEn >= 0.4 || tBdi >= 0.35) ? 'elevated' : 'stable';
+      const bc = tSev === 'critical' ? 'var(--danger)' : tSev === 'elevated' ? 'var(--warn)' : 'var(--ok)';
+      const turnJurs = [];
+      if (tSev === 'critical') { turnJurs.push('MY'); turnJurs.push('SG'); turnJurs.push('VN'); }
+      else if (tSev === 'elevated') turnJurs.push('SG');
+      html += `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid rgba(30,45,69,0.35)">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);width:26px;flex-shrink:0">T+${i+1}</span>
+        <div style="flex:1;height:3px;background:var(--border2);border-radius:2px;overflow:hidden">
+          <div style="height:100%;width:${Math.round(tBdi*100)}%;background:${bc};border-radius:2px;transition:width 0.3s"></div>
+        </div>
+        <span style="font-size:9px;font-family:'JetBrains Mono',monospace;color:${bc};width:28px;text-align:right;flex-shrink:0">${Math.round(tBdi*100)}%</span>
+        <div style="display:flex;gap:3px;flex-shrink:0">
+          ${turnJurs.map(j=>`<span class="jur-badge jur-${j}" style="font-size:7px;padding:0 4px">${j}</span>`).join('')}
+        </div>
+        <span class="badge ${tSev}" style="font-size:7px;padding:1px 4px;flex-shrink:0">${tSev}</span>
+      </div>`;
+    });
+    html += `</div>`;
+  } else {
+    html += `<div style="margin-top:14px;padding:10px 12px;background:var(--bg4);border:1px solid var(--border);border-radius:7px;font-size:10px;color:var(--muted);text-align:center">No session lineage available for this event.</div>`;
+  }
+
+  body.innerHTML = html;
 }
 
 /* REMEDIATE */
 async function remediateEvent(){
   if(selIdx<0){alert('Select an event first.');return;}
-  const e=ALL[selIdx], id=evId(selIdx);
-  if(!confirm('Create a permanent legal hold for '+id+'?\n\nThis writes an immutable forensic record that cannot be deleted — the same protection your audit ledger already guarantees.')) return;
-  const btn=document.querySelector('.act-full.act-danger');
-  const orig=btn.textContent;
-  btn.disabled=true; btn.textContent='⚡ Creating hold…';
-  try{
-    const sevMap={critical:'CRITICAL',elevated:'HIGH',stable:'MEDIUM'};
-    const res=await apiFetch('/legal-hold',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({trigger_type:'manual',reason:'Manually remediated via dashboard — '+id,severity:sevMap[sev(e)]||'HIGH',agent_id:e.data?.agent_id||null,session_id:e.raw?.session_id||null,event_id:e.raw?.event_id||null})});
-    const data=await res.json();
-    if(data.created===false) alert('No new hold created — an active hold already exists for this session.');
-    else if(data.hold) alert('Legal hold created for '+id+'.\nHold ID: '+data.hold.id+'\nStatus: ACTIVE');
-    else alert('Hold request sent. Check /legal-hold to confirm.');
-  }catch(err){alert('Could not create legal hold: '+err.message);}
-  btn.disabled=false; btn.textContent=orig;
+  const e=ALL[selIdx],id=evId(selIdx);
+  if(!confirm('Create a permanent legal hold for '+id+'?\n\nThis writes an immutable forensic record that cannot be deleted — the same protection your audit ledger already guarantees.'))return;
+  const btn=document.querySelector('.act-full.act-danger'),orig=btn.textContent;
+  btn.disabled=true;btn.textContent='⚡ Creating hold…';
+  try{const sevMap={critical:'CRITICAL',elevated:'HIGH',stable:'MEDIUM'};const res=await apiFetch('/legal-hold',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({trigger_type:'manual',reason:'Manually remediated via dashboard — '+id,severity:sevMap[sev(e)]||'HIGH',agent_id:e.data?.agent_id||null,session_id:e.raw?.session_id||null,event_id:e.raw?.event_id||null})});const data=await res.json();if(data.created===false)alert('No new hold created — an active hold already exists for this session.');else if(data.hold)alert('Legal hold created for '+id+'.\nHold ID: '+data.hold.id+'\nStatus: ACTIVE');else alert('Hold request sent. Check /legal-hold to confirm.');}
+  catch(err){alert('Could not create legal hold: '+err.message);}
+  btn.disabled=false;btn.textContent=orig;
 }
 
 /* REPLAY */
 async function replayEventChain(){
-  var btn=document.getElementById('btn-replay');
-  btn.disabled=true; btn.textContent='▷ Replaying…'; closeInv();
-  var evs=filtered(); var tb=document.getElementById('tbody'); tb.innerHTML='';
+  var btn=document.getElementById('btn-replay');btn.disabled=true;btn.textContent='▷ Replaying…';closeInv();
+  var evs=filtered(),tb=document.getElementById('tbody');tb.innerHTML='';
   for(var i=0;i<evs.length;i++){
     await new Promise(function(r){setTimeout(r,380)});
-    var e=evs[i], ridx=ALL.indexOf(e), s=sev(e), bd=e.data&&e.data.bdi_score||0, en=e.data&&e.data.entropy||0;
-    var ts=e.created_at?new Date(e.created_at).toLocaleString():'—', bpct=Math.round(bd*100);
-    var row=document.createElement('div'); row.className='evt-row';
-    row.style.background='rgba(0,212,255,0.09)';
-    row.setAttribute('onclick','openInv('+ridx+')');
-    row.innerHTML='<div><div class="evt-id"><strong>'+evId(ridx)+'</strong></div><div class="evt-ts">'+ts+'</div></div>'+
-      '<div class="actor-wrap">'+avatarFor(e.kind)+'<div style="min-width:0"><div class="actor-name">'+actorName(e.kind)+'</div><div class="actor-desc">'+shortText(e.text)+'</div></div></div>'+
-      '<div><span class="badge '+s+'">'+s+'</span></div>'+
-      '<div class="bdi-wrap"><div class="bdi-track"><div class="bdi-fill" style="width:'+bpct+'%;background:'+bdiC(bd)+'"></div></div><span class="mono-val" style="color:'+bdiC(bd)+'">'+bpct+'%</span></div>'+
-      '<div class="mono-val" style="color:'+entC(en)+'">'+en.toFixed(2)+'</div>'+
-      '<div><div class="pulse-dot '+pulseClass(s)+'">'+pulseIcon(s)+'</div></div>';
+    var e=evs[i],ridx=ALL.indexOf(e),s=sev(e),bd=e.data&&e.data.bdi_score||0,en=e.data&&e.data.entropy||0,ts=e.created_at?new Date(e.created_at).toLocaleString():'—',bpct=Math.round(bd*100);
+    var row=document.createElement('div');row.className='evt-row';row.style.background='rgba(0,212,255,0.09)';row.setAttribute('onclick','openInv('+ridx+')');
+    row.innerHTML='<div><div class="evt-id"><strong>'+evId(ridx)+'</strong></div><div class="evt-ts">'+ts+'</div></div><div class="actor-wrap">'+avatarFor(e.kind)+'<div style="min-width:0"><div class="actor-name">'+actorName(e.kind)+'</div><div class="actor-desc">'+shortText(e.text)+'</div></div></div><div><span class="badge '+s+'">'+s+'</span></div><div class="bdi-wrap"><div class="bdi-track"><div class="bdi-fill" style="width:'+bpct+'%;background:'+bdiC(bd)+'"></div></div><span class="mono-val" style="color:'+bdiC(bd)+'">'+bpct+'%</span></div><div class="mono-val" style="color:'+entC(en)+'">'+en.toFixed(2)+'</div><div><div class="pulse-dot '+pulseClass(s)+'">'+pulseIcon(s)+'</div></div>';
     tb.appendChild(row);
     (function(rr){setTimeout(function(){rr.style.background=''},600)})(row);
   }
-  btn.disabled=false; btn.textContent='▷ Replay Event Chain';
+  btn.disabled=false;btn.textContent='▷ Replay Event Chain';
 }
-async function downloadSealedPDF(){if(selIdx<0){alert('Select an event first.');return;}const e=ALL[selIdx];const sessionId=e.raw&&e.raw.session_id;if(!sessionId){alert('No session ID on this event.');return;}const btn=document.getElementById('btn-sealed-pdf');const orig=btn.textContent;btn.disabled=true;btn.textContent='⬇ Fetching…';try{const holdsRes=await apiFetch('/legal-hold?status=ACTIVE',{cache:'no-store'}).then(r=>r.json());const holds=holdsRes.holds||[];const agentId=e.data&&e.data.agent_id;const match=holds.find(function(h){return h.session_id===sessionId||h.agent_id===agentId;});if(!match){alert('No sealed evidence package found.\nA breach must occur first to auto-generate one.');btn.disabled=false;btn.textContent=orig;return;}const pdfUrl=API+'/legal-hold/'+encodeURIComponent(match.id)+'/evidence-package?format=pdf';const a=document.createElement('a');a.href=pdfUrl;a.download='pulse-incident-'+match.id.slice(0,8)+'.pdf';a.target='_blank';a.click();}catch(err){alert('Download failed: '+err.message);}btn.disabled=false;btn.textContent=orig;}
+
+async function downloadSealedPDF(){
+  if(selIdx<0){alert('Select an event first.');return;}
+  const e=ALL[selIdx],sessionId=e.raw&&e.raw.session_id;
+  if(!sessionId){alert('No session ID on this event.');return;}
+  const btn=document.getElementById('btn-sealed-pdf'),orig=btn.textContent;btn.disabled=true;btn.textContent='⬇ Fetching…';
+  try{const holdsRes=await apiFetch('/legal-hold?status=ACTIVE',{cache:'no-store'}).then(r=>r.json());const holds=holdsRes.holds||[];const agentId=e.data&&e.data.agent_id;const match=holds.find(function(h){return h.session_id===sessionId||h.agent_id===agentId;});if(!match){alert('No sealed evidence package found.\nA breach must occur first to auto-generate one.');btn.disabled=false;btn.textContent=orig;return;}const pdfUrl=API+'/legal-hold/'+encodeURIComponent(match.id)+'/evidence-package?format=pdf';const a=document.createElement('a');a.href=pdfUrl;a.download='pulse-incident-'+match.id.slice(0,8)+'.pdf';a.target='_blank';a.click();}
+  catch(err){alert('Download failed: '+err.message);}
+  btn.disabled=false;btn.textContent=orig;
+}
+
 /* EXPORT */
 async function exportEvidencePackage(){
-  var btn=document.getElementById('btn-export'); btn.disabled=true; btn.textContent='↓ Exporting…';
+  var btn=document.getElementById('btn-export');btn.disabled=true;btn.textContent='↓ Exporting…';
   try{
     var e=selIdx>=0?ALL[selIdx]:null;
-    var results=await Promise.all([
-      apiFetch('/health',{cache:'no-store'}).then(function(r){return r.json()}),
-      apiFetch('/circuit-breaker/status',{cache:'no-store'}).then(function(r){return r.json()}),
-      apiFetch('/ai_events/recent?limit=500',{cache:'no-store'}).then(function(r){return r.json()}),
-      apiFetch('/alerts?limit=100',{cache:'no-store'}).then(function(r){return r.json()}).catch(function(){return {alerts:[]}})
-    ]);
+    var results=await Promise.all([apiFetch('/health',{cache:'no-store'}).then(function(r){return r.json()}),apiFetch('/circuit-breaker/status',{cache:'no-store'}).then(function(r){return r.json()}),apiFetch('/ai_events/recent?limit=500',{cache:'no-store'}).then(function(r){return r.json()}),apiFetch('/alerts?limit=100',{cache:'no-store'}).then(function(r){return r.json()}).catch(function(){return{alerts:[]}})]);
     var pkg={exported_at:new Date().toISOString(),governance_version:'pulse-v1-beta',jurisdiction:'ASEAN — PDPA Malaysia (24hr) / Singapore MGF (72hr) / Vietnam AI Law (72hr)',selected_event:e?Object.assign({event_id:evId(selIdx),severity:sev(e),exfiltration:isExfiltration(e)},e):null,health:results[0],circuit_breaker:results[1],all_events:results[2].events||[],exfiltration_alerts:results[3].alerts||[],total_events:(results[2].events||[]).length};
-    var blob=new Blob([JSON.stringify(pkg,null,2)],{type:'application/json'});
-    var url=URL.createObjectURL(blob); var a=document.createElement('a');
-    a.href=url; a.download='pulse-evidence-'+new Date().toISOString().replace(/[:.]/g,'-')+'.json'; a.click(); URL.revokeObjectURL(url);
+    var blob=new Blob([JSON.stringify(pkg,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='pulse-evidence-'+new Date().toISOString().replace(/[:.]/g,'-')+'.json';a.click();URL.revokeObjectURL(url);
   }catch(err){alert('Export failed: '+err.message);}
-  btn.disabled=false; btn.textContent='↓ Export Evidence Package';
+  btn.disabled=false;btn.textContent='↓ Export Evidence Package';
 }
 
 /* INCIDENT REPORT */
 async function generateIncidentReport(){
-  var btn=document.getElementById('btn-report'); btn.disabled=true; btn.textContent='☰ Generating…';
+  var btn=document.getElementById('btn-report');btn.disabled=true;btn.textContent='☰ Generating…';
   try{
-    var e=selIdx>=0?ALL[selIdx]:null, s=e?sev(e):'n/a', bd=e&&e.data&&e.data.bdi_score||0, en=e&&e.data&&e.data.entropy||0;
-    var ts=e&&e.created_at?new Date(e.created_at).toLocaleString():'Unknown', now=new Date().toISOString();
-    var health={ok:'?'}, cb={state:'?',failure_count:0};
+    var e=selIdx>=0?ALL[selIdx]:null,s=e?sev(e):'n/a',bd=e&&e.data&&e.data.bdi_score||0,en=e&&e.data&&e.data.entropy||0;
+    var ts=e&&e.created_at?new Date(e.created_at).toLocaleString():'Unknown',now=new Date().toISOString();
+    var health={ok:'?'},cb={state:'?',failure_count:0};
     try{var r2=await Promise.all([apiFetch('/health',{cache:'no-store'}).then(function(r){return r.json()}),apiFetch('/circuit-breaker/status',{cache:'no-store'}).then(function(r){return r.json()})]);health=r2[0];cb=r2[1];}catch(_){}
     var L=['PULSE AI GOVERNANCE INCIDENT REPORT','=====================================','Generated:    '+now,'Jurisdiction: ASEAN (PDPA Malaysia 24hr / Singapore MGF 72hr / Vietnam AI Law 72hr)','','SYSTEM STATUS','-------------','Health:          '+(health.ok===true?'HEALTHY':'UNKNOWN'),'Circuit Breaker: '+(cb.state||'unknown').toUpperCase(),'Failures:        '+(cb.failure_count||0),''];
-    if(e){
-      L.push('SELECTED EVENT','——————————','Event ID:  '+evId(selIdx),'Severity:  '+s.toUpperCase(),'Triggered: '+ts,'Kind:      '+(e.kind||'unknown'),'BDI Score: '+Math.round(bd*100)+'%','Entropy:   '+en.toFixed(2),'Exfiltration: '+(isExfiltration(e)?'YES — risk '+((e.data&&e.data.exfiltration&&e.data.exfiltration.risk_score)||'?'):'No'),'Text:      '+(e.text||'(none)'),'');
-      if(isExfiltration(e)) L.push('REQUIRED ACTIONS (EXFILTRATION)','——————————————————————','PDPA Malaysia:   Notify PDPC within 24 hours — data breach','Singapore MGF:   File incident report within 72 hours','Vietnam AI Law:  Notify competent authority within 72 hours','Internal:        Isolate agent, revoke API keys, activate HITL review','');
-      else if(s==='critical') L.push('REQUIRED ACTIONS (CRITICAL)','——————————————————','PDPA Malaysia:   Notify PDPC within 24 hours','Singapore MGF:   File incident report within 72 hours','Vietnam AI Law:  Notify competent authority within 72 hours','Internal:        Pause automated pipeline, activate HITL review','');
-    } else L.push('NOTE: No event selected.','');
+    if(e){L.push('SELECTED EVENT','——————————','Event ID:  '+evId(selIdx),'Severity:  '+s.toUpperCase(),'Triggered: '+ts,'Kind:      '+(e.kind||'unknown'),'BDI Score: '+Math.round(bd*100)+'%','Entropy:   '+en.toFixed(2),'Exfiltration: '+(isExfiltration(e)?'YES — risk '+((e.data&&e.data.exfiltration&&e.data.exfiltration.risk_score)||'?'):'No'),'Text:      '+(e.text||'(none)'),'');if(isExfiltration(e))L.push('REQUIRED ACTIONS (EXFILTRATION)','——————————————————————','PDPA Malaysia:   Notify PDPC within 24 hours — data breach','Singapore MGF:   File incident report within 72 hours','Vietnam AI Law:  Notify competent authority within 72 hours','Internal:        Isolate agent, revoke API keys, activate HITL review','');else if(s==='critical')L.push('REQUIRED ACTIONS (CRITICAL)','——————————————————','PDPA Malaysia:   Notify PDPC within 24 hours','Singapore MGF:   File incident report within 72 hours','Vietnam AI Law:  Notify competent authority within 72 hours','Internal:        Pause automated pipeline, activate HITL review','');}else L.push('NOTE: No event selected.','');
     L.push('ALL EVENTS SUMMARY','——————————','Total:    '+ALL.length,'Critical: '+ALL.filter(function(x){return sev(x)==='critical'}).length,'Exfiltration: '+ALL.filter(function(x){return isExfiltration(x)}).length,'Elevated: '+ALL.filter(function(x){return sev(x)==='elevated'}).length,'Stable:   '+ALL.filter(function(x){return sev(x)==='stable'}).length,'','EVENT TIMELINE','——————————');
     ALL.forEach(function(x,i){var xt=x.created_at?new Date(x.created_at).toLocaleString():'?';L.push('['+evId(ALL.length-1-i)+'] '+xt+' | '+sev(x).toUpperCase()+' | '+x.kind+' | '+(x.text||'').substring(0,55));});
     L.push('','=====================================','Pulse — Immutable Compliance for ASEAN AI Governance','Built by Waqas Nazir');
-    var blob=new Blob([L.join('\n')],{type:'text/plain'});
-    var url=URL.createObjectURL(blob); var a=document.createElement('a');
-    a.href=url; a.download='pulse-incident-report-'+now.replace(/[:.]/g,'-')+'.txt'; a.click(); URL.revokeObjectURL(url);
+    var blob=new Blob([L.join('\n')],{type:'text/plain'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='pulse-incident-report-'+now.replace(/[:.]/g,'-')+'.txt';a.click();URL.revokeObjectURL(url);
   }catch(err){alert('Report generation failed: '+err.message);}
-  btn.disabled=false; btn.textContent='☰ Generate Full Incident Report';
+  btn.disabled=false;btn.textContent='☰ Generate Full Incident Report';
 }
 
 /* ── MAIN LOAD ── */
 async function load(){
   try{
-    const [h,cb,ev,alertsRes]=await Promise.all([
-      apiFetch('/health',{cache:'no-store'}).then(r=>r.json()),
-      apiFetch('/circuit-breaker/status',{cache:'no-store'}).then(r=>r.json()),
-      apiFetch('/ai_events/recent?limit=500',{cache:'no-store'}).then(r=>r.json()),
-      apiFetch('/alerts?limit=100',{cache:'no-store'}).then(r=>r.json()).catch(()=>({alerts:[]}))
-    ]);
-    const state=cb.state||h.circuit_breaker?.state||'unknown', fails=cb.failure_count??0;
-    const pill=document.getElementById('status-pill'), ptxt=document.getElementById('status-text');
-    if(state==='open'){pill.className='pill open-cb';ptxt.textContent='CIRCUIT OPEN';}
-    else if(state==='half-open'){pill.className='pill fallback';ptxt.textContent='FALLBACK';}
-    else{pill.className='pill live';ptxt.textContent='Systems Nominal';}
-    const cbEl=document.getElementById('k-cb');
-    cbEl.textContent=state.toUpperCase();
-    cbEl.className='kpi-val '+(state==='closed'?'c-green':state==='open'?'c-red':'c-amber');
+    const [h,cb,ev,alertsRes]=await Promise.all([apiFetch('/health',{cache:'no-store'}).then(r=>r.json()),apiFetch('/circuit-breaker/status',{cache:'no-store'}).then(r=>r.json()),apiFetch('/ai_events/recent?limit=500',{cache:'no-store'}).then(r=>r.json()),apiFetch('/alerts?limit=100',{cache:'no-store'}).then(r=>r.json()).catch(()=>({alerts:[]}))]);
+    const state=cb.state||h.circuit_breaker?.state||'unknown',fails=cb.failure_count??0;
+    const pill=document.getElementById('status-pill'),ptxt=document.getElementById('status-text');
+    if(state==='open'){pill.className='pill open-cb';ptxt.textContent='CIRCUIT OPEN';}else if(state==='half-open'){pill.className='pill fallback';ptxt.textContent='FALLBACK';}else{pill.className='pill live';ptxt.textContent='Systems Nominal';}
+    const cbEl=document.getElementById('k-cb');cbEl.textContent=state.toUpperCase();cbEl.className='kpi-val '+(state==='closed'?'c-green':state==='open'?'c-red':'c-amber');
     document.getElementById('k-fail').textContent=fails;
     EXFIL_ALERTS=alertsRes.alerts||[];
-    ALL=attachExfiltration((ev.events||[]).map(transformAiEvent), EXFIL_ALERTS);
-    // Phase 5: render CEM after events are loaded
-    renderCEM();
-    refresh();
-  }catch(err){
-    document.getElementById('tbody').innerHTML=`<div class="empty"><div style="color:var(--danger);font-size:20px">⚠</div><div style="color:var(--danger);margin-top:6px;font-weight:500">Backend unreachable</div><div style="font-size:11px;margin-top:4px;color:var(--muted2)">${err.message}</div></div>`;
-  }
+    ALL=attachExfiltration((ev.events||[]).map(transformAiEvent),EXFIL_ALERTS);
+    renderCEM();refresh();
+  }catch(err){document.getElementById('tbody').innerHTML=`<div class="empty"><div style="color:var(--danger);font-size:20px">⚠</div><div style="color:var(--danger);margin-top:6px;font-weight:500">Backend unreachable</div><div style="font-size:11px;margin-top:4px;color:var(--muted2)">${err.message}</div></div>`;}
 }
 
-// Date filter defaults to empty — show all events on load
 window.addEventListener('DOMContentLoaded', function() {
-    const today = new Date().toISOString().slice(0, 10);
-    dateFrom = today;
-    const df = document.getElementById('date-from');
-    if (df) df.value = today;
+  const today = new Date().toISOString().slice(0, 10);
+  dateFrom = today;
+  const df = document.getElementById('date-from');
+  if (df) df.value = today;
 });
 
 /* SHARE VIEWER LINK */
 async function shareViewerLink(){
   if(selIdx<0){alert('Select an event first.');return;}
-  const e=ALL[selIdx];
-  const sessionId=e.raw&&e.raw.session_id;
-  const agentId=e.data&&e.data.agent_id;
-  const btn=document.getElementById('btn-viewer-link');
-  const orig=btn.textContent;
-  btn.disabled=true; btn.textContent='🔗 Generating link…';
-  try{
-    const holdsRes=await apiFetch('/legal-hold?status=ACTIVE',{cache:'no-store'}).then(r=>r.json());
-    const holds=holdsRes.holds||[];
-    const match=holds.find(h=>h.session_id===sessionId||h.agent_id===agentId);
-    if(!match){
-      alert('No sealed evidence package found for this event.\nA breach must be detected first to generate a viewer link.');
-      btn.disabled=false; btn.textContent=orig; return;
-    }
-    const linkRes=await apiFetch('/legal-hold/'+encodeURIComponent(match.id)+'/view-link',{cache:'no-store'}).then(r=>r.json());
-    if(!linkRes.ok||!linkRes.viewer_url){
-      alert('Could not generate viewer link. Check backend logs.');
-      btn.disabled=false; btn.textContent=orig; return;
-    }
-    try{await navigator.clipboard.writeText(linkRes.viewer_url);}catch(_){}
-    alert(
-      'Audit Viewer Link Generated\n\n'+
-      linkRes.viewer_url+'\n\n'+
-      'Expires: '+new Date(linkRes.expires_at).toLocaleString()+'\n'+
-      'TTL: '+linkRes.ttl_hours+' hours\n\n'+
-      'Link copied to clipboard. Share with auditors or regulators — no login required.'
-    );
-  }catch(err){alert('Failed to generate viewer link: '+err.message);}
-  btn.disabled=false; btn.textContent=orig;
+  const e=ALL[selIdx],sessionId=e.raw&&e.raw.session_id,agentId=e.data&&e.data.agent_id;
+  const btn=document.getElementById('btn-viewer-link'),orig=btn.textContent;btn.disabled=true;btn.textContent='🔗 Generating link…';
+  try{const holdsRes=await apiFetch('/legal-hold?status=ACTIVE',{cache:'no-store'}).then(r=>r.json());const holds=holdsRes.holds||[];const match=holds.find(h=>h.session_id===sessionId||h.agent_id===agentId);if(!match){alert('No sealed evidence package found for this event.\nA breach must be detected first to generate a viewer link.');btn.disabled=false;btn.textContent=orig;return;}const linkRes=await apiFetch('/legal-hold/'+encodeURIComponent(match.id)+'/view-link',{cache:'no-store'}).then(r=>r.json());if(!linkRes.ok||!linkRes.viewer_url){alert('Could not generate viewer link. Check backend logs.');btn.disabled=false;btn.textContent=orig;return;}try{await navigator.clipboard.writeText(linkRes.viewer_url);}catch(_){}alert('Audit Viewer Link Generated\n\n'+linkRes.viewer_url+'\n\nExpires: '+new Date(linkRes.expires_at).toLocaleString()+'\nTTL: '+linkRes.ttl_hours+' hours\n\nLink copied to clipboard. Share with auditors or regulators — no login required.');}
+  catch(err){alert('Failed to generate viewer link: '+err.message);}
+  btn.disabled=false;btn.textContent=orig;
 }
 
-/* SEND PDPA DPO NOTIFICATION */
+/* SEND DPO */
 async function sendToDPO(){
   if(selIdx<0){alert('Select an event first.');return;}
-  const e=ALL[selIdx];
-  const sessionId=e.raw&&e.raw.session_id;
-  const agentId=e.data&&e.data.agent_id;
+  const e=ALL[selIdx],sessionId=e.raw&&e.raw.session_id,agentId=e.data&&e.data.agent_id;
   const dpoEmail=prompt('Enter DPO email address:','dpo@yourcompany.com');
-  if(!dpoEmail||!dpoEmail.includes('@')) return;
-  const btn=document.getElementById('btn-send-dpo');
-  const orig=btn.textContent;
-  btn.disabled=true; btn.textContent='✉ Sending…';
-  try{
-    const holdsRes=await apiFetch('/legal-hold?status=ACTIVE',{cache:'no-store'}).then(r=>r.json());
-    const holds=holdsRes.holds||[];
-    const match=holds.find(h=>h.session_id===sessionId||h.agent_id===agentId);
-    if(!match){
-      alert('No sealed evidence package found for this event.\nA breach must be detected first to send a DPO notification.');
-      btn.disabled=false; btn.textContent=orig; return;
-    }
-    const sendRes=await fetch(
-      API+'/legal-hold/'+encodeURIComponent(match.id)+'/evidence-package/send?dpo_email='+encodeURIComponent(dpoEmail),
-      {method:'POST',headers:{'Content-Type':'application/json'}}
-    ).then(r=>r.json());
-    if(sendRes.ok===false&&sendRes.message&&sendRes.message.includes('SMTP')){
-      alert('PDPA DPO Notification Ready\n\nSMTP not configured on the backend yet.\nTo enable email delivery, set these in Render environment variables:\n\nPULSE_SMTP_HOST\nPULSE_SMTP_PORT\nPULSE_SMTP_USER\nPULSE_SMTP_PASS\n\nHold ID: '+match.id+'\nTarget DPO: '+dpoEmail);
-    } else if(sendRes.sent){
-      alert('PDPA DPO Notification Sent ✓\n\nTo: '+dpoEmail+'\nHold ID: '+match.id+'\nSent at: '+sendRes.sent_at);
-    } else {
-      alert('Response: '+JSON.stringify(sendRes,null,2));
-    }
-  }catch(err){alert('Failed to send notification: '+err.message);}
-  btn.disabled=false; btn.textContent=orig;
-}
-  function saveApiKey(){
-  const val = document.getElementById('api-key-input').value.trim();
-  if(!val){ clearApiKey(); return; }
-  localStorage.setItem('pulse_api_key', val);
-  ORG_API_KEY = val;
-  document.getElementById('api-key-status').textContent = '✓ API key saved — reloading your data…';
-  document.getElementById('api-key-status').style.color = 'var(--ok)';
-  setTimeout(()=>load(), 800);
+  if(!dpoEmail||!dpoEmail.includes('@'))return;
+  const btn=document.getElementById('btn-send-dpo'),orig=btn.textContent;btn.disabled=true;btn.textContent='✉ Sending…';
+  try{const holdsRes=await apiFetch('/legal-hold?status=ACTIVE',{cache:'no-store'}).then(r=>r.json());const holds=holdsRes.holds||[];const match=holds.find(h=>h.session_id===sessionId||h.agent_id===agentId);if(!match){alert('No sealed evidence package found for this event.\nA breach must be detected first to send a DPO notification.');btn.disabled=false;btn.textContent=orig;return;}const sendRes=await fetch(API+'/legal-hold/'+encodeURIComponent(match.id)+'/evidence-package/send?dpo_email='+encodeURIComponent(dpoEmail),{method:'POST',headers:{'Content-Type':'application/json'}}).then(r=>r.json());if(sendRes.ok===false&&sendRes.message&&sendRes.message.includes('SMTP')){alert('PDPA DPO Notification Ready\n\nSMTP not configured on the backend yet.\nTo enable email delivery, set these in Render environment variables:\n\nPULSE_SMTP_HOST\nPULSE_SMTP_PORT\nPULSE_SMTP_USER\nPULSE_SMTP_PASS\n\nHold ID: '+match.id+'\nTarget DPO: '+dpoEmail);}else if(sendRes.sent){alert('PDPA DPO Notification Sent ✓\n\nTo: '+dpoEmail+'\nHold ID: '+match.id+'\nSent at: '+sendRes.sent_at);}else{alert('Response: '+JSON.stringify(sendRes,null,2));}}
+  catch(err){alert('Failed to send notification: '+err.message);}
+  btn.disabled=false;btn.textContent=orig;
 }
 
-function clearApiKey(){
-  localStorage.removeItem('pulse_api_key');
-  ORG_API_KEY = null;
-  const input = document.getElementById('api-key-input');
-  if(input) input.value = '';
-  const status = document.getElementById('api-key-status');
-  if(status){ status.textContent = 'API key cleared — showing demo data'; status.style.color = 'var(--muted)'; }
-  setTimeout(()=>load(), 800);
-}
-  /* ── PHASE 12: REPLAY ENGINE ── */
+function saveApiKey(){const val=document.getElementById('api-key-input').value.trim();if(!val){clearApiKey();return;}localStorage.setItem('pulse_api_key',val);ORG_API_KEY=val;document.getElementById('api-key-status').textContent='✓ API key saved — reloading your data…';document.getElementById('api-key-status').style.color='var(--ok)';setTimeout(()=>load(),800);}
+function clearApiKey(){localStorage.removeItem('pulse_api_key');ORG_API_KEY=null;const input=document.getElementById('api-key-input');if(input)input.value='';const status=document.getElementById('api-key-status');if(status){status.textContent='API key cleared — showing demo data';status.style.color='var(--muted)';}setTimeout(()=>load(),800);}
+
+/* ── PHASE 12: REPLAY ENGINE ── */
 let replayRawMode = false;
 
 async function loadReplaySessions() {
-  const panel = document.getElementById('replay-panel');
-  const list = document.getElementById('replay-list');
-  panel.style.display = 'block';
-  list.innerHTML = '<div class="loading"><div class="spin"></div>Loading replay queue…</div>';
-  try {
-    const data = await apiFetch('/replay?status=pending', {cache:'no-store'}).then(r => r.json());
-    const sessions = data.sessions || [];
-    if (!sessions.length) {
-      list.innerHTML = '<div class="empty"><div class="empty-icon">◎</div><div>No sessions flagged for replay.</div><div style="font-size:11px;margin-top:6px;color:var(--muted2)">Sessions are auto-flagged when HIGH or CRITICAL events fire.</div></div>';
-      return;
-    }
-    list.innerHTML = sessions.map(s => `
-      <div class="drift-card" style="cursor:pointer" onclick="openReplaySession('${s.session_id}','${s.id}')">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-          <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text)">${s.session_id}</span>
-          <div style="display:flex;align-items:center;gap:8px">
-            <span class="badge critical">${s.trigger_reason || 'flagged'}</span>
-            <span class="badge ${s.status === 'reviewed' ? 'stable' : 'elevated'}">${s.status}</span>
-          </div>
-        </div>
-        <div style="font-size:10px;color:var(--muted)">Flagged by: ${s.flagged_by} · ${s.flagged_at ? new Date(s.flagged_at).toLocaleString() : '—'}</div>
-      </div>`).join('');
-  } catch(err) {
-    list.innerHTML = `<div class="empty"><div style="color:var(--danger)">⚠ ${err.message}</div></div>`;
-  }
+  const panel=document.getElementById('replay-panel'),list=document.getElementById('replay-list');
+  panel.style.display='block';list.innerHTML='<div class="loading"><div class="spin"></div>Loading replay queue…</div>';
+  try{const data=await apiFetch('/replay?status=pending',{cache:'no-store'}).then(r=>r.json());const sessions=data.sessions||[];if(!sessions.length){list.innerHTML='<div class="empty"><div class="empty-icon">◎</div><div>No sessions flagged for replay.</div><div style="font-size:11px;margin-top:6px;color:var(--muted2)">Sessions are auto-flagged when HIGH or CRITICAL events fire.</div></div>';return;}list.innerHTML=sessions.map(s=>`<div class="drift-card" style="cursor:pointer" onclick="openReplaySession('${s.session_id}','${s.id}')"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text)">${s.session_id}</span><div style="display:flex;align-items:center;gap:8px"><span class="badge critical">${s.trigger_reason||'flagged'}</span><span class="badge ${s.status==='reviewed'?'stable':'elevated'}">${s.status}</span></div></div><div style="font-size:10px;color:var(--muted)">Flagged by: ${s.flagged_by} · ${s.flagged_at?new Date(s.flagged_at).toLocaleString():'—'}</div></div>`).join('');}
+  catch(err){list.innerHTML=`<div class="empty"><div style="color:var(--danger)">⚠ ${err.message}</div></div>`;}
 }
 
-async function openReplaySession(sessionId, replayId) {
-  const modal = document.getElementById('replay-modal');
-  const body = document.getElementById('replay-modal-body');
-  const title = document.getElementById('replay-modal-title');
-  modal.style.display = 'flex';
-  replayRawMode = false;
-  document.getElementById('replay-toggle-raw').textContent = '{ } View Raw JSON';
-  title.textContent = 'Forensic Replay — ' + sessionId;
-  body.innerHTML = '<div class="loading"><div class="spin"></div>Loading session events…</div>';
-  try {
-    const data = await apiFetch('/replay/' + encodeURIComponent(sessionId), {cache:'no-store'}).then(r => r.json());
-    const summary = data.summary || {};
-    const steps = data.action_chain || [];
-    renderReplayChain(summary, steps, sessionId, replayId);
-  } catch(err) {
-    body.innerHTML = `<div class="empty"><div style="color:var(--danger)">⚠ ${err.message}</div></div>`;
-  }
+async function openReplaySession(sessionId,replayId) {
+  const modal=document.getElementById('replay-modal'),body=document.getElementById('replay-modal-body'),title=document.getElementById('replay-modal-title');
+  modal.style.display='flex';replayRawMode=false;document.getElementById('replay-toggle-raw').textContent='{ } View Raw JSON';title.textContent='Forensic Replay — '+sessionId;body.innerHTML='<div class="loading"><div class="spin"></div>Loading session events…</div>';
+  try{const data=await apiFetch('/replay/'+encodeURIComponent(sessionId),{cache:'no-store'}).then(r=>r.json());const summary=data.summary||{},steps=data.action_chain||[];renderReplayChain(summary,steps,sessionId,replayId);}
+  catch(err){body.innerHTML=`<div class="empty"><div style="color:var(--danger)">⚠ ${err.message}</div></div>`;}
 }
 
-function renderReplayChain(summary, steps, sessionId, replayId) {
-  const body = document.getElementById('replay-modal-body');
-  const trajColor = summary.bdi_trajectory === 'escalating' ? 'var(--danger)' : summary.bdi_trajectory === 'de-escalating' ? 'var(--ok)' : 'var(--muted)';
-  const summaryHtml = `
-    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;padding:12px;background:var(--bg4);border:1px solid var(--border);border-radius:8px">
-      <div style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;background:rgba(0,212,255,0.07);border:1px solid rgba(0,212,255,0.2);font-size:10px;color:var(--accent)">🔒 READ-ONLY FORENSIC REPLAY</div>
-      <span style="font-size:10px;color:var(--muted);margin-left:auto">${summary.total_turns || 0} turns · ${summary.drift_flagged_turns || 0} drift flags · <span style="color:${trajColor}">${summary.bdi_trajectory || 'stable'}</span></span>
-      <div style="width:100%;display:flex;gap:16px;flex-wrap:wrap;margin-top:4px">
-        <span style="font-size:10px;color:var(--muted)">BDI peak: <strong style="color:var(--danger);font-family:'JetBrains Mono',monospace">${summary.bdi_peak ?? '—'}</strong></span>
-        <span style="font-size:10px;color:var(--muted)">Entropy peak: <strong style="color:var(--warn);font-family:'JetBrains Mono',monospace">${summary.entropy_peak ?? '—'}</strong></span>
-        <span style="font-size:10px;color:var(--muted)">Chain intact: <strong style="color:${summary.hash_chain_intact ? 'var(--ok)' : 'var(--danger)'}">${summary.hash_chain_intact ? '✓ Yes' : '✕ Broken'}</strong></span>
-        <span style="font-size:10px;color:var(--muted)">Jurisdiction: <strong style="color:var(--text)">${summary.jurisdiction || '—'}</strong></span>
-      </div>
-    </div>`;
-  const stepsHtml = steps.map(step => {
-    const bdiColor = step.bdi_band === 'CRITICAL' ? 'var(--danger)' : step.bdi_band === 'HIGH' ? 'var(--critical)' : step.bdi_band === 'ELEVATED' ? 'var(--warn)' : 'var(--ok)';
-    const driftFlag = step.drift_flagged ? '<span style="background:rgba(239,68,68,0.12);color:var(--danger);border:1px solid rgba(239,68,68,0.3);padding:1px 6px;border-radius:4px;font-size:9px;font-weight:700">DRIFT</span>' : '';
-    const rawJson = replayRawMode ? `<pre style="margin-top:8px;font-size:9px;color:var(--muted);background:var(--bg);padding:8px;border-radius:5px;overflow-x:auto;white-space:pre-wrap;border:1px solid var(--border)">${JSON.stringify(step.raw, null, 2)}</pre>` : '';
-    return `<div style="padding:10px 12px;background:var(--bg3);border:1px solid ${step.drift_flagged ? 'rgba(239,68,68,0.3)' : 'var(--border)'};border-radius:8px;margin-bottom:6px">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-        <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--accent);background:rgba(0,212,255,0.08);padding:2px 7px;border-radius:4px">T+${step.turn}</span>
-        <span style="font-size:10px;color:var(--muted)">${step.timestamp ? new Date(step.timestamp).toLocaleString() : '—'}</span>
-        <span style="font-size:10px;color:var(--muted);margin-left:auto">${step.action || 'intercept'}</span>
-        ${driftFlag}
-        <span class="badge ${step.status === 'blocked' ? 'critical' : 'stable'}">${step.status || 'allowed'}</span>
-      </div>
-      <div style="display:flex;gap:16px;margin-bottom:6px">
-        <span style="font-size:10px;color:var(--muted)">BDI: <strong style="color:${bdiColor};font-family:'JetBrains Mono',monospace">${step.bdi_score != null ? (step.bdi_score * 100).toFixed(0) + '%' : '—'}</strong> <span style="font-size:9px;color:${bdiColor}">${step.bdi_band || ''}</span></span>
-        <span style="font-size:10px;color:var(--muted)">Entropy: <strong style="font-family:'JetBrains Mono',monospace;color:${step.entropy_band === 'CRITICAL' ? 'var(--danger)' : step.entropy_band === 'HIGH' ? 'var(--warn)' : 'var(--muted)'}">${step.entropy != null ? step.entropy.toFixed(2) : '—'}</strong></span>
-        <span style="font-size:10px;color:var(--muted)">Chain: <strong style="color:${step.chain_intact ? 'var(--ok)' : 'var(--danger)'}">${step.chain_intact ? '✓' : '✕'}</strong></span>
-      </div>
-      ${step.input_preview ? `<div style="font-size:10px;color:var(--muted);margin-bottom:3px">↳ Input: <span style="color:var(--text)">${step.input_preview}</span></div>` : ''}
-      ${step.output_preview ? `<div style="font-size:10px;color:var(--muted)">↳ Output: <span style="color:var(--text)">${step.output_preview}</span></div>` : ''}
-      ${rawJson}
-    </div>`;
-  }).join('');
-  body.innerHTML = summaryHtml + (steps.length ? stepsHtml : '<div class="empty"><div class="empty-icon">◎</div><div>No events found for this session.</div></div>');
-  body._steps = steps;
-  body._summary = summary;
-  body._sessionId = sessionId;
-  body._replayId = replayId;
+function renderReplayChain(summary,steps,sessionId,replayId) {
+  const body=document.getElementById('replay-modal-body');
+  const trajColor=summary.bdi_trajectory==='escalating'?'var(--danger)':summary.bdi_trajectory==='de-escalating'?'var(--ok)':'var(--muted)';
+  const summaryHtml=`<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;padding:12px;background:var(--bg4);border:1px solid var(--border);border-radius:8px"><div style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;background:rgba(0,212,255,0.07);border:1px solid rgba(0,212,255,0.2);font-size:10px;color:var(--accent)">🔒 READ-ONLY FORENSIC REPLAY</div><span style="font-size:10px;color:var(--muted);margin-left:auto">${summary.total_turns||0} turns · ${summary.drift_flagged_turns||0} drift flags · <span style="color:${trajColor}">${summary.bdi_trajectory||'stable'}</span></span><div style="width:100%;display:flex;gap:16px;flex-wrap:wrap;margin-top:4px"><span style="font-size:10px;color:var(--muted)">BDI peak: <strong style="color:var(--danger);font-family:'JetBrains Mono',monospace">${summary.bdi_peak??'—'}</strong></span><span style="font-size:10px;color:var(--muted)">Entropy peak: <strong style="color:var(--warn);font-family:'JetBrains Mono',monospace">${summary.entropy_peak??'—'}</strong></span><span style="font-size:10px;color:var(--muted)">Chain intact: <strong style="color:${summary.hash_chain_intact?'var(--ok)':'var(--danger)'}">${summary.hash_chain_intact?'✓ Yes':'✕ Broken'}</strong></span><span style="font-size:10px;color:var(--muted)">Jurisdiction: <strong style="color:var(--text)">${summary.jurisdiction||'—'}</strong></span></div></div>`;
+  const stepsHtml=steps.map(step=>{const bdiColor=step.bdi_band==='CRITICAL'?'var(--danger)':step.bdi_band==='HIGH'?'var(--critical)':step.bdi_band==='ELEVATED'?'var(--warn)':'var(--ok)';const driftFlag=step.drift_flagged?'<span style="background:rgba(239,68,68,0.12);color:var(--danger);border:1px solid rgba(239,68,68,0.3);padding:1px 6px;border-radius:4px;font-size:9px;font-weight:700">DRIFT</span>':'';const rawJson=replayRawMode?`<pre style="margin-top:8px;font-size:9px;color:var(--muted);background:var(--bg);padding:8px;border-radius:5px;overflow-x:auto;white-space:pre-wrap;border:1px solid var(--border)">${JSON.stringify(step.raw,null,2)}</pre>`:'';return `<div style="padding:10px 12px;background:var(--bg3);border:1px solid ${step.drift_flagged?'rgba(239,68,68,0.3)':'var(--border)'};border-radius:8px;margin-bottom:6px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--accent);background:rgba(0,212,255,0.08);padding:2px 7px;border-radius:4px">T+${step.turn}</span><span style="font-size:10px;color:var(--muted)">${step.timestamp?new Date(step.timestamp).toLocaleString():'—'}</span><span style="font-size:10px;color:var(--muted);margin-left:auto">${step.action||'intercept'}</span>${driftFlag}<span class="badge ${step.status==='blocked'?'critical':'stable'}">${step.status||'allowed'}</span></div><div style="display:flex;gap:16px;margin-bottom:6px"><span style="font-size:10px;color:var(--muted)">BDI: <strong style="color:${bdiColor};font-family:'JetBrains Mono',monospace">${step.bdi_score!=null?(step.bdi_score*100).toFixed(0)+'%':'—'}</strong> <span style="font-size:9px;color:${bdiColor}">${step.bdi_band||''}</span></span><span style="font-size:10px;color:var(--muted)">Entropy: <strong style="font-family:'JetBrains Mono',monospace;color:${step.entropy_band==='CRITICAL'?'var(--danger)':step.entropy_band==='HIGH'?'var(--warn)':'var(--muted)'}">${step.entropy!=null?step.entropy.toFixed(2):'—'}</strong></span><span style="font-size:10px;color:var(--muted)">Chain: <strong style="color:${step.chain_intact?'var(--ok)':'var(--danger)'}">${step.chain_intact?'✓':'✕'}</strong></span></div>${step.input_preview?`<div style="font-size:10px;color:var(--muted);margin-bottom:3px">↳ Input: <span style="color:var(--text)">${step.input_preview}</span></div>`:''}${step.output_preview?`<div style="font-size:10px;color:var(--muted)">↳ Output: <span style="color:var(--text)">${step.output_preview}</span></div>`:''}${rawJson}</div>`;}).join('');
+  body.innerHTML=summaryHtml+(steps.length?stepsHtml:'<div class="empty"><div class="empty-icon">◎</div><div>No events found for this session.</div></div>');
+  body._steps=steps;body._summary=summary;body._sessionId=sessionId;body._replayId=replayId;
 }
 
-function toggleReplayRaw() {
-  const body = document.getElementById('replay-modal-body');
-  replayRawMode = !replayRawMode;
-  document.getElementById('replay-toggle-raw').textContent = replayRawMode ? '◎ Visual View' : '{ } View Raw JSON';
-  if (body._steps) renderReplayChain(body._summary, body._steps, body._sessionId, body._replayId);
+function toggleReplayRaw(){const body=document.getElementById('replay-modal-body');replayRawMode=!replayRawMode;document.getElementById('replay-toggle-raw').textContent=replayRawMode?'◎ Visual View':'{ } View Raw JSON';if(body._steps)renderReplayChain(body._summary,body._steps,body._sessionId,body._replayId);}
+
+async function markReplayReviewed(){
+  const body=document.getElementById('replay-modal-body');if(!body._sessionId)return;
+  const btn=document.getElementById('replay-mark-reviewed');btn.disabled=true;btn.textContent='✓ Marking…';
+  try{await apiFetch('/replay/'+encodeURIComponent(body._sessionId)+'/mark-reviewed',{method:'POST',body:JSON.stringify({reviewed_by:'dashboard',notes:'Reviewed via dashboard'})}).then(r=>r.json());btn.textContent='✓ Marked as Reviewed';btn.style.color='var(--ok)';loadReplaySessions();}
+  catch(err){btn.disabled=false;btn.textContent='✓ Mark as Reviewed';alert('Failed: '+err.message);}
 }
 
-async function markReplayReviewed() {
-  const body = document.getElementById('replay-modal-body');
-  if (!body._sessionId) return;
-  const btn = document.getElementById('replay-mark-reviewed');
-  btn.disabled = true; btn.textContent = '✓ Marking…';
-  try {
-    await apiFetch('/replay/' + encodeURIComponent(body._sessionId) + '/mark-reviewed', {
-      method: 'POST',
-      body: JSON.stringify({reviewed_by: 'dashboard', notes: 'Reviewed via dashboard'})
-    }).then(r => r.json());
-    btn.textContent = '✓ Marked as Reviewed';
-    btn.style.color = 'var(--ok)';
-    loadReplaySessions();
-  } catch(err) {
-    btn.disabled = false; btn.textContent = '✓ Mark as Reviewed';
-    alert('Failed: ' + err.message);
-  }
-}
-  load(); setInterval(load,10000);
+load();setInterval(load,10000);
 </script>
-  <!-- Phase 12: Replay Modal -->
+
+<!-- Phase 12: Replay Modal -->
 <div id="replay-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:100;align-items:center;justify-content:center;padding:24px">
   <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;width:100%;max-width:760px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden">
     <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
