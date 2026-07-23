@@ -15,66 +15,74 @@
   --ok:#10b981;--warn:#f59e0b;--danger:#ef4444;--critical:#ff6b35;
 }
 body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);height:100vh;overflow:hidden;display:flex;flex-direction:column}
-
-/* ── TOPBAR ── */
 .topbar{height:46px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 18px;gap:14px;flex-shrink:0;z-index:10}
 .topbar-logo{width:26px;height:26px;background:var(--accent);border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;color:#000}
 .topbar-title{font-size:13px;font-weight:600;color:var(--text)}
 .topbar-sub{font-size:11px;color:var(--muted)}
 .topbar-back{margin-left:auto;background:var(--bg4);border:1px solid var(--border);border-radius:5px;padding:4px 10px;color:var(--muted);cursor:pointer;font-size:10px;font-family:'Inter',sans-serif;transition:all 0.12s;text-decoration:none;display:flex;align-items:center;gap:5px}
 .topbar-back:hover{color:var(--accent);border-color:rgba(0,212,255,0.3)}
-
-/* ── LAYOUT ── */
 .main{flex:1;display:flex;overflow:hidden}
 #canvas-wrap{flex:1;position:relative;cursor:grab}
 #canvas-wrap:active{cursor:grabbing}
 #canvas-wrap canvas{display:block}
 
+/* ── LABELS OVERLAY ── */
+#labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.node-label{position:absolute;transform:translate(-50%,-50%);pointer-events:none;text-align:center;transition:opacity 0.2s}
+.node-label .lbl-name{font-size:10px;font-weight:600;color:#e2e8f0;text-shadow:0 0 8px rgba(0,0,0,0.9),0 0 3px rgba(0,0,0,1);white-space:nowrap;font-family:'Inter',sans-serif;letter-spacing:0.02em}
+.node-label .lbl-sub{font-size:8px;color:#64748b;text-shadow:0 0 6px rgba(0,0,0,1);white-space:nowrap;font-family:'JetBrains Mono',monospace;margin-top:2px}
+.node-label .lbl-clause{font-size:8px;font-weight:700;padding:1px 6px;border-radius:3px;margin-top:3px;display:inline-block;letter-spacing:0.04em;text-transform:uppercase}
+
 /* ── SIDE PANEL ── */
-.side{width:280px;background:var(--bg2);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;flex-shrink:0}
-.side-hdr{padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
-.side-hdr-title{font-size:10px;text-transform:uppercase;letter-spacing:0.09em;color:var(--muted);font-weight:600;margin-bottom:3px}
-.side-hdr-val{font-size:14px;font-weight:600;color:var(--text)}
+.side{width:290px;background:var(--bg2);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;flex-shrink:0;transition:background 0.2s}
+.side-hdr{padding:16px;border-bottom:1px solid var(--border);flex-shrink:0}
+.side-hdr-eyebrow{font-size:9px;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);font-weight:600;margin-bottom:4px}
+.side-hdr-val{font-size:15px;font-weight:600;color:var(--text)}
+.side-hdr-badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:9px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;margin-top:5px}
 .side-body{flex:1;overflow-y:auto;padding:14px}
 .side-body::-webkit-scrollbar{width:3px}
 .side-body::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
 .side-sec{margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border)}
-.side-sec:last-child{border-bottom:none}
+.side-sec:last-child{border-bottom:none;margin-bottom:0}
 .side-sec-title{font-size:9px;text-transform:uppercase;letter-spacing:0.09em;color:var(--muted);font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:5px}
 .side-sec-title::before{content:'';width:4px;height:4px;border-radius:50%;background:var(--accent);display:inline-block}
-.kv{display:flex;justify-content:space-between;align-items:flex-start;padding:4px 0;border-bottom:1px solid rgba(30,45,69,0.4);font-size:10px}
+.kv{display:flex;justify-content:space-between;align-items:flex-start;padding:5px 0;border-bottom:1px solid rgba(30,45,69,0.4);font-size:10px;gap:8px}
 .kv:last-child{border-bottom:none}
-.kv-key{color:var(--muted)}
-.kv-val{color:var(--text);font-family:'JetBrains Mono',monospace;font-size:10px;text-align:right;max-width:160px;word-break:break-all}
+.kv-key{color:var(--muted);flex-shrink:0}
+.kv-val{color:var(--text);font-family:'JetBrains Mono',monospace;font-size:10px;text-align:right;word-break:break-all}
 .badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:999px;font-size:9px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase}
 .badge.critical{background:rgba(255,107,53,0.12);color:#ff6b35;border:1px solid rgba(255,107,53,0.3)}
 .badge.elevated{background:rgba(245,158,11,0.1);color:#f59e0b;border:1px solid rgba(245,158,11,0.25)}
 .badge.stable{background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.25)}
-.policy-row{padding:7px 10px;border-radius:7px;margin-bottom:5px;border:1px solid transparent}
+.policy-row{padding:8px 10px;border-radius:7px;margin-bottom:6px;border:1px solid transparent}
 .policy-row.MY{background:rgba(255,107,53,0.06);border-color:rgba(255,107,53,0.25)}
 .policy-row.SG{background:rgba(14,165,233,0.06);border-color:rgba(14,165,233,0.25)}
 .policy-row.VN{background:rgba(16,185,129,0.06);border-color:rgba(16,185,129,0.25)}
 .policy-row.ORG{background:rgba(139,92,246,0.06);border-color:rgba(139,92,246,0.25)}
-.policy-jur{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:2px}
-.policy-clause{font-size:10px;color:var(--muted)}
+.policy-jur{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px}
+.policy-clause{font-size:10px;color:var(--muted);line-height:1.4}
 .policy-jur.MY{color:#ff6b35}.policy-jur.SG{color:#0ea5e9}.policy-jur.VN{color:#10b981}.policy-jur.ORG{color:#a78bfa}
-.node-detail{background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:6px;cursor:pointer;transition:all 0.12s}
-.node-detail:hover{border-color:var(--accent)}
-.node-detail.selected{border-color:var(--accent);background:rgba(0,212,255,0.06)}
-.node-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;display:inline-block;margin-right:6px}
-.hint{font-size:10px;color:var(--muted2);text-align:center;padding:20px;line-height:1.6}
+.hint{font-size:11px;color:var(--muted2);text-align:center;padding:28px 16px;line-height:1.7}
+.hint-icon{font-size:24px;opacity:0.25;margin-bottom:10px}
+.flow-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;font-size:9px;font-weight:700;letter-spacing:0.04em;margin-bottom:4px}
+.flow-badge.action{background:rgba(139,92,246,0.1);color:#a78bfa;border:1px solid rgba(139,92,246,0.25)}
 
-/* ── CONTROLS OVERLAY ── */
-.controls{position:absolute;bottom:16px;left:16px;display:flex;flex-direction:column;gap:6px;z-index:5}
-.ctrl-btn{width:32px;height:32px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);font-size:14px;transition:all 0.12s;user-select:none}
-.ctrl-btn:hover{color:var(--accent);border-color:rgba(0,212,255,0.3)}
-.ctrl-hint{position:absolute;bottom:16px;right:16px;font-size:9px;color:var(--muted2);text-align:right;line-height:1.8;pointer-events:none}
+/* ── CONTROLS ── */
+.controls{position:absolute;bottom:20px;left:20px;display:flex;flex-direction:column;gap:7px;z-index:5}
+.ctrl-btn{width:34px;height:34px;background:rgba(13,17,23,0.85);border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);font-size:15px;transition:all 0.12s;user-select:none;backdrop-filter:blur(4px)}
+.ctrl-btn:hover{color:var(--accent);border-color:rgba(0,212,255,0.3);background:rgba(0,212,255,0.06)}
+.ctrl-hint{position:absolute;bottom:20px;right:16px;font-size:9px;color:rgba(100,116,139,0.7);text-align:right;line-height:2;pointer-events:none;letter-spacing:0.02em}
 
 /* ── LOADING ── */
-#loading{position:absolute;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:20}
+#loading{position:absolute;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:20}
 .spin{width:20px;height:20px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 #no-data{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--muted)}
+
+/* ── HOVER TOOLTIP ── */
+#tooltip{position:absolute;pointer-events:none;background:rgba(13,17,23,0.92);border:1px solid var(--border2);border-radius:7px;padding:7px 11px;font-size:10px;color:var(--text);display:none;z-index:15;backdrop-filter:blur(6px);max-width:200px}
+#tooltip .tt-name{font-weight:600;margin-bottom:3px;color:var(--accent)}
+#tooltip .tt-sub{color:var(--muted);font-size:9px}
 </style>
 </head>
 <body>
@@ -92,455 +100,540 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);heigh
       <div class="spin"></div>
       <div style="font-size:12px;color:var(--muted)">Building 3D graph…</div>
     </div>
-    <div id="no-data">
-      <div style="font-size:28px;opacity:0.3">⬡</div>
-      <div style="font-size:13px">No event data found.</div>
-      <div style="font-size:11px;margin-top:4px">Open this page from the dashboard chain panel.</div>
+    <div id="no-data" style="display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px">
+      <div style="font-size:32px;opacity:0.2">⬡</div>
+      <div style="font-size:13px;color:var(--muted)">No event data found.</div>
+      <div style="font-size:11px;color:var(--muted2)">Open this page from the dashboard chain panel.</div>
     </div>
+    <div id="labels"></div>
+    <div id="tooltip"><div class="tt-name" id="tt-name"></div><div class="tt-sub" id="tt-sub"></div></div>
     <div class="controls">
       <div class="ctrl-btn" id="btn-reset" title="Reset camera">⊙</div>
       <div class="ctrl-btn" id="btn-zoom-in" title="Zoom in">+</div>
       <div class="ctrl-btn" id="btn-zoom-out" title="Zoom out">−</div>
     </div>
-    <div class="ctrl-hint">Drag to rotate · Scroll to zoom · Click node to inspect</div>
+    <div class="ctrl-hint">Drag to rotate&nbsp;&nbsp;·&nbsp;&nbsp;Scroll to zoom&nbsp;&nbsp;·&nbsp;&nbsp;Click node to inspect</div>
   </div>
 
-  <div class="side">
+  <div class="side" id="side">
     <div class="side-hdr">
-      <div class="side-hdr-title">Selected Node</div>
-      <div class="side-hdr-val" id="sel-title">Click a node to inspect</div>
+      <div class="side-hdr-eyebrow">Selected Node</div>
+      <div class="side-hdr-val" id="sel-title">Click a node</div>
+      <div id="sel-badge"></div>
     </div>
     <div class="side-body" id="side-body">
-      <div class="hint">Click any node in the 3D graph to see its details here.</div>
+      <div class="hint"><div class="hint-icon">⬡</div>Click any node in the 3D graph to inspect its details here.<br><br>Violated nodes glow and pulse.</div>
     </div>
   </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
-// ── POLICY DEFINITIONS ──
 const POLICY_CLAUSES = {
-  MY:  { label: 'PDPA MY',        clause: 'Art. 7 — Breach Notification',    color: '#ff6b35' },
-  SG:  { label: 'SGP MGF',        clause: 'Clause 2.5 — Incident Disclosure', color: '#0ea5e9' },
-  VN:  { label: 'VN AI Law',      clause: 'Sec. 12 — AI Incident Report',     color: '#10b981' },
-  ORG: { label: 'Company Policy', clause: 'Custom Rule — Data Policy',         color: '#a78bfa' }
+  MY:  { label:'PDPA MY',        clause:'Art. 7 — Breach Notification',     color:'#ff6b35', bg:'rgba(255,107,53,0.15)'  },
+  SG:  { label:'SGP MGF',        clause:'Clause 2.5 — Incident Disclosure',  color:'#0ea5e9', bg:'rgba(14,165,233,0.15)'  },
+  VN:  { label:'VN AI Law',      clause:'Sec. 12 — AI Incident Report',      color:'#10b981', bg:'rgba(16,185,129,0.15)'  },
+  ORG: { label:'Company Policy', clause:'Custom Rule — Data Policy',          color:'#a78bfa', bg:'rgba(139,92,246,0.15)'  }
 };
 
-// ── LOAD EVENT DATA FROM localStorage ──
+// Load event data
 let eventData = null;
-try {
-  const raw = localStorage.getItem('pulse_chain_event');
-  if (raw) eventData = JSON.parse(raw);
-} catch(_) {}
+try { const raw = localStorage.getItem('pulse_chain_event'); if (raw) eventData = JSON.parse(raw); } catch(_) {}
 
 if (!eventData) {
   document.getElementById('loading').style.display = 'none';
   document.getElementById('no-data').style.display = 'flex';
-} else {
-  initScene(eventData);
-}
+} else { init(eventData); }
 
-function sev(bd, en) {
+function sevFn(bd, en) {
   if (en >= 0.7 || bd >= 0.65) return 'critical';
   if (en >= 0.4 || bd >= 0.35) return 'elevated';
   return 'stable';
 }
-
-function detectJurisdictions(data) {
-  const jurs = [], s = sev(data.bdi_score || 0, data.entropy || 0);
-  const isExfil = data.is_exfiltration || false;
-  const text = (data.text || '').toLowerCase();
-  if (isExfil || s === 'critical') jurs.push('MY');
-  if (s === 'critical' || s === 'elevated') jurs.push('SG');
-  if (s === 'critical') jurs.push('VN');
-  if (text.includes('email') || text.includes('customer_id') || text.includes('phone') || text.includes('policy')) jurs.push('ORG');
-  if (!jurs.length) jurs.push('SG');
+function detectJurs(data) {
+  const jurs=[], s=sevFn(data.bdi_score||0,data.entropy||0), isEx=data.is_exfiltration||false, text=(data.text||'').toLowerCase();
+  if(isEx||s==='critical') jurs.push('MY');
+  if(s==='critical'||s==='elevated') jurs.push('SG');
+  if(s==='critical') jurs.push('VN');
+  if(text.includes('email')||text.includes('customer_id')||text.includes('phone')||text.includes('policy')) jurs.push('ORG');
+  if(!jurs.length) jurs.push('SG');
   return [...new Set(jurs)];
 }
-
 function getActions(data) {
-  const actions = [], s = sev(data.bdi_score || 0, data.entropy || 0), isExfil = data.is_exfiltration || false;
-  if (isExfil || s === 'critical') actions.push({ label: 'Legal Hold',      color: '#ef4444', icon: '🔒' });
-  if (s === 'critical' || isExfil) actions.push({ label: 'Webhook',         color: '#f59e0b', icon: '📡' });
-  if (s === 'critical')            actions.push({ label: 'Agent Isolated',   color: '#ff6b35', icon: '⊘' });
-  if (isExfil)                     actions.push({ label: 'Incident Report',  color: '#00d4ff', icon: '📄' });
-  if (!actions.length)             actions.push({ label: 'Allowed',          color: '#10b981', icon: '✓' });
-  return actions;
+  const a=[], s=sevFn(data.bdi_score||0,data.entropy||0), isEx=data.is_exfiltration||false;
+  if(isEx||s==='critical') a.push({label:'Legal Hold',    color:'#ef4444', icon:'🔒'});
+  if(s==='critical'||isEx)  a.push({label:'Webhook',       color:'#f59e0b', icon:'📡'});
+  if(s==='critical')         a.push({label:'Agent Isolated',color:'#ff6b35', icon:'⊘'});
+  if(isEx)                   a.push({label:'Incident Report',color:'#00d4ff',icon:'📄'});
+  if(!a.length)              a.push({label:'Allowed',       color:'#10b981', icon:'✓'});
+  return a;
 }
+function hexColor(hex){ return new THREE.Color(hex); }
 
-function hexToRgb(hex) {
-  const r = parseInt(hex.slice(1,3),16)/255;
-  const g = parseInt(hex.slice(3,5),16)/255;
-  const b = parseInt(hex.slice(5,7),16)/255;
-  return { r, g, b };
-}
-
-function colorToThree(hex) {
-  return new THREE.Color(hex);
-}
-
-// ── THREE.JS SCENE ──
-function initScene(data) {
+function init(data) {
   const wrap = document.getElementById('canvas-wrap');
-  const W = wrap.clientWidth, H = wrap.clientHeight;
+  const W = () => wrap.clientWidth, H = () => wrap.clientHeight;
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-  renderer.setSize(W, H);
-  renderer.setPixelRatio(window.devicePixelRatio);
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+  renderer.setSize(W(), H());
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setClearColor(0x080c14, 1);
+  renderer.shadowMap.enabled = true;
   wrap.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(55, W / H, 0.1, 1000);
-  camera.position.set(0, 0, 14);
+  scene.fog = new THREE.FogExp2(0x080c14, 0.018);
 
-  // Ambient + point lights
-  scene.add(new THREE.AmbientLight(0xffffff, 0.3));
-  const pLight = new THREE.PointLight(0x00d4ff, 1.2, 40);
-  pLight.position.set(0, 5, 8);
-  scene.add(pLight);
+  const camera = new THREE.PerspectiveCamera(50, W()/H(), 0.1, 500);
+  camera.position.set(0, 2, 18);
 
-  // ── BUILD GRAPH NODES ──
-  const severity = sev(data.bdi_score || 0, data.entropy || 0);
-  const isViolation = severity === 'critical' || severity === 'elevated' || data.is_exfiltration;
-  const jurs = detectJurisdictions(data);
+  // Lights
+  scene.add(new THREE.AmbientLight(0xffffff, 0.25));
+  const dLight = new THREE.DirectionalLight(0xffffff, 0.4);
+  dLight.position.set(5, 10, 8);
+  scene.add(dLight);
+  const accentLight = new THREE.PointLight(0x00d4ff, 2.5, 35);
+  accentLight.position.set(0, 6, 4);
+  scene.add(accentLight);
+
+  const severity = sevFn(data.bdi_score||0, data.entropy||0);
+  const isViolation = severity==='critical'||severity==='elevated'||data.is_exfiltration;
+  const jurs = detectJurs(data);
   const actions = getActions(data);
-  const evColor = severity === 'critical' ? '#ff6b35' : severity === 'elevated' ? '#f59e0b' : '#10b981';
+  const evColor = severity==='critical'?'#ff6b35':severity==='elevated'?'#f59e0b':'#10b981';
 
-  const nodeObjects = []; // {mesh, label, data, glowMesh}
-  const edges = [];       // {from, to, color}
+  // Node registry
+  const nodeObjects = [];
+  const labelEls = [];
+  const labelsDiv = document.getElementById('labels');
 
-  function makeNode({ pos, radius, color, emissive, label, sublabel, nodeData, violated }) {
-    const geo = new THREE.SphereGeometry(radius, 32, 32);
-    const rgb = hexToRgb(color);
+  function makeNode({ pos, radius, color, emissive, emissiveInt, label, sublabel, clauseLabel, clauseColor, nodeData, violated, pulse }) {
+    const geo = new THREE.SphereGeometry(radius, 40, 40);
     const mat = new THREE.MeshPhongMaterial({
-      color: colorToThree(color),
-      emissive: colorToThree(emissive || color),
-      emissiveIntensity: violated ? 0.45 : 0.12,
-      transparent: true,
-      opacity: violated ? 0.95 : 0.82,
-      shininess: 80
+      color: hexColor(color),
+      emissive: hexColor(emissive||color),
+      emissiveIntensity: emissiveInt||(violated?0.5:0.1),
+      transparent: true, opacity: violated?0.95:0.8, shininess: 90
     });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(...pos);
     scene.add(mesh);
 
-    // Glow halo for violated nodes
+    // Glow halo for violated
     let glowMesh = null;
     if (violated) {
-      const glowGeo = new THREE.SphereGeometry(radius * 1.55, 24, 24);
-      const glowMat = new THREE.MeshBasicMaterial({
-        color: colorToThree(color),
-        transparent: true,
-        opacity: 0.08,
-        side: THREE.BackSide
-      });
-      glowMesh = new THREE.Mesh(glowGeo, glowMat);
+      const gGeo = new THREE.SphereGeometry(radius*1.6, 24, 24);
+      const gMat = new THREE.MeshBasicMaterial({ color: hexColor(color), transparent:true, opacity:0.07, side:THREE.BackSide });
+      glowMesh = new THREE.Mesh(gGeo, gMat);
       glowMesh.position.set(...pos);
       scene.add(glowMesh);
     }
 
-    nodeObjects.push({ mesh, glowMesh, label, sublabel, nodeData, violated, color, radius });
+    // Always-visible HTML label
+    const el = document.createElement('div');
+    el.className = 'node-label';
+    el.innerHTML = `<div class="lbl-name">${label}</div>
+      ${sublabel ? `<div class="lbl-sub">${sublabel}</div>` : ''}
+      ${clauseLabel ? `<div class="lbl-clause" style="background:${clauseColor}22;color:${clauseColor};border:1px solid ${clauseColor}55">${clauseLabel}</div>` : ''}`;
+    labelsDiv.appendChild(el);
+    labelEls.push({ el, mesh, offset: radius + 0.3 });
+
+    nodeObjects.push({ mesh, glowMesh, label, sublabel, clauseLabel, clauseColor, nodeData, violated, color, radius, pulse: pulse||false });
     return mesh;
   }
 
-  function makeEdge(fromMesh, toMesh, color, dashed = false) {
-    const from = fromMesh.position, to = toMesh.position;
-    const points = [new THREE.Vector3(from.x, from.y, from.z), new THREE.Vector3(to.x, to.y, to.z)];
+  function makeEdge(fromMesh, toMesh, color, dashed=false, animated=false) {
+    const from = fromMesh.position.clone();
+    const to = toMesh.position.clone();
+    const points = [from, to];
     const geo = new THREE.BufferGeometry().setFromPoints(points);
-    const mat = new THREE.LineBasicMaterial({ color: colorToThree(color), transparent: true, opacity: dashed ? 0.35 : 0.55 });
+    const mat = new THREE.LineBasicMaterial({ color: hexColor(color), transparent:true, opacity: dashed?0.3:0.55 });
     const line = new THREE.Line(geo, mat);
+    line._animated = animated;
+    line._fromPos = from.clone();
+    line._toPos = to.clone();
+    line._color = color;
     scene.add(line);
-    edges.push(line);
 
-    // Arrow tip
+    // Arrow cone
     const dir = new THREE.Vector3().subVectors(to, from).normalize();
-    const arrowHelper = new THREE.ArrowHelper(dir, from, from.distanceTo(to) - toMesh.geometry.parameters.radius - 0.1, colorToThree(color), 0.4, 0.22);
-    arrowHelper.line.material.transparent = true;
-    arrowHelper.line.material.opacity = 0;
-    arrowHelper.cone.material.transparent = true;
-    arrowHelper.cone.material.opacity = dashed ? 0.3 : 0.6;
-    scene.add(arrowHelper);
+    const length = from.distanceTo(to) - toMesh.geometry.parameters.radius - 0.15;
+    const arrow = new THREE.ArrowHelper(dir, from, length, hexColor(color), 0.45, 0.25);
+    arrow.line.material.transparent = true; arrow.line.material.opacity = 0;
+    arrow.cone.material.transparent = true; arrow.cone.material.opacity = dashed?0.25:0.65;
+    scene.add(arrow);
+    return { line, arrow };
   }
 
-  // Agent node — top center
+  // ── BUILD NODES ──
+
+  // Agent node — top, slightly back in Z
   const agentMesh = makeNode({
-    pos: [0, 4.5, 0], radius: 0.7,
-    color: '#00d4ff', emissive: '#00d4ff',
-    label: data.agent_id || 'unknown',
+    pos: [0, 5.5, -1.5], radius: 0.75,
+    color: '#00d4ff', emissive: '#00d4ff', emissiveInt: 0.25,
+    label: (data.agent_id||'unknown').length > 16 ? (data.agent_id||'unknown').slice(0,16)+'…' : (data.agent_id||'unknown'),
     sublabel: 'AI Agent',
-    nodeData: { type: 'agent', agent_id: data.agent_id, session_id: data.session_id },
-    violated: false
+    nodeData: { type:'agent', agent_id:data.agent_id, session_id:data.session_id },
+    violated: false, pulse: false
   });
 
-  // Event node — center
-  const evRadius = isViolation ? 1.0 : 0.75;
+  // Event node — center, prominent
+  const evR = isViolation ? 1.15 : 0.85;
   const eventMesh = makeNode({
-    pos: [0, 0, 0], radius: evRadius,
-    color: evColor, emissive: evColor,
-    label: data.event_id || 'EV-????',
-    sublabel: `BDI ${Math.round((data.bdi_score||0)*100)}% · E${(data.entropy||0).toFixed(2)}`,
-    nodeData: { type: 'event', ...data },
-    violated: isViolation
+    pos: [0, 0, 0], radius: evR,
+    color: evColor, emissive: evColor, emissiveInt: isViolation?0.55:0.15,
+    label: data.event_id||'EV-????',
+    sublabel: `BDI ${Math.round((data.bdi_score||0)*100)}%  ·  E${(data.entropy||0).toFixed(2)}`,
+    clauseLabel: isViolation&&jurs.length ? POLICY_CLAUSES[jurs[0]]?.clause : null,
+    clauseColor: isViolation&&jurs.length ? POLICY_CLAUSES[jurs[0]]?.color : null,
+    nodeData: { type:'event', ...data },
+    violated: isViolation, pulse: isViolation
   });
-  makeEdge(agentMesh, eventMesh, isViolation ? evColor : '#253550');
+  makeEdge(agentMesh, eventMesh, isViolation?evColor:'#253550', false, isViolation);
 
-  // Action nodes — arc below event
-  const actSpread = Math.min(3.2, actions.length * 1.1);
+  // Action nodes — arc below, spread in X and slight Z depth variation
+  const actSpread = Math.min(3.8, actions.length * 1.3);
   actions.forEach((act, i) => {
-    const t = actions.length === 1 ? 0 : (i / (actions.length - 1)) - 0.5;
+    const t = actions.length===1 ? 0 : (i/(actions.length-1)) - 0.5;
     const ax = t * actSpread * 2;
-    const ay = -3.8;
-    const az = (Math.abs(t) * 0.8);
+    const ay = -4.2 - Math.abs(t)*0.4;
+    const az = t * 1.8; // Z spread for real 3D depth
     const aMesh = makeNode({
-      pos: [ax, ay, az], radius: 0.5,
-      color: act.color, emissive: act.color,
+      pos: [ax, ay, az], radius: 0.52,
+      color: act.color, emissive: act.color, emissiveInt: 0.15,
       label: act.label, sublabel: act.icon,
-      nodeData: { type: 'action', label: act.label, color: act.color },
-      violated: false
+      nodeData: { type:'action', label:act.label, color:act.color, icon:act.icon },
+      violated: false, pulse: false
     });
-    makeEdge(eventMesh, aMesh, act.color);
+    makeEdge(eventMesh, aMesh, act.color, false, false);
   });
 
-  // Jurisdiction satellite nodes — orbit around event in 3D
+  // Jurisdiction satellite nodes — orbit event in true 3D sphere positions
   if (isViolation && jurs.length > 0) {
-    const orbitR = 3.2;
+    const orbitR = 3.5;
     jurs.forEach((jur, i) => {
-      const pc = POLICY_CLAUSES[jur];
-      if (!pc) return;
-      const angle = (i / jurs.length) * Math.PI * 2 - Math.PI / 2;
-      const jx = Math.cos(angle) * orbitR;
-      const jy = Math.sin(angle) * orbitR * 0.5;
-      const jz = Math.sin(angle) * orbitR * 0.6;
+      const pc = POLICY_CLAUSES[jur]; if (!pc) return;
+      // Distribute around event in 3D, not just 2D ring
+      const phi = (Math.PI * 0.4) + (i / Math.max(jurs.length,1)) * Math.PI * 1.2;
+      const theta = (i / Math.max(jurs.length,1)) * Math.PI * 1.6 - 0.3;
+      const jx = Math.sin(phi)*Math.cos(theta)*orbitR;
+      const jy = Math.cos(phi)*orbitR*0.6;
+      const jz = Math.sin(phi)*Math.sin(theta)*orbitR;
       const jMesh = makeNode({
-        pos: [jx, jy, jz], radius: 0.42,
-        color: pc.color, emissive: pc.color,
-        label: pc.label, sublabel: pc.clause,
-        nodeData: { type: 'jurisdiction', jur, ...pc },
-        violated: true
+        pos: [jx, jy, jz], radius: 0.44,
+        color: pc.color, emissive: pc.color, emissiveInt: 0.5,
+        label: pc.label, sublabel: null,
+        clauseLabel: pc.clause, clauseColor: pc.color,
+        nodeData: { type:'jurisdiction', jur, ...pc },
+        violated: true, pulse: true
       });
-      makeEdge(eventMesh, jMesh, pc.color, true);
+      makeEdge(eventMesh, jMesh, pc.color, true, false);
     });
   }
 
-  // Particle field (background stars)
-  const starGeo = new THREE.BufferGeometry();
-  const starVerts = [];
-  for (let i = 0; i < 600; i++) {
-    starVerts.push((Math.random() - 0.5) * 80, (Math.random() - 0.5) * 80, (Math.random() - 0.5) * 80);
+  // ── RICH STAR FIELD ── 
+  // Layer 1: distant small stars
+  const s1geo = new THREE.BufferGeometry();
+  const s1v = [];
+  for (let i=0; i<1200; i++) {
+    const r = 60 + Math.random()*40;
+    const t = Math.random()*Math.PI*2, p = Math.acos(2*Math.random()-1);
+    s1v.push(r*Math.sin(p)*Math.cos(t), r*Math.sin(p)*Math.sin(t), r*Math.cos(p));
   }
-  starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starVerts, 3));
-  const starMat = new THREE.PointsMaterial({ color: 0x1e2d45, size: 0.12 });
-  scene.add(new THREE.Points(starGeo, starMat));
+  s1geo.setAttribute('position', new THREE.Float32BufferAttribute(s1v,3));
+  scene.add(new THREE.Points(s1geo, new THREE.PointsMaterial({color:0x253550,size:0.08,transparent:true,opacity:0.7})));
+
+  // Layer 2: mid-distance medium stars
+  const s2geo = new THREE.BufferGeometry();
+  const s2v = [];
+  for (let i=0; i<400; i++) {
+    const r = 25 + Math.random()*30;
+    const t = Math.random()*Math.PI*2, p = Math.acos(2*Math.random()-1);
+    s2v.push(r*Math.sin(p)*Math.cos(t), r*Math.sin(p)*Math.sin(t), r*Math.cos(p));
+  }
+  s2geo.setAttribute('position', new THREE.Float32BufferAttribute(s2v,3));
+  scene.add(new THREE.Points(s2geo, new THREE.PointsMaterial({color:0x1e3a5f,size:0.14,transparent:true,opacity:0.5})));
+
+  // Layer 3: close bright accent points
+  const s3geo = new THREE.BufferGeometry();
+  const s3v = [];
+  for (let i=0; i<80; i++) {
+    const r = 10 + Math.random()*15;
+    const t = Math.random()*Math.PI*2, p = Math.acos(2*Math.random()-1);
+    s3v.push(r*Math.sin(p)*Math.cos(t), r*Math.sin(p)*Math.sin(t), r*Math.cos(p));
+  }
+  s3geo.setAttribute('position', new THREE.Float32BufferAttribute(s3v,3));
+  scene.add(new THREE.Points(s3geo, new THREE.PointsMaterial({color:0x00d4ff,size:0.06,transparent:true,opacity:0.25})));
 
   // Update topbar
-  document.getElementById('tb-sub').textContent = `${data.event_id || '—'} · ${severity.toUpperCase()} · ${data.agent_id || '—'}`;
-
-  // Build side panel summary
-  buildSidePanel(data, severity, jurs, actions, isViolation);
+  document.getElementById('tb-sub').textContent = `${data.event_id||'—'} · ${severity.toUpperCase()} · ${data.agent_id||'—'}`;
+  buildSummaryPanel(data, severity, jurs, actions, isViolation);
   document.getElementById('loading').style.display = 'none';
 
-  // ── ORBIT CONTROLS (manual) ──
-  let isDragging = false, prevMouse = { x: 0, y: 0 };
-  let theta = 0, phi = Math.PI / 2, radius3d = 14;
-  const target = new THREE.Vector3(0, 0, 0);
-  const MIN_R = 5, MAX_R = 30;
+  // ── ORBIT CONTROLS ──
+  let isDragging=false, prevMouse={x:0,y:0};
+  let theta=0.2, phi=1.2, camR=18;
+  const camTarget = new THREE.Vector3(0,0,0);
+  const MIN_R=6, MAX_R=40;
 
   function updateCamera() {
-    camera.position.x = target.x + radius3d * Math.sin(phi) * Math.sin(theta);
-    camera.position.y = target.y + radius3d * Math.cos(phi);
-    camera.position.z = target.z + radius3d * Math.sin(phi) * Math.cos(theta);
-    camera.lookAt(target);
+    camera.position.x = camTarget.x + camR*Math.sin(phi)*Math.sin(theta);
+    camera.position.y = camTarget.y + camR*Math.cos(phi);
+    camera.position.z = camTarget.z + camR*Math.sin(phi)*Math.cos(theta);
+    camera.lookAt(camTarget);
   }
   updateCamera();
 
-  wrap.addEventListener('mousedown', e => { isDragging = true; prevMouse = { x: e.clientX, y: e.clientY }; });
-  window.addEventListener('mouseup', () => { isDragging = false; });
-  window.addEventListener('mousemove', e => {
-    if (!isDragging) return;
-    const dx = e.clientX - prevMouse.x, dy = e.clientY - prevMouse.y;
-    theta -= dx * 0.008;
-    phi = Math.max(0.15, Math.min(Math.PI - 0.15, phi + dy * 0.008));
-    prevMouse = { x: e.clientX, y: e.clientY };
-    updateCamera();
+  wrap.addEventListener('mousedown', e=>{ isDragging=true; prevMouse={x:e.clientX,y:e.clientY}; });
+  window.addEventListener('mouseup', ()=>{ isDragging=false; });
+  window.addEventListener('mousemove', e=>{
+    if (!isDragging) { handleHover(e); return; }
+    const dx=e.clientX-prevMouse.x, dy=e.clientY-prevMouse.y;
+    theta -= dx*0.007; phi = Math.max(0.12, Math.min(Math.PI-0.12, phi+dy*0.007));
+    prevMouse={x:e.clientX,y:e.clientY}; updateCamera();
   });
-  wrap.addEventListener('wheel', e => {
+  wrap.addEventListener('wheel', e=>{
     e.preventDefault();
-    radius3d = Math.max(MIN_R, Math.min(MAX_R, radius3d + e.deltaY * 0.018));
+    camR = Math.max(MIN_R, Math.min(MAX_R, camR+e.deltaY*0.015));
     updateCamera();
-  }, { passive: false });
+  }, {passive:false});
 
-  // Touch support
-  let lastTouch = null;
-  wrap.addEventListener('touchstart', e => { lastTouch = e.touches[0]; });
-  wrap.addEventListener('touchmove', e => {
-    if (!lastTouch) return;
-    const t = e.touches[0];
-    const dx = t.clientX - lastTouch.clientX, dy = t.clientY - lastTouch.clientY;
-    theta -= dx * 0.01; phi = Math.max(0.15, Math.min(Math.PI - 0.15, phi + dy * 0.01));
-    lastTouch = t; updateCamera(); e.preventDefault();
-  }, { passive: false });
-
-  // Control buttons
-  document.getElementById('btn-reset').addEventListener('click', () => {
-    theta = 0; phi = Math.PI / 2; radius3d = 14; updateCamera();
+  // Touch
+  let lastTouch=null, lastPinchDist=null;
+  wrap.addEventListener('touchstart', e=>{
+    if (e.touches.length===1) lastTouch=e.touches[0];
+    if (e.touches.length===2) lastPinchDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
   });
-  document.getElementById('btn-zoom-in').addEventListener('click', () => {
-    radius3d = Math.max(MIN_R, radius3d - 2); updateCamera();
-  });
-  document.getElementById('btn-zoom-out').addEventListener('click', () => {
-    radius3d = Math.min(MAX_R, radius3d + 2); updateCamera();
-  });
-
-  // ── RAYCASTING (node click) ──
-  const raycaster = new THREE.Raycaster();
-  const mouse = new THREE.Vector2();
-  let selectedNode = null;
-
-  wrap.addEventListener('click', e => {
-    const rect = wrap.getBoundingClientRect();
-    mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-    mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-    raycaster.setFromCamera(mouse, camera);
-    const meshes = nodeObjects.map(n => n.mesh);
-    const hits = raycaster.intersectObjects(meshes);
-    if (hits.length) {
-      const hit = hits[0].object;
-      const node = nodeObjects.find(n => n.mesh === hit);
-      if (node) selectNode(node);
+  wrap.addEventListener('touchmove', e=>{
+    e.preventDefault();
+    if (e.touches.length===1 && lastTouch) {
+      const t=e.touches[0], dx=t.clientX-lastTouch.clientX, dy=t.clientY-lastTouch.clientY;
+      theta-=dx*0.01; phi=Math.max(0.12,Math.min(Math.PI-0.12,phi+dy*0.01));
+      lastTouch=t; updateCamera();
     }
+    if (e.touches.length===2 && lastPinchDist) {
+      const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+      camR=Math.max(MIN_R,Math.min(MAX_R,camR-(d-lastPinchDist)*0.04));
+      lastPinchDist=d; updateCamera();
+    }
+  },{passive:false});
+
+  // Controls
+  document.getElementById('btn-reset').addEventListener('click', ()=>{ theta=0.2;phi=1.2;camR=18;updateCamera(); });
+  document.getElementById('btn-zoom-in').addEventListener('click', ()=>{ camR=Math.max(MIN_R,camR-2);updateCamera(); });
+  document.getElementById('btn-zoom-out').addEventListener('click', ()=>{ camR=Math.min(MAX_R,camR+2);updateCamera(); });
+
+  // ── RAYCASTING ──
+  const raycaster=new THREE.Raycaster();
+  const mouse2d=new THREE.Vector2();
+  const tooltip=document.getElementById('tooltip');
+  let hoveredNode=null, selectedNode=null;
+
+  function getHit(e) {
+    const rect=wrap.getBoundingClientRect();
+    mouse2d.x=((e.clientX-rect.left)/rect.width)*2-1;
+    mouse2d.y=-((e.clientY-rect.top)/rect.height)*2+1;
+    raycaster.setFromCamera(mouse2d, camera);
+    const meshes=nodeObjects.map(n=>n.mesh);
+    const hits=raycaster.intersectObjects(meshes);
+    return hits.length ? nodeObjects.find(n=>n.mesh===hits[0].object) : null;
+  }
+
+  function handleHover(e) {
+    const node=getHit(e);
+    if (node !== hoveredNode) {
+      hoveredNode=node;
+      if (node) {
+        wrap.style.cursor='pointer';
+        document.getElementById('tt-name').textContent=node.label;
+        document.getElementById('tt-sub').textContent=node.sublabel||(node.clauseLabel||'');
+        tooltip.style.display='block';
+      } else {
+        wrap.style.cursor='grab';
+        tooltip.style.display='none';
+      }
+    }
+    if (hoveredNode) {
+      tooltip.style.left=(e.clientX+14)+'px';
+      tooltip.style.top=(e.clientY-10)+'px';
+    }
+  }
+
+  wrap.addEventListener('click', e=>{
+    if (isDragging) return;
+    const node=getHit(e);
+    if (node) selectNode(node);
   });
 
   function selectNode(node) {
-    // Reset previous
-    nodeObjects.forEach(n => {
-      n.mesh.material.emissiveIntensity = n.violated ? 0.45 : 0.12;
-    });
-    // Highlight selected
-    node.mesh.material.emissiveIntensity = 0.75;
-    selectedNode = node;
+    nodeObjects.forEach(n=>{ n.mesh.material.emissiveIntensity = n.violated?0.5:0.1; });
+    node.mesh.material.emissiveIntensity = 0.85;
+    selectedNode=node;
     showNodeDetail(node);
   }
 
   function showNodeDetail(node) {
-    document.getElementById('sel-title').textContent = node.label;
-    const d = node.nodeData;
-    let html = '';
+    const d=node.nodeData;
+    document.getElementById('sel-title').textContent=node.label;
+    const badgeEl=document.getElementById('sel-badge');
 
-    if (d.type === 'agent') {
-      html += `<div class="side-sec">
-        <div class="side-sec-title">Agent Identity</div>
-        <div class="kv"><span class="kv-key">Agent ID</span><span class="kv-val">${d.agent_id || '—'}</span></div>
-        <div class="kv"><span class="kv-key">Session</span><span class="kv-val">${(d.session_id||'—').slice(0,20)}…</span></div>
+    let badgeHtml='', html='';
+
+    if (d.type==='agent') {
+      badgeHtml=`<span class="side-hdr-badge" style="background:rgba(0,212,255,0.1);color:#00d4ff;border:1px solid rgba(0,212,255,0.3)">AI Agent</span>`;
+      html=`<div class="side-sec">
+        <div class="side-sec-title">Identity</div>
+        <div class="kv"><span class="kv-key">Agent ID</span><span class="kv-val">${d.agent_id||'—'}</span></div>
+        <div class="kv"><span class="kv-key">Session</span><span class="kv-val">${d.session_id?(d.session_id.slice(0,22)+'…'):'—'}</span></div>
+        <div class="kv"><span class="kv-key">Status</span><span class="kv-val" style="color:#00d4ff">Active</span></div>
+      </div>
+      <div class="side-sec" style="border-bottom:none">
+        <div class="side-sec-title">Role</div>
+        <div style="font-size:10px;color:var(--muted);line-height:1.6">This agent initiated the event chain. All downstream enforcement actions were triggered by its behaviour.</div>
       </div>`;
-    } else if (d.type === 'event') {
-      const s = sev(d.bdi_score||0, d.entropy||0);
-      html += `<div class="side-sec">
+    } else if (d.type==='event') {
+      const s=sevFn(d.bdi_score||0,d.entropy||0);
+      const sc=s==='critical'?'#ff6b35':s==='elevated'?'#f59e0b':'#10b981';
+      badgeHtml=`<span class="side-hdr-badge badge ${s}">${s.toUpperCase()}</span>`;
+      html=`<div class="side-sec">
         <div class="side-sec-title">Event Details</div>
-        <div class="kv"><span class="kv-key">Event ID</span><span class="kv-val" style="color:var(--accent)">${d.event_id||'—'}</span></div>
-        <div class="kv"><span class="kv-key">Severity</span><span class="kv-val"><span class="badge ${s}">${s}</span></span></div>
-        <div class="kv"><span class="kv-key">BDI Score</span><span class="kv-val" style="color:${s==='critical'?'var(--danger)':s==='elevated'?'var(--warn)':'var(--ok)'}">${Math.round((d.bdi_score||0)*100)}%</span></div>
+        <div class="kv"><span class="kv-key">Event ID</span><span class="kv-val" style="color:#00d4ff">${d.event_id||'—'}</span></div>
+        <div class="kv"><span class="kv-key">BDI Score</span><span class="kv-val" style="color:${sc}">${Math.round((d.bdi_score||0)*100)}%</span></div>
         <div class="kv"><span class="kv-key">Entropy</span><span class="kv-val">${(d.entropy||0).toFixed(3)}</span></div>
-        <div class="kv"><span class="kv-key">Exfiltration</span><span class="kv-val" style="color:${d.is_exfiltration?'var(--danger)':'var(--ok)'}">${d.is_exfiltration?'DETECTED':'None'}</span></div>
+        <div class="kv"><span class="kv-key">Exfiltration</span><span class="kv-val" style="color:${d.is_exfiltration?'#ef4444':'#10b981'}">${d.is_exfiltration?'DETECTED':'None'}</span></div>
       </div>`;
-      if (d.text) {
-        html += `<div class="side-sec">
-          <div class="side-sec-title">Event Text</div>
-          <div style="font-size:10px;color:var(--muted);line-height:1.5">${d.text.slice(0,200)}${d.text.length>200?'…':''}</div>
-        </div>`;
-      }
-    } else if (d.type === 'jurisdiction') {
-      html += `<div class="side-sec">
-        <div class="side-sec-title">Policy Violation</div>
+      if (d.text) html+=`<div class="side-sec">
+        <div class="side-sec-title">Event Text</div>
+        <div style="font-size:10px;color:var(--muted);line-height:1.6">${d.text.slice(0,220)}${d.text.length>220?'…':''}</div>
+      </div>`;
+      html+=`<div class="side-sec" style="border-bottom:none">
+        <div class="side-sec-title">Triggered At</div>
+        <div style="font-size:10px;color:var(--muted)">${d.created_at?new Date(d.created_at).toLocaleString():'—'}</div>
+      </div>`;
+    } else if (d.type==='jurisdiction') {
+      badgeHtml=`<span class="side-hdr-badge" style="background:${POLICY_CLAUSES[d.jur]?.bg||'transparent'};color:${d.color};border:1px solid ${d.color}44">Violation</span>`;
+      html=`<div class="side-sec">
+        <div class="side-sec-title">Policy Violated</div>
         <div class="policy-row ${d.jur}">
           <div class="policy-jur ${d.jur}">${d.label}</div>
           <div class="policy-clause">${d.clause}</div>
         </div>
-        <div style="font-size:10px;color:var(--muted);margin-top:8px;line-height:1.5">This jurisdiction was triggered by the event's severity and data exposure pattern.</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:8px;line-height:1.6">Triggered by event severity and data exposure pattern. Immediate regulatory action required.</div>
+      </div>
+      <div class="side-sec" style="border-bottom:none">
+        <div class="side-sec-title">Required Action</div>
+        <div style="font-size:10px;color:var(--muted);line-height:1.6">${
+          d.jur==='MY'?'Notify PDPC within 24 hours of breach detection.':
+          d.jur==='SG'?'File incident report within 72-hour MGF window.':
+          d.jur==='VN'?'Report to competent authority within 72 hours.':
+          'Review and enforce org custom policy rules.'
+        }</div>
       </div>`;
-    } else if (d.type === 'action') {
-      html += `<div class="side-sec">
-        <div class="side-sec-title">Enforcement Action</div>
-        <div class="kv"><span class="kv-key">Action</span><span class="kv-val" style="color:${d.color}">${d.label}</span></div>
-        <div style="font-size:10px;color:var(--muted);margin-top:8px;line-height:1.5">Auto-triggered by Pulse governance engine on breach detection.</div>
+    } else if (d.type==='action') {
+      badgeHtml=`<span class="side-hdr-badge flow-badge action">Enforcement</span>`;
+      html=`<div class="side-sec">
+        <div class="side-sec-title">Action</div>
+        <div class="kv"><span class="kv-key">Type</span><span class="kv-val" style="color:${d.color}">${d.icon} ${d.label}</span></div>
+        <div class="kv"><span class="kv-key">Trigger</span><span class="kv-val">Auto</span></div>
+        <div class="kv"><span class="kv-key">Status</span><span class="kv-val" style="color:#10b981">Executed</span></div>
+      </div>
+      <div class="side-sec" style="border-bottom:none">
+        <div class="side-sec-title">Details</div>
+        <div style="font-size:10px;color:var(--muted);line-height:1.6">Auto-triggered by the Pulse governance engine on confirmed breach detection. No manual intervention required.</div>
       </div>`;
     }
 
-    document.getElementById('side-body').innerHTML = html || '<div class="hint">No details available.</div>';
+    badgeEl.innerHTML=badgeHtml;
+    document.getElementById('side-body').innerHTML=html||'<div class="hint">No details.</div>';
+  }
+
+  // ── PROJECT LABELS TO SCREEN ──
+  function updateLabels() {
+    const w=W(), h=H();
+    labelEls.forEach(({el, mesh, offset}) => {
+      const pos=mesh.position.clone();
+      // Project a point above the node
+      const above=pos.clone().add(new THREE.Vector3(0, offset+0.6, 0));
+      above.project(camera);
+      const x=(above.x*0.5+0.5)*w;
+      const y=(-above.y*0.5+0.5)*h;
+      // Hide if behind camera
+      if (above.z > 1) { el.style.opacity='0'; return; }
+      el.style.opacity='1';
+      el.style.left=x+'px';
+      el.style.top=y+'px';
+    });
   }
 
   // ── ANIMATE ──
-  let t = 0;
+  let t=0;
   function animate() {
     requestAnimationFrame(animate);
-    t += 0.012;
+    t += 0.014;
 
-    // Pulse glow on violated nodes
-    nodeObjects.forEach(n => {
+    // Pulse violated nodes + their glow
+    nodeObjects.forEach(n=>{
       if (n.violated && n.glowMesh) {
-        const pulse = 0.06 + Math.sin(t * 1.8) * 0.04;
-        n.glowMesh.material.opacity = pulse;
-        n.mesh.material.emissiveIntensity = (selectedNode === n ? 0.75 : 0.45) + Math.sin(t * 2) * 0.06;
+        const pulse=0.06+Math.sin(t*1.9)*0.045;
+        n.glowMesh.material.opacity=pulse;
+        if (selectedNode!==n) n.mesh.material.emissiveIntensity=0.48+Math.sin(t*2.1)*0.08;
       }
     });
 
+    // Accent light slow orbit
+    accentLight.position.x=Math.sin(t*0.3)*8;
+    accentLight.position.z=Math.cos(t*0.3)*8+4;
+
+    updateLabels();
     renderer.render(scene, camera);
   }
   animate();
 
   // Resize
-  window.addEventListener('resize', () => {
-    const W = wrap.clientWidth, H = wrap.clientHeight;
-    camera.aspect = W / H;
+  window.addEventListener('resize', ()=>{
+    camera.aspect=W()/H();
     camera.updateProjectionMatrix();
-    renderer.setSize(W, H);
+    renderer.setSize(W(),H());
   });
 }
 
-// ── SIDE PANEL SUMMARY (non-selected state) ──
-function buildSidePanel(data, severity, jurs, actions, isViolation) {
-  const agentId = data.agent_id || 'unknown';
-  const bd = data.bdi_score || 0, en = data.entropy || 0;
-
-  let html = `<div class="side-sec">
+// Side panel initial summary
+function buildSummaryPanel(data, severity, jurs, actions, isViolation) {
+  const bd=data.bdi_score||0, en=data.entropy||0;
+  const sc=severity==='critical'?'#ff6b35':severity==='elevated'?'#f59e0b':'#10b981';
+  let html=`<div class="side-sec">
     <div class="side-sec-title">Event Summary</div>
-    <div class="kv"><span class="kv-key">Event</span><span class="kv-val" style="color:var(--accent)">${data.event_id||'—'}</span></div>
-    <div class="kv"><span class="kv-key">Agent</span><span class="kv-val">${agentId}</span></div>
+    <div class="kv"><span class="kv-key">Event</span><span class="kv-val" style="color:#00d4ff">${data.event_id||'—'}</span></div>
+    <div class="kv"><span class="kv-key">Agent</span><span class="kv-val">${data.agent_id||'—'}</span></div>
     <div class="kv"><span class="kv-key">Severity</span><span class="kv-val"><span class="badge ${severity}">${severity}</span></span></div>
-    <div class="kv"><span class="kv-key">BDI</span><span class="kv-val">${Math.round(bd*100)}%</span></div>
+    <div class="kv"><span class="kv-key">BDI</span><span class="kv-val" style="color:${sc}">${Math.round(bd*100)}%</span></div>
     <div class="kv"><span class="kv-key">Entropy</span><span class="kv-val">${en.toFixed(3)}</span></div>
   </div>`;
 
   if (isViolation && jurs.length) {
-    html += `<div class="side-sec"><div class="side-sec-title">Policies Violated</div>`;
-    jurs.forEach(jur => {
-      const pc = POLICY_CLAUSES[jur];
-      if (!pc) return;
-      html += `<div class="policy-row ${jur}">
-        <div class="policy-jur ${jur}">${pc.label}</div>
-        <div class="policy-clause">${pc.clause}</div>
-      </div>`;
+    html+=`<div class="side-sec"><div class="side-sec-title">Policies Violated</div>`;
+    jurs.forEach(jur=>{ const pc=POLICY_CLAUSES[jur]; if(!pc)return;
+      html+=`<div class="policy-row ${jur}"><div class="policy-jur ${jur}">${pc.label}</div><div class="policy-clause">${pc.clause}</div></div>`;
     });
-    html += `</div>`;
+    html+=`</div>`;
   }
 
-  html += `<div class="side-sec"><div class="side-sec-title">Enforcement Chain</div>`;
-  actions.forEach(act => {
-    html += `<div class="kv"><span class="kv-key">${act.icon} ${act.label}</span><span class="kv-val" style="color:${act.color}">auto-triggered</span></div>`;
+  html+=`<div class="side-sec"><div class="side-sec-title">Enforcement Chain</div>`;
+  actions.forEach(act=>{
+    html+=`<div class="kv"><span class="kv-key">${act.icon}&nbsp;${act.label}</span><span class="kv-val" style="color:${act.color}">auto</span></div>`;
   });
-  html += `</div>`;
+  html+=`</div>`;
 
-  html += `<div class="side-sec" style="border-bottom:none">
-    <div class="side-sec-title">Navigation</div>
-    <div style="font-size:10px;color:var(--muted2);line-height:1.8">
-      🖱 Drag — Orbit<br>
-      ⚲ Scroll — Zoom<br>
-      ↙ Click node — Inspect<br>
-      ⊙ Reset — Reset camera
+  html+=`<div class="side-sec" style="border-bottom:none"><div class="side-sec-title">Controls</div>
+    <div style="font-size:10px;color:var(--muted2);line-height:2">
+      🖱&nbsp;Drag to orbit<br>
+      ⚲&nbsp;Scroll to zoom<br>
+      👆&nbsp;Click node — inspect<br>
+      ⊙&nbsp;Button — reset view
     </div>
   </div>`;
 
-  document.getElementById('side-body').innerHTML = html;
+  document.getElementById('side-body').innerHTML=html;
 }
 </script>
 </body>
