@@ -256,6 +256,32 @@ svg.hm{width:100%;height:55px}
 .settings-row:last-child{border-bottom:none}
 .settings-key{font-size:11px;color:var(--muted)}
 .settings-val{font-size:11px;font-weight:500;font-family:'JetBrains Mono',monospace;text-align:right;max-width:280px}
+
+/* ── PHASE 18: GRAPH EXPLORER (3D compliance framework graph) ── */
+#view-graph{padding:0;display:flex;flex-direction:column;overflow:hidden}
+.graph-toolbar{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap;gap:8px}
+.graph-canvas-wrap{flex:1;position:relative;overflow:hidden;cursor:grab;min-height:380px}
+.graph-canvas-wrap.dragging{cursor:grabbing}
+.graph-canvas-wrap canvas{display:block;width:100%;height:100%}
+.graph-overlay{position:absolute;inset:0;pointer-events:none}
+.graph-hint{position:absolute;top:10px;left:14px;font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--muted2);letter-spacing:0.02em;pointer-events:none}
+.graph-controls{position:absolute;top:8px;right:12px;display:flex;gap:6px}
+.hub-overlay{position:absolute;transform:translate(-50%,-50%);pointer-events:auto;cursor:pointer;font-size:11px;font-weight:600;color:var(--text);padding:4px 10px;border-radius:20px;border:1px solid;background:rgba(13,17,23,0.7);white-space:nowrap;user-select:none;backdrop-filter:blur(2px);transition:transform .18s cubic-bezier(.2,.8,.3,1.3)}
+.hub-overlay:hover{transform:translate(-50%,-50%) scale(1.12)}
+.sat-card{position:absolute;transform:translate(-50%,-100%) translateY(-10px) scale(0.9);pointer-events:none;opacity:0;transition:opacity .25s ease, transform .25s cubic-bezier(.2,.8,.3,1.2);background:var(--bg3);border:1px solid var(--border);border-left-width:3px;border-radius:5px;padding:6px 9px;min-width:120px;font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--muted);z-index:2}
+.sat-card.visible{opacity:1;pointer-events:auto;cursor:pointer;transform:translate(-50%,-100%) translateY(-14px) scale(1)}
+.sat-card .lbl{color:var(--text);font-weight:600;font-size:10.5px;margin-bottom:2px}
+.graph-legend{display:flex;gap:16px;flex-wrap:wrap;padding:10px 16px;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--muted);border-top:1px solid var(--border);flex-shrink:0}
+.graph-legend-item{display:flex;align-items:center;gap:6px}
+.graph-legend-dot{width:8px;height:8px;border-radius:50%}
+.graph-legend-note{margin-left:auto;color:var(--muted2)}
+.graph-side{width:320px;flex-shrink:0;border-left:1px solid var(--border);padding:16px;overflow-y:auto}
+.graph-content-row{display:flex;flex:1;min-height:0;overflow:hidden}
+.graph-card{background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:16px;min-height:220px}
+.graph-card-eyebrow{font-size:9px;letter-spacing:0.09em;color:var(--muted);text-transform:uppercase;font-weight:600;margin-bottom:8px}
+.graph-card-title{font-size:15px;font-weight:600;margin-bottom:2px}
+.graph-card-sub{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--muted);margin-bottom:14px}
+.graph-card-desc{margin-top:12px;padding-top:12px;border-top:1px solid var(--border);font-size:11.5px;line-height:1.55;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -271,6 +297,9 @@ svg.hm{width:100%;height:55px}
   </button>
   <button class="nav-btn" title="Agents" data-view="agents">
     <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+  </button>
+  <button class="nav-btn" title="Graph Explorer" data-view="graph">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><line x1="12" y1="7.5" x2="6.3" y2="17"/><line x1="12" y1="7.5" x2="17.7" y2="17"/></svg>
   </button>
   <button class="nav-btn" title="Circuit Breaker" data-view="circuit-breaker">
     <svg viewBox="0 0 24 24"><path d="M18.36 6.64A9 9 0 1 1 5.64 6.64"/><polyline points="13 2 13 8 16 8"/></svg>
@@ -441,6 +470,35 @@ svg.hm{width:100%;height:55px}
           <div class="tools-row"><button class="refresh-btn" onclick="loadSettings()">↻ Refresh</button></div>
         </div>
         <div id="settings-body"><div class="loading"><div class="spin"></div>Loading system settings…</div></div>
+      </div>
+    </div>
+
+    <!-- GRAPH EXPLORER VIEW (Phase 18) -->
+    <div id="view-graph" style="display:none">
+      <div class="graph-toolbar">
+        <div class="section-label">Compliance Framework Graph Explorer</div>
+        <div class="tools-row">
+          <span class="cnt" id="graph-status">not loaded</span>
+          <button class="refresh-btn" onclick="loadGraph(true)">↻ Refresh</button>
+        </div>
+      </div>
+      <div class="graph-content-row">
+        <div class="graph-canvas-wrap" id="graph-canvas-wrap">
+          <div class="loading" id="graph-loading" style="position:absolute;inset:0"><div class="spin"></div>Loading agents &amp; legal holds…</div>
+          <canvas id="graph-three-canvas"></canvas>
+          <div class="graph-overlay" id="graph-overlay"></div>
+          <div class="graph-hint">MOVE CURSOR TO TILT · DRAG TO SPIN · SCROLL TO ZOOM · CLICK A FRAMEWORK TO EXPLODE</div>
+        </div>
+        <div class="graph-side">
+          <div class="graph-card" id="graph-card">
+            <div class="graph-card-eyebrow">Overview</div>
+            <div class="graph-card-title">Select a framework</div>
+            <div class="graph-card-sub">Click a hub to explode its connections</div>
+          </div>
+        </div>
+      </div>
+      <div class="graph-legend" id="graph-legend">
+        <div class="graph-legend-note">Satellite = real agent from /topology · edge = active legal hold from /legal-hold</div>
       </div>
     </div>
 
@@ -653,12 +711,13 @@ function refresh(){const f=filtered();renderRows(f);updateKpis(f);}
 
 /* ── VIEW SWITCHING ── */
 document.querySelectorAll('.nav-btn[data-view]').forEach(b=>b.addEventListener('click',()=>switchView(b.dataset.view)));
-const VIEW_LOADERS={'agents':()=>{if(!lastTopology)loadAgents();},'analytics':()=>{if(!lastDrift)loadAnalytics();},'circuit-breaker':()=>loadCircuitBreaker(),'compliance':()=>{if(!lastDeadlines)loadCompliance();},'settings':()=>{if(!lastHealth)loadSettings();}};
+const VIEW_LOADERS={'agents':()=>{if(!lastTopology)loadAgents();},'analytics':()=>{if(!lastDrift)loadAnalytics();},'circuit-breaker':()=>loadCircuitBreaker(),'compliance':()=>{if(!lastDeadlines)loadCompliance();},'settings':()=>{if(!lastHealth)loadSettings();},'graph':()=>{if(!graphLoaded)loadGraph();}};
 function switchView(view){
   document.querySelectorAll('.nav-btn[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===view));
-  ['ledger','agents','analytics','circuit-breaker','compliance','settings'].forEach(v=>{const el=document.getElementById('view-'+v);if(el)el.style.display=v===view?'':'none';});
+  ['ledger','agents','analytics','circuit-breaker','compliance','settings','graph'].forEach(v=>{const el=document.getElementById('view-'+v);if(el)el.style.display=v===view?'':'none';});
   closeInv();
   if(VIEW_LOADERS[view])VIEW_LOADERS[view]();
+  if(view==='graph')setTimeout(graphResize,50);
 }
 
 /* ── PASSPORT ── */
@@ -771,6 +830,357 @@ function renderSettings(){
   const box=document.getElementById('settings-body'),cb=h.circuit_breaker||{};
   box.innerHTML=`<div class="settings-card"><div class="inv-sec-title" style="margin-bottom:8px">◎ Service</div><div class="settings-row"><span class="settings-key">Service</span><span class="settings-val">${h.service||'pulse-proxy'}</span></div><div class="settings-row"><span class="settings-key">Status</span><span class="settings-val" style="color:${h.ok?'var(--ok)':'var(--danger)'}">${h.ok?'HEALTHY':'UNREACHABLE'}</span></div><div class="settings-row"><span class="settings-key">Backend</span><span class="settings-val" style="font-size:10px">${API}</span></div></div><div class="settings-card"><div class="inv-sec-title" style="margin-bottom:8px">◎ Pulse Configuration</div><div class="settings-row"><span class="settings-key">Shadow Mode</span><span class="settings-val" style="color:${h.shadow_mode?'var(--warn)':'var(--ok)'}">${h.shadow_mode?'ENABLED — log only, not blocking':'DISABLED — full enforcement'}</span></div><div class="settings-row"><span class="settings-key">Synthesis Engine</span><span class="settings-val" style="color:${h.synthesis_enabled?'var(--ok)':'var(--muted)'}">${h.synthesis_enabled?'ENABLED':'DISABLED'}</span></div><div class="settings-row"><span class="settings-key">Upstream LLM</span><span class="settings-val" style="color:${h.upstream_configured?'var(--ok)':'var(--muted)'}">${h.upstream_configured?'CONFIGURED':'Not configured — baseline fallback'}</span></div><div class="settings-row"><span class="settings-key">Events in feed</span><span class="settings-val">${h.events??0}</span></div></div><div class="settings-card"><div class="inv-sec-title" style="margin-bottom:8px">◎ Circuit Breaker</div><div class="settings-row"><span class="settings-key">State</span><span class="settings-val" style="color:${cb.state==='closed'?'var(--ok)':cb.state==='open'?'var(--danger)':'var(--warn)'}">${(cb.state||'unknown').toUpperCase()}</span></div><div class="settings-row"><span class="settings-key">Allows Requests</span><span class="settings-val" style="color:${cb.allows_requests?'var(--ok)':'var(--danger)'}">${cb.allows_requests?'Yes':'No'}</span></div></div><div class="settings-card"><div class="inv-sec-title" style="margin-bottom:8px">◎ Organisation API Key</div><div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5">Paste your API key to scope this dashboard to your organisation's events only. Leave blank to view demo data.</div><div style="display:flex;gap:8px;align-items:center"><input id="api-key-input" type="password" placeholder="pulse_…" value="${ORG_API_KEY||''}" style="flex:1;background:var(--bg4);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:11px;font-family:'JetBrains Mono',monospace;outline:none"/><button onclick="saveApiKey()" style="background:var(--accent);color:#000;border:none;border-radius:6px;padding:8px 14px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">Save</button><button onclick="clearApiKey()" style="background:var(--bg4);border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:8px 10px;font-size:11px;cursor:pointer">Clear</button></div><div id="api-key-status" style="font-size:10px;margin-top:6px;color:var(--ok)">${ORG_API_KEY?'✓ API key active — showing your organisation data':''}</div></div><div class="settings-card"><div class="inv-sec-title" style="margin-bottom:8px">◎ Quick Links</div><div class="settings-row"><span class="settings-key">Ledger Integrity</span><a href="${API}/ledger/integrity" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">audit_logs chain →</a></div><div class="settings-row"><span class="settings-key">AI Events Integrity</span><a href="${API}/ledger/integrity/ai_events" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">ai_events chain →</a></div><div class="settings-row"><span class="settings-key">Swarm Detector</span><a href="${API}/swarm/detect" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">run detection →</a></div><div class="settings-row"><span class="settings-key">Active Legal Holds</span><a href="${API}/legal-hold?source=db" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">view holds →</a></div><div class="settings-row"><span class="settings-key">Org Policies</span><a href="${API}/org/policies?org_id=demo-org" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">view active policies →</a></div><div class="settings-row"><span class="settings-key">Isolated Agents</span><a href="${API}/agents/isolated" target="_blank" style="font-size:11px;color:var(--danger);text-decoration:none">view quarantined →</a></div><div class="settings-row"><span class="settings-key">Webhooks</span><a href="${API}/webhooks?org_id=demo-org" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">view registrations →</a></div><div class="settings-row"><span class="settings-key">Evidence Packages</span><a href="${API}/legal-hold?status=ACTIVE" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">view active holds →</a></div></div><div class="settings-card"><div class="inv-sec-title" style="margin-bottom:8px">◎ Active Org Policies — demo-org</div><div id="org-policies-body"><div class="loading"><div class="spin"></div>Loading policies…</div></div></div>`;
   apiFetch('/org/policies?org_id=demo-org',{cache:'no-store'}).then(r=>r.json()).then(data=>{const policies=data.policies||[],pb=document.getElementById('org-policies-body');if(!pb)return;if(!policies.length){pb.innerHTML='<div style="font-size:11px;color:var(--muted)">No active policies for demo-org.</div>';return;}pb.innerHTML=policies.map(p=>{const ruleHtml=Array.isArray(p.rules)?p.rules.map(r=>`<div style="font-size:10px;color:var(--muted);margin-top:3px">↳ <span style="color:${r.action==='block'?'var(--danger)':'var(--warn)'}">${r.action}</span> if output contains <strong style="color:var(--text)">${r.match||r.keyword||''}</strong></div>`).join(''):'';return `<div style="padding:8px 0;border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:11px;font-weight:500">${p.name}</span><span class="badge stable">active</span></div><div style="font-size:10px;color:var(--muted);margin-top:2px">${p.description||p.policy_id}</div>${ruleHtml}</div>`;}).join('');}).catch(()=>{const pb=document.getElementById('org-policies-body');if(pb)pb.innerHTML='<div style="font-size:11px;color:var(--danger)">Could not load policies.</div>';});
+}
+
+/* ══════════════════════════════════════════════════════════
+   PHASE 18 — GRAPH EXPLORER (real /topology + real /legal-hold)
+   Hub jurisdictions are the fixed 4 ASEAN frameworks (stable).
+   Satellite nodes = real agents from /topology.
+   Edges = ONLY real active legal holds with a framework/jurisdiction
+   on them. Agents with no active hold are shown unconnected —
+   that's real signal (no current regulatory exposure), not a gap.
+   ══════════════════════════════════════════════════════════ */
+let graphLoaded = false;
+let graphThree = null; // holds three.js runtime state once built
+
+const GRAPH_HUBS = {
+  pdpa: {id:'pdpa', label:'PDPA Malaysia', jurisdiction:'Malaysia', color:0xff6b35, hex:'#ff6b35', x:130, y:90, z:70, deadline:'24h breach notification', matchJur:['MY']},
+  mgf:  {id:'mgf',  label:'Singapore MGF', jurisdiction:'Singapore', color:0x0ea5e9, hex:'#0ea5e9', x:-130, y:90, z:-70, deadline:'72h incident review', matchJur:['SG']},
+  vn:   {id:'vn',   label:'Vietnam AI Law', jurisdiction:'Vietnam', color:0x10b981, hex:'#10b981', x:-130, y:-90, z:70, deadline:'72h incident report', matchJur:['VN']},
+  org:  {id:'org',  label:'Company Policy', jurisdiction:'Internal — ORG', color:0xa78bfa, hex:'#a78bfa', x:130, y:-90, z:-70, deadline:'Org-defined SLA', matchJur:['ORG','INTL']}
+};
+
+function jurisdictionToHub(jurisdiction, framework){
+  const j=(jurisdiction||'').toUpperCase();
+  for(const hub of Object.values(GRAPH_HUBS)) if(hub.matchJur.includes(j)) return hub.id;
+  const f=(framework||'').toLowerCase();
+  if(f.includes('pdpa')||f.includes('malaysia')) return 'pdpa';
+  if(f.includes('singapore')||f.includes('mgf')) return 'mgf';
+  if(f.includes('vietnam')) return 'vn';
+  if(f.includes('org')||f.includes('polic')||f.includes('iso')) return 'org';
+  return null;
+}
+
+async function loadGraph(force){
+  if(graphLoaded && !force) return;
+  const statusEl=document.getElementById('graph-status');
+  const loadingEl=document.getElementById('graph-loading');
+  statusEl.textContent='loading…';
+  if(loadingEl) loadingEl.style.display='flex';
+  try{
+    const [topo, holdsRes] = await Promise.all([
+      apiFetch('/topology', {cache:'no-store'}).then(r=>r.json()),
+      apiFetch('/legal-hold?status=ACTIVE&source=db', {cache:'no-store'}).then(r=>r.json())
+    ]);
+    const agentNodes = (topo.nodes||[]).filter(n=>n.type==='agent');
+    const holds = holdsRes.holds||[];
+
+    // Build satellite list — every real agent, real fields, no fabricated edges.
+    const satellites = agentNodes.map(a=>{
+      const agentHolds = holds.filter(h=>h.agent_id===a.agent_id);
+      const links = [...new Set(agentHolds.map(h=>jurisdictionToHub(h.jurisdiction,h.framework)).filter(Boolean))];
+      return {
+        id:a.agent_id, kind:'agent', label:a.agent_id,
+        registered: !!a.registered, risk_band: a.risk_band||'unknown',
+        events: a.events||0, blocked: a.blocked||0,
+        links, holds: agentHolds
+      };
+    });
+
+    statusEl.textContent = `${agentNodes.length} agents · ${holds.length} active holds`;
+    if(loadingEl) loadingEl.style.display='none';
+    graphLoaded = true;
+    buildGraphScene(satellites);
+  }catch(err){
+    statusEl.textContent = 'error';
+    if(loadingEl) loadingEl.innerHTML = `<div style="color:var(--danger)">⚠ Could not load graph data — ${err.message}</div>`;
+  }
+}
+
+function ensureThreeLoaded(cb){
+  if(window.THREE){ cb(); return; }
+  const s=document.createElement('script');
+  s.src='https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
+  s.onload=cb;
+  document.head.appendChild(s);
+}
+
+function graphResize(){
+  if(!graphThree) return;
+  const wrap=document.getElementById('graph-canvas-wrap');
+  const w=wrap.clientWidth, h=wrap.clientHeight;
+  graphThree.renderer.setSize(w,h,false);
+  graphThree.camera.aspect=w/h;
+  graphThree.camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', graphResize);
+
+function buildGraphScene(satellites){
+  ensureThreeLoaded(()=>_buildGraphScene(satellites));
+}
+
+function _buildGraphScene(satellites){
+  const wrap=document.getElementById('graph-canvas-wrap');
+  const canvas=document.getElementById('graph-three-canvas');
+  const overlay=document.getElementById('graph-overlay');
+  overlay.innerHTML='';
+
+  const renderer=new THREE.WebGLRenderer({canvas, antialias:true, alpha:true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  const scene=new THREE.Scene();
+  const camera=new THREE.PerspectiveCamera(45,1,1,3000);
+  const CAMERA_Z=560;
+  camera.position.set(0,0,CAMERA_Z);
+  const graphGroup=new THREE.Group();
+  const INITIAL_ROT={x:0.35,y:-0.5};
+  scene.add(graphGroup);
+
+  // hubs
+  const hubMeshes={};
+  Object.values(GRAPH_HUBS).forEach(f=>{
+    const geo=new THREE.SphereGeometry(20,28,28);
+    const mat=new THREE.MeshBasicMaterial({color:f.color, transparent:true, opacity:0.92});
+    const mesh=new THREE.Mesh(geo,mat);
+    mesh.position.set(f.x,f.y,f.z);
+    graphGroup.add(mesh);
+    const glow=new THREE.Mesh(new THREE.SphereGeometry(31,16,16), new THREE.MeshBasicMaterial({color:f.color, transparent:true, opacity:0.16, blending:THREE.AdditiveBlending, depthWrite:false}));
+    glow.position.copy(mesh.position);
+    graphGroup.add(glow);
+    const ring=new THREE.Mesh(new THREE.TorusGeometry(33,0.9,8,56), new THREE.MeshBasicMaterial({color:f.color, transparent:true, opacity:0.45}));
+    ring.position.copy(mesh.position);
+    ring.rotation.x=Math.PI/2.4; ring.rotation.y=Math.random()*Math.PI;
+    graphGroup.add(ring);
+    hubMeshes[f.id]={mesh,glow,ring,def:f};
+  });
+
+  // layout satellites around a sphere so many real agents don't overlap
+  const satMeshes=[];
+  const N=Math.max(satellites.length,1);
+  satellites.forEach((s,i)=>{
+    const linked = s.links.length>0;
+    const phi=Math.acos(1-2*(i+0.5)/N);
+    const theta=Math.PI*(1+Math.sqrt(5))*i;
+    const baseR = linked ? 210 : 130; // unlinked agents sit closer to center — no exposure
+    const rx=baseR*Math.sin(phi)*Math.cos(theta), ry=baseR*Math.sin(phi)*Math.sin(theta), rz=baseR*Math.cos(phi);
+    const risk = s.risk_band==='critical'?0.9:s.risk_band==='elevated'||s.risk_band==='caution'?0.55:s.risk_band==='unregistered'?0.4:0.2;
+    const r = 5 + risk*8;
+    const color = s.links.length>1 ? 0xffffff : (s.links.length===1 ? GRAPH_HUBS[s.links[0]].color : 0x475569);
+    const geo=new THREE.IcosahedronGeometry(r,0);
+    const mat=new THREE.MeshBasicMaterial({color, transparent:true, opacity:s.links.length?0.92:0.4});
+    const mesh=new THREE.Mesh(geo,mat);
+    mesh.position.set(rx,ry,rz);
+    graphGroup.add(mesh);
+    const restVec=new THREE.Vector3(rx,ry,rz);
+    const explodedVecs={};
+    s.links.forEach(hid=>{
+      const hub=GRAPH_HUBS[hid];
+      const hubVec=new THREE.Vector3(hub.x,hub.y,hub.z);
+      const dir=restVec.clone().sub(hubVec).multiplyScalar(2.1);
+      explodedVecs[hid]=hubVec.clone().add(dir);
+    });
+    satMeshes.push({def:s, mesh, restVec, explodedVecs, spin:(Math.random()-0.5)*0.01});
+  });
+
+  // edges — ONLY for real active holds
+  const edgeRefs=[];
+  satMeshes.forEach(sm=>{
+    sm.def.links.forEach(hid=>{
+      const geo=new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6),3));
+      const mat=new THREE.LineBasicMaterial({color:GRAPH_HUBS[hid].color, transparent:true, opacity:0.22});
+      const line=new THREE.Line(geo,mat);
+      graphGroup.add(line);
+      const pulse=new THREE.Mesh(new THREE.SphereGeometry(2.6,8,8), new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0.3, blending:THREE.AdditiveBlending, depthWrite:false}));
+      graphGroup.add(pulse);
+      edgeRefs.push({line,pulse,sat:sm,hubId:hid,phase:Math.random()});
+    });
+  });
+
+  // overlays
+  const hubOverlays={};
+  Object.values(GRAPH_HUBS).forEach(f=>{
+    const div=document.createElement('div');
+    div.className='hub-overlay';
+    div.style.borderColor=f.hex; div.style.color=f.hex;
+    div.textContent=f.label;
+    div.addEventListener('click',(e)=>{e.stopPropagation();toggleHub(f.id);markInteraction();});
+    overlay.appendChild(div);
+    hubOverlays[f.id]=div;
+  });
+  const satOverlays=[];
+  satMeshes.forEach(sm=>{
+    const s=sm.def;
+    const div=document.createElement('div');
+    div.className='sat-card';
+    const borderColor = s.links.length>1 ? '#e2e8f0' : (s.links.length===1 ? GRAPH_HUBS[s.links[0]].hex : '#475569');
+    div.style.borderLeftColor=borderColor;
+    div.innerHTML=`<div class="lbl">${s.label}</div><div>${s.registered?'registered':'unregistered'} · ${s.risk_band}</div><div>${s.events} events · ${s.blocked} blocked</div>`;
+    div.addEventListener('click',(e)=>{e.stopPropagation();renderGraphCard(s,'agent');markInteraction();});
+    overlay.appendChild(div);
+    satOverlays.push({sm,div});
+  });
+
+  // interaction state
+  let activeHub=null, hoveredHub=null;
+  let isDragging=false,lastX=0,lastY=0,dragDist=0;
+  let lastInteraction=Date.now();
+  let baseRotation={x:INITIAL_ROT.x,y:INITIAL_ROT.y};
+  let velocity={x:0,y:0};
+  let tiltCurrent={x:0,y:0};
+  let mouseNDC={x:0,y:0};
+  function markInteraction(){lastInteraction=Date.now();}
+
+  wrap.addEventListener('pointermove', e=>{
+    const rect=wrap.getBoundingClientRect();
+    mouseNDC.x=((e.clientX-rect.left)/rect.width)*2-1;
+    mouseNDC.y=((e.clientY-rect.top)/rect.height)*2-1;
+  });
+  canvas.addEventListener('pointerdown', e=>{
+    isDragging=true;dragDist=0;lastX=e.clientX;lastY=e.clientY;velocity={x:0,y:0};
+    wrap.classList.add('dragging');markInteraction();
+  });
+  window.addEventListener('pointermove', e=>{
+    if(!isDragging)return;
+    const dx=e.clientX-lastX, dy=e.clientY-lastY;
+    dragDist+=Math.abs(dx)+Math.abs(dy);
+    velocity.x=dy*0.006; velocity.y=dx*0.006;
+    baseRotation.x+=velocity.x; baseRotation.y+=velocity.y;
+    lastX=e.clientX; lastY=e.clientY; markInteraction();
+  });
+  window.addEventListener('pointerup', ()=>{
+    if(isDragging && dragDist<4) toggleHub(null);
+    isDragging=false; wrap.classList.remove('dragging');
+  });
+  let targetCameraZ=CAMERA_Z;
+  canvas.addEventListener('wheel', e=>{
+    e.preventDefault();
+    targetCameraZ=Math.max(280,Math.min(950,targetCameraZ+e.deltaY*0.4));
+    markInteraction();
+  }, {passive:false});
+
+  function toggleHub(id){
+    activeHub=(activeHub===id)?null:id;
+    if(activeHub) renderGraphCard(GRAPH_HUBS[activeHub],'hub'); else renderGraphEmpty();
+  }
+
+  function tmpProjectSetup(){ return new THREE.Vector3(); }
+  const tmpVec=new THREE.Vector3();
+  function project(v3,w,h){
+    tmpVec.copy(v3).applyMatrix4(graphGroup.matrixWorld).project(camera);
+    return {x:(tmpVec.x*0.5+0.5)*w, y:(-tmpVec.y*0.5+0.5)*h, behind:tmpVec.z>1};
+  }
+
+  function animate(){
+    graphThree.raf = requestAnimationFrame(animate);
+    const t=performance.now()*0.001;
+    if(!isDragging){
+      baseRotation.x+=velocity.x; baseRotation.y+=velocity.y;
+      velocity.x*=0.92; velocity.y*=0.92;
+      if(Math.abs(velocity.x)<0.0002)velocity.x=0;
+      if(Math.abs(velocity.y)<0.0002)velocity.y=0;
+      if(!velocity.x && !velocity.y && Date.now()-lastInteraction>4000) baseRotation.y+=0.0016;
+    }
+    const targetTiltX=mouseNDC.y*0.16, targetTiltY=mouseNDC.x*0.22;
+    tiltCurrent.x+=(targetTiltX-tiltCurrent.x)*0.06;
+    tiltCurrent.y+=(targetTiltY-tiltCurrent.y)*0.06;
+    graphGroup.rotation.set(baseRotation.x+tiltCurrent.x, baseRotation.y+tiltCurrent.y, 0);
+    camera.position.z += (targetCameraZ-camera.position.z)*0.12;
+
+    satMeshes.forEach(sm=>{
+      const connected = activeHub && sm.def.links.includes(activeHub);
+      const target = connected ? sm.explodedVecs[activeHub] : sm.restVec;
+      sm.mesh.position.lerp(target,0.12);
+      sm.mesh.rotation.x+=sm.spin; sm.mesh.rotation.y+=sm.spin*1.3;
+      const dimmed = activeHub && !connected;
+      const baseOp = sm.def.links.length?0.92:0.4;
+      const targetOp = dimmed ? 0.06 : baseOp;
+      sm.mesh.material.opacity += (targetOp - sm.mesh.material.opacity)*0.15;
+    });
+
+    edgeRefs.forEach(e=>{
+      const hubMesh=hubMeshes[e.hubId].mesh, satMesh=e.sat.mesh;
+      const pos=e.line.geometry.attributes.position;
+      pos.setXYZ(0, satMesh.position.x, satMesh.position.y, satMesh.position.z);
+      pos.setXYZ(1, hubMesh.position.x, hubMesh.position.y, hubMesh.position.z);
+      pos.needsUpdate=true;
+      const connected=!activeHub || e.hubId===activeHub;
+      e.line.material.opacity += ((connected?0.4:0.03) - e.line.material.opacity)*0.15;
+      const speed=(activeHub===e.hubId)?0.5:0.12;
+      const phase=(t*speed+e.phase)%1;
+      e.pulse.position.lerpVectors(satMesh.position, hubMesh.position, phase);
+      const pulseTarget=(activeHub===e.hubId)?0.95:(activeHub?0.03:0.22);
+      e.pulse.material.opacity += (pulseTarget - e.pulse.material.opacity)*0.15;
+    });
+
+    Object.values(hubMeshes).forEach(({mesh,glow,ring,def})=>{
+      const hovered=hoveredHub===def.id;
+      const breathe=1+Math.sin(t*1.4+def.x*0.05)*0.06+(hovered?0.08:0);
+      glow.scale.setScalar(breathe);
+      ring.rotation.z+=0.0025;
+      const dimmed=activeHub && activeHub!==def.id;
+      const targetOp=dimmed?0.22:(hovered?1:0.92);
+      mesh.material.opacity += (targetOp-mesh.material.opacity)*0.15;
+      const ringTarget=dimmed?0.08:0.45;
+      ring.material.opacity += (ringTarget-ring.material.opacity)*0.15;
+    });
+
+    renderer.render(scene,camera);
+
+    const w=wrap.clientWidth,h=wrap.clientHeight;
+    Object.values(hubMeshes).forEach(({mesh,def})=>{
+      const p=project(mesh.position,w,h);
+      const div=hubOverlays[def.id];
+      div.style.left=p.x+'px'; div.style.top=p.y+'px';
+      div.style.opacity=p.behind?0.15:(activeHub && activeHub!==def.id?0.4:1);
+    });
+    satOverlays.forEach(({sm,div})=>{
+      const p=project(sm.mesh.position,w,h);
+      div.style.left=p.x+'px'; div.style.top=p.y+'px';
+      const shouldShow = activeHub && sm.def.links.includes(activeHub) && !p.behind;
+      div.classList.toggle('visible', !!shouldShow);
+    });
+  }
+
+  // dispose any previous scene before starting a new one (e.g. on refresh)
+  if(graphThree && graphThree.raf) cancelAnimationFrame(graphThree.raf);
+  graphThree = {renderer,camera,scene,graphGroup,raf:null};
+  graphResize();
+  renderGraphEmpty();
+  animate();
+
+  // legend
+  document.getElementById('graph-legend').innerHTML = Object.values(GRAPH_HUBS).map(f=>
+    `<div class="graph-legend-item"><span class="graph-legend-dot" style="background:${f.hex}"></span>${f.label}</div>`
+  ).join('') + '<div class="graph-legend-note">Satellite = real agent from /topology · edge = active legal hold from /legal-hold · white gem = agent under 2+ frameworks</div>';
+}
+
+function renderGraphCard(node, kind){
+  const card=document.getElementById('graph-card');
+  if(kind==='hub'){
+    const linkedAgents = graphThree ? null : null; // counts shown via legend/status; keep card focused on framework facts
+    card.innerHTML=`
+      <div class="graph-card-eyebrow">Framework</div>
+      <div class="graph-card-title">${node.label}</div>
+      <div class="graph-card-sub">${node.jurisdiction}</div>
+      <div class="graph-card-desc">Notification window: <strong style="color:var(--text)">${node.deadline}</strong><br><br>Edges shown are real active legal holds from <code>/legal-hold?status=ACTIVE</code> tagged with this jurisdiction — not an estimate.</div>`;
+  } else {
+    const chips = node.links.map(hid=>`<span class="badge stable" style="border-color:${GRAPH_HUBS[hid].hex}55;color:${GRAPH_HUBS[hid].hex};background:${GRAPH_HUBS[hid].hex}18">${GRAPH_HUBS[hid].label}</span>`).join(' ');
+    card.innerHTML=`
+      <div class="graph-card-eyebrow">Agent</div>
+      <div class="graph-card-title">${node.label}</div>
+      <div class="graph-card-sub">${node.registered?'registered':'unregistered'} · risk band: ${node.risk_band}</div>
+      <div class="graph-card-desc">
+        <div style="margin-bottom:8px">Events: <strong style="color:var(--text)">${node.events}</strong> · Blocked: <strong style="color:var(--text)">${node.blocked}</strong></div>
+        ${node.links.length ? `<div style="margin-bottom:8px">Active holds under: ${chips}</div>` : `<div style="color:var(--muted2)">No active legal hold for this agent — no current regulatory exposure.</div>`}
+      </div>`;
+  }
+}
+function renderGraphEmpty(){
+  document.getElementById('graph-card').innerHTML=`
+    <div class="graph-card-eyebrow">Overview</div>
+    <div class="graph-card-title">Select a framework</div>
+    <div class="graph-card-sub">Click a hub to explode its connections</div>
+    <div class="graph-card-desc">Every satellite is a real agent from your topology. Only agents with an active legal hold are connected to a hub — an unconnected agent means no current regulatory exposure, not missing data.</div>`;
 }
 
 /* ── EVENT LISTENERS ── */
@@ -889,8 +1299,6 @@ function chainActions(e) {
 }
 
 function buildChainSVG(nodes, edges, W, H) {
-  // nodes: [{id, x, y, r, fill, stroke, glow, label, sublabel, violated, clauseLabel, clauseColor}]
-  // edges: [{from, to, color, dashed}]
   let svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">`;
   svg += `<defs>`;
   nodes.forEach(n => {
@@ -902,15 +1310,12 @@ function buildChainSVG(nodes, edges, W, H) {
     }
   });
   svg += `</defs>`;
-
-  // Draw edges first
   edges.forEach(edge => {
     const from = nodes.find(n => n.id === edge.from);
     const to = nodes.find(n => n.id === edge.to);
     if (!from || !to) return;
     const dash = edge.dashed ? 'stroke-dasharray="4 3"' : '';
     svg += `<line x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" stroke="${edge.color}" stroke-width="${edge.width||1.5}" ${dash} opacity="0.7"/>`;
-    // Arrow tip
     const dx = to.x - from.x, dy = to.y - from.y;
     const len = Math.sqrt(dx*dx+dy*dy);
     if (len > 0) {
@@ -920,28 +1325,20 @@ function buildChainSVG(nodes, edges, W, H) {
       svg += `<polygon points="${ax},${ay} ${ax-ux*8+px},${ay-uy*8+py} ${ax-ux*8-px},${ay-uy*8-py}" fill="${edge.color}" opacity="0.8"/>`;
     }
   });
-
-  // Draw nodes
   nodes.forEach(n => {
     const glowAttr = n.glow ? `filter="url(#glow-${n.id})"` : '';
     svg += `<circle cx="${n.x}" cy="${n.y}" r="${n.r}" fill="${n.fill}" stroke="${n.stroke}" stroke-width="${n.violated?2:1.5}" ${glowAttr} opacity="${n.violated?1:0.85}"/>`;
-
-    // Icon or short text inside node
     if (n.icon) {
       svg += `<text x="${n.x}" y="${n.y+4}" text-anchor="middle" font-size="13" font-family="Inter,sans-serif">${n.icon}</text>`;
     } else if (n.initials) {
       svg += `<text x="${n.x}" y="${n.y+4}" text-anchor="middle" font-size="${n.r>16?11:9}" font-weight="700" fill="${n.stroke}" font-family="JetBrains Mono,monospace">${n.initials}</text>`;
     }
-
-    // Label below node
     if (n.label) {
       svg += `<text x="${n.x}" y="${n.y+n.r+13}" text-anchor="middle" font-size="9" fill="#e2e8f0" font-family="Inter,sans-serif" font-weight="600">${n.label}</text>`;
     }
     if (n.sublabel) {
       svg += `<text x="${n.x}" y="${n.y+n.r+24}" text-anchor="middle" font-size="8" fill="#64748b" font-family="Inter,sans-serif">${n.sublabel}</text>`;
     }
-
-    // Violation clause label — shown only on violated nodes, above the node
     if (n.violated && n.clauseLabel) {
       const cw = n.clauseLabel.length * 5.2 + 16;
       const cx = Math.max(cw/2+4, Math.min(W-cw/2-4, n.x));
@@ -951,7 +1348,6 @@ function buildChainSVG(nodes, edges, W, H) {
       svg += `<text x="${cx}" y="${cy+1}" text-anchor="middle" font-size="7.5" font-weight="700" fill="${n.clauseColor}" font-family="Inter,sans-serif" letter-spacing="0.03em">${n.clauseLabel}</text>`;
     }
   });
-
   svg += `</svg>`;
   return svg;
 }
@@ -982,14 +1378,10 @@ async function openChainView(e) {
     } catch (_) {}
   }
 
-  // ── Build SVG graph ──
   const W = 390, H = 300;
   const cx = W / 2;
-
-  // Node positions — agent top-center, event middle, actions spread below
   const nodeMap = {};
 
-  // Agent node
   nodeMap['agent'] = {
     id: 'agent', x: cx, y: 52, r: 20,
     fill: 'rgba(0,212,255,0.08)', stroke: '#00d4ff',
@@ -999,7 +1391,6 @@ async function openChainView(e) {
     violated: false
   };
 
-  // Event node — larger if violation
   const evR = isViolation ? 26 : 20;
   const evColor = s === 'critical' ? '#ff6b35' : s === 'elevated' ? '#f59e0b' : '#10b981';
   const evGlow = s === 'critical' ? 'rgba(255,107,53,0.5)' : s === 'elevated' ? 'rgba(245,158,11,0.4)' : null;
@@ -1015,7 +1406,6 @@ async function openChainView(e) {
     clauseColor: isViolation && jurs.length ? POLICY_CLAUSES[jurs[0]]?.color : null
   };
 
-  // Action nodes — spread horizontally below event
   const actionY = 248;
   const totalActs = acts.length;
   acts.forEach((act, i) => {
@@ -1031,8 +1421,6 @@ async function openChainView(e) {
     };
   });
 
-  // Policy violation satellite nodes — orbit around event node
-  // Only shown when violation detected, positioned around the event node
   if (isViolation && jurs.length > 1) {
     const orbitR = 72;
     const angleStep = (Math.PI * 0.8) / Math.max(jurs.length - 1, 1);
@@ -1056,16 +1444,11 @@ async function openChainView(e) {
   }
 
   const nodes = Object.values(nodeMap);
-
-  // ── Build edges ──
   const edges = [];
-  // Agent → Event
   edges.push({ from: 'agent', to: 'event', color: isViolation ? evColor : '#253550', width: isViolation ? 2 : 1.5, dashed: false });
-  // Event → Actions
   acts.forEach((act, i) => {
     edges.push({ from: 'event', to: `act_${i}`, color: act.color, width: 1.5, dashed: false });
   });
-  // Event → Satellite jurisdiction nodes
   if (isViolation && jurs.length > 1) {
     jurs.slice(1).forEach(jur => {
       if (nodeMap[`jur_${jur}`]) {
@@ -1076,7 +1459,6 @@ async function openChainView(e) {
 
   const svgHtml = buildChainSVG(nodes, edges, W, H);
 
-  // ── Violation summary pills ──
   let metaHtml = '';
   if (isViolation && jurs.length) {
     metaHtml += `<div class="chain-meta">
@@ -1092,7 +1474,6 @@ async function openChainView(e) {
     metaHtml += `</div>`;
   }
 
-  // ── Session lineage strip ──
   let lineageHtml = '';
   if (siblings.length > 1) {
     lineageHtml = `<div class="chain-lineage">
@@ -1174,7 +1555,7 @@ async function generateIncidentReport(){
     var health={ok:'?'},cb={state:'?',failure_count:0};
     try{var r2=await Promise.all([apiFetch('/health',{cache:'no-store'}).then(function(r){return r.json()}),apiFetch('/circuit-breaker/status',{cache:'no-store'}).then(function(r){return r.json()})]);health=r2[0];cb=r2[1];}catch(_){}
     var L=['PULSE AI GOVERNANCE INCIDENT REPORT','=====================================','Generated:    '+now,'Jurisdiction: ASEAN (PDPA Malaysia 24hr / Singapore MGF 72hr / Vietnam AI Law 72hr)','','SYSTEM STATUS','-------------','Health:          '+(health.ok===true?'HEALTHY':'UNKNOWN'),'Circuit Breaker: '+(cb.state||'unknown').toUpperCase(),'Failures:        '+(cb.failure_count||0),''];
-    if(e){L.push('SELECTED EVENT','——————————','Event ID:  '+evId(selIdx),'Severity:  '+s.toUpperCase(),'Triggered: '+ts,'Kind:      '+(e.kind||'unknown'),'BDI Score: '+Math.round(bd*100)+'%','Entropy:   '+en.toFixed(2),'Exfiltration: '+(isExfiltration(e)?'YES — risk '+((e.data&&e.data.exfiltration&&e.data.exfiltration.risk_score)||'?'):'No'),'Text:      '+(e.text||'(none)'),'');if(isExfiltration(e))L.push('REQUIRED ACTIONS (EXFILTRATION)','——————————————————————','PDPA Malaysia:   Notify PDPC within 24 hours — data breach','Singapore MGF:   File incident report within 72 hours','Vietnam AI Law:  Notify competent authority within 72 hours','Internal:        Isolate agent, revoke API keys, activate HITL review','');else if(s==='critical')L.push('REQUIRED ACTIONS (CRITICAL)','——————————————————','PDPA Malaysia:   Notify PDPC within 24 hours','Singapore MGF:   File incident report within 72 hours','Vietnam AI Law:  Notify competent authority within 72 hours','Internal:        Pause automated pipeline, activate HITL review','');}else L.push('NOTE: No event selected.','');
+    if(e){L.push('SELECTED EVENT','——————————','Event ID:  '+evId(selIdx),'Severity:  '+s.toUpperCase(),'Triggered: '+ts,'Kind:      '+(e.kind||'unknown'),'BDI Score: '+Math.round(bd*100)+'%','Entropy:   '+en.toFixed(2),'Exfiltration: '+(isExfiltration(e)?'YES — risk '+((e.data&&e.data.exfiltration&&e.data.exfiltration.risk_score)||'?'):'No'),'Text:      '+(e.text||'(none)'),'');if(isExfiltration(e))L.push('REQUIRED ACTIONS (EXFILTRATION)','——————————————————————','PDPA Malaysia:   Notify PDPC within 24 hours — data breach','Singapore MGF:   File incident report within 72 hours','Vietnam AI Law:  Notify competent authority within 72 hours','Internal:        Isolate agent, revoke API keys, activate HITL review','');else if(s==='critical')L.push('REQUIRED ACTIONS (CRITICAL)','——————————————————','PDPA Malaysia:   Notify PDPC within 24 hours','Singapore MGF:   File incident report within 72 hours','Vietnam AI Law:  Notify competent authority within 72 hours','Internal:        Pause automated pipeline, activate HITL review','');else L.push('NOTE: No event selected.','');
     L.push('ALL EVENTS SUMMARY','——————————','Total:    '+ALL.length,'Critical: '+ALL.filter(function(x){return sev(x)==='critical'}).length,'Exfiltration: '+ALL.filter(function(x){return isExfiltration(x)}).length,'Elevated: '+ALL.filter(function(x){return sev(x)==='elevated'}).length,'Stable:   '+ALL.filter(function(x){return sev(x)==='stable'}).length,'','EVENT TIMELINE','——————————');
     ALL.forEach(function(x,i){var xt=x.created_at?new Date(x.created_at).toLocaleString():'?';L.push('['+evId(ALL.length-1-i)+'] '+xt+' | '+sev(x).toUpperCase()+' | '+x.kind+' | '+(x.text||'').substring(0,55));});
     L.push('','=====================================','Pulse — Immutable Compliance for ASEAN AI Governance','Built by Waqas Nazir');
