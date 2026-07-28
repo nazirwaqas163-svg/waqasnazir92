@@ -833,21 +833,23 @@ function renderSettings(){
 }
 
 /* ══════════════════════════════════════════════════════════
-   PHASE 18 — GRAPH EXPLORER (real /topology + real /legal-hold)
-   Hub jurisdictions are the fixed 4 ASEAN frameworks (stable).
-   Satellite nodes = real agents from /topology.
-   Edges = ONLY real active legal holds with a framework/jurisdiction
-   on them. Agents with no active hold are shown unconnected —
-   that's real signal (no current regulatory exposure), not a gap.
+   PHASE 18 — GRAPH EXPLORER (real /topology + /legal-hold + /alerts)
+   Layout: linked agents sit in a tight bright cluster near their
+   hub already at rest. Unlinked agents are pushed to a dim, sparse
+   outer shell — visually receding, not competing for attention.
+   Security layer: agents with a live exfiltration alert get a
+   pulsing red ring; isolated (quarantined) agents get an amber
+   wireframe cage. All of this comes from real endpoints:
+   /topology, /legal-hold?status=ACTIVE, /alerts, /agents/isolated.
    ══════════════════════════════════════════════════════════ */
 let graphLoaded = false;
 let graphThree = null; // holds three.js runtime state once built
 
 const GRAPH_HUBS = {
-  pdpa: {id:'pdpa', label:'PDPA Malaysia', jurisdiction:'Malaysia', color:0xff6b35, hex:'#ff6b35', x:130, y:90, z:70, deadline:'24h breach notification', matchJur:['MY']},
-  mgf:  {id:'mgf',  label:'Singapore MGF', jurisdiction:'Singapore', color:0x0ea5e9, hex:'#0ea5e9', x:-130, y:90, z:-70, deadline:'72h incident review', matchJur:['SG']},
-  vn:   {id:'vn',   label:'Vietnam AI Law', jurisdiction:'Vietnam', color:0x10b981, hex:'#10b981', x:-130, y:-90, z:70, deadline:'72h incident report', matchJur:['VN']},
-  org:  {id:'org',  label:'Company Policy', jurisdiction:'Internal — ORG', color:0xa78bfa, hex:'#a78bfa', x:130, y:-90, z:-70, deadline:'Org-defined SLA', matchJur:['ORG','INTL']}
+  pdpa: {id:'pdpa', label:'PDPA Malaysia', jurisdiction:'Malaysia', color:0xff6b35, hex:'#ff6b35', x:150, y:100, z:80, deadline:'24h breach notification', matchJur:['MY']},
+  mgf:  {id:'mgf',  label:'Singapore MGF', jurisdiction:'Singapore', color:0x0ea5e9, hex:'#0ea5e9', x:-150, y:100, z:-80, deadline:'72h incident review', matchJur:['SG']},
+  vn:   {id:'vn',   label:'Vietnam AI Law', jurisdiction:'Vietnam', color:0x10b981, hex:'#10b981', x:-150, y:-100, z:80, deadline:'72h incident report', matchJur:['VN']},
+  org:  {id:'org',  label:'Company Policy', jurisdiction:'Internal — ORG', color:0xa78bfa, hex:'#a78bfa', x:150, y:-100, z:-80, deadline:'Org-defined SLA', matchJur:['ORG','INTL']}
 };
 
 function jurisdictionToHub(jurisdiction, framework){
@@ -861,33 +863,64 @@ function jurisdictionToHub(jurisdiction, framework){
   return null;
 }
 
+function riskColorHex(band){
+  if(band==='critical') return '#ff6b35';
+  if(band==='elevated'||band==='caution') return '#f59e0b';
+  if(band==='unregistered') return '#a78bfa';
+  return '#10b981';
+}
+
 async function loadGraph(force){
   if(graphLoaded && !force) return;
   const statusEl=document.getElementById('graph-status');
   const loadingEl=document.getElementById('graph-loading');
   statusEl.textContent='loading…';
-  if(loadingEl) loadingEl.style.display='flex';
+  if(loadingEl){ loadingEl.style.display='flex'; loadingEl.innerHTML='<div class="spin"></div>Loading agents, legal holds &amp; alerts…'; }
   try{
-    const [topo, holdsRes] = await Promise.all([
+    const [topo, holdsRes, alertsRes, isoRes] = await Promise.all([
       apiFetch('/topology', {cache:'no-store'}).then(r=>r.json()),
-      apiFetch('/legal-hold?status=ACTIVE&source=db', {cache:'no-store'}).then(r=>r.json())
+      apiFetch('/legal-hold?status=ACTIVE&source=db', {cache:'no-store'}).then(r=>r.json()),
+      apiFetch('/alerts?limit=200', {cache:'no-store'}).then(r=>r.json()).catch(()=>({alerts:[]})),
+      apiFetch('/agents/isolated?active_only=true', {cache:'no-store'}).then(r=>r.json()).catch(()=>({isolated_agents:[]}))
     ]);
     const agentNodes = (topo.nodes||[]).filter(n=>n.type==='agent');
     const holds = holdsRes.holds||[];
+    const alerts = alertsRes.alerts||[];
+    const isolatedSet = new Set((isoRes.isolated_agents||[]).map(r=>r.agent_id));
 
-    // Build satellite list — every real agent, real fields, no fabricated edges.
+    // Real security signals per agent — sourced from live alerts feed, same
+    // data the Ledger's exfiltration badges use, not a graph-only estimate.
+    const exfilByAgent = {};
+    const swarmByAgent = {};
+    alerts.forEach(a=>{
+      if(a.kind!=='alert') return;
+      const d=a.data||{}, aid=d.agent_id;
+      if(!aid) return;
+      if(d.trigger_type==='exfiltration'){
+        const prev=exfilByAgent[aid];
+        if(!prev || (d.risk_score||0)>prev.risk_score) exfilByAgent[aid]={risk_score:d.risk_score||0, at:a.created_at};
+      }
+      if(d.trigger_type==='swarm') swarmByAgent[aid]=true;
+    });
+
     const satellites = agentNodes.map(a=>{
       const agentHolds = holds.filter(h=>h.agent_id===a.agent_id);
       const links = [...new Set(agentHolds.map(h=>jurisdictionToHub(h.jurisdiction,h.framework)).filter(Boolean))];
+      const exfil = exfilByAgent[a.agent_id] || null;
       return {
         id:a.agent_id, kind:'agent', label:a.agent_id,
         registered: !!a.registered, risk_band: a.risk_band||'unknown',
         events: a.events||0, blocked: a.blocked||0,
-        links, holds: agentHolds
+        links, holds: agentHolds,
+        exfiltration: exfil,
+        swarmSuspect: !!swarmByAgent[a.agent_id],
+        isolated: isolatedSet.has(a.agent_id)
       };
     });
 
-    statusEl.textContent = `${agentNodes.length} agents · ${holds.length} active holds`;
+    const exfilCount = satellites.filter(s=>s.exfiltration).length;
+    const isoCount = satellites.filter(s=>s.isolated).length;
+    statusEl.textContent = `${agentNodes.length} agents · ${holds.length} active holds · ${exfilCount} exfiltration · ${isoCount} isolated`;
     if(loadingEl) loadingEl.style.display='none';
     graphLoaded = true;
     buildGraphScene(satellites);
@@ -929,74 +962,122 @@ function _buildGraphScene(satellites){
   renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
   const scene=new THREE.Scene();
   const camera=new THREE.PerspectiveCamera(45,1,1,3000);
-  const CAMERA_Z=560;
+  const CAMERA_Z=620;
   camera.position.set(0,0,CAMERA_Z);
   const graphGroup=new THREE.Group();
-  const INITIAL_ROT={x:0.35,y:-0.5};
+  const INITIAL_ROT={x:0.32,y:-0.5};
   scene.add(graphGroup);
 
   // hubs
   const hubMeshes={};
   Object.values(GRAPH_HUBS).forEach(f=>{
-    const geo=new THREE.SphereGeometry(20,28,28);
-    const mat=new THREE.MeshBasicMaterial({color:f.color, transparent:true, opacity:0.92});
+    const geo=new THREE.SphereGeometry(22,28,28);
+    const mat=new THREE.MeshBasicMaterial({color:f.color, transparent:true, opacity:0.95});
     const mesh=new THREE.Mesh(geo,mat);
     mesh.position.set(f.x,f.y,f.z);
     graphGroup.add(mesh);
-    const glow=new THREE.Mesh(new THREE.SphereGeometry(31,16,16), new THREE.MeshBasicMaterial({color:f.color, transparent:true, opacity:0.16, blending:THREE.AdditiveBlending, depthWrite:false}));
+    const glow=new THREE.Mesh(new THREE.SphereGeometry(34,16,16), new THREE.MeshBasicMaterial({color:f.color, transparent:true, opacity:0.18, blending:THREE.AdditiveBlending, depthWrite:false}));
     glow.position.copy(mesh.position);
     graphGroup.add(glow);
-    const ring=new THREE.Mesh(new THREE.TorusGeometry(33,0.9,8,56), new THREE.MeshBasicMaterial({color:f.color, transparent:true, opacity:0.45}));
+    const ring=new THREE.Mesh(new THREE.TorusGeometry(36,1,8,56), new THREE.MeshBasicMaterial({color:f.color, transparent:true, opacity:0.5}));
     ring.position.copy(mesh.position);
     ring.rotation.x=Math.PI/2.4; ring.rotation.y=Math.random()*Math.PI;
     graphGroup.add(ring);
     hubMeshes[f.id]={mesh,glow,ring,def:f};
   });
 
-  // layout satellites around a sphere so many real agents don't overlap
+  // ── LAYERED LAYOUT ──
+  // Linked agents cluster tightly around their hub(s) already at rest.
+  // Unlinked agents sit on a large, sparse, dim outer shell.
   const satMeshes=[];
-  const N=Math.max(satellites.length,1);
-  satellites.forEach((s,i)=>{
-    const linked = s.links.length>0;
-    const phi=Math.acos(1-2*(i+0.5)/N);
+  const linked = satellites.filter(s=>s.links.length>0);
+  const unlinked = satellites.filter(s=>s.links.length===0);
+
+  // group linked agents by their (first) hub for tidy clustering
+  const byHub = {pdpa:[],mgf:[],vn:[],org:[]};
+  const multiHub = [];
+  linked.forEach(s=>{ if(s.links.length>1) multiHub.push(s); else byHub[s.links[0]].push(s); });
+
+  Object.keys(byHub).forEach(hid=>{
+    const hub=GRAPH_HUBS[hid];
+    const group=byHub[hid];
+    const n=group.length;
+    group.forEach((s,i)=>{
+      const clusterR = 62 + (i%3)*22;
+      const phi=Math.acos(1-2*((i+0.5)/Math.max(n,1)));
+      const theta=Math.PI*(1+Math.sqrt(5))*i + hid.length; // deterministic jitter per hub
+      const ox=clusterR*Math.sin(phi)*Math.cos(theta), oy=clusterR*Math.sin(phi)*Math.sin(theta), oz=clusterR*Math.cos(phi);
+      placeSatellite(s, hub.x+ox, hub.y+oy, hub.z+oz);
+    });
+  });
+  multiHub.forEach((s,i)=>{
+    // sit between its hubs, offset outward from the midpoint
+    const pts = s.links.map(hid=>GRAPH_HUBS[hid]);
+    const mx=pts.reduce((a,p)=>a+p.x,0)/pts.length, my=pts.reduce((a,p)=>a+p.y,0)/pts.length, mz=pts.reduce((a,p)=>a+p.z,0)/pts.length;
+    const jitter=(i%5)*9;
+    placeSatellite(s, mx+jitter, my-jitter*0.6, mz+jitter*0.4);
+  });
+  const Nu=Math.max(unlinked.length,1);
+  unlinked.forEach((s,i)=>{
+    const phi=Math.acos(1-2*((i+0.5)/Nu));
     const theta=Math.PI*(1+Math.sqrt(5))*i;
-    const baseR = linked ? 210 : 130; // unlinked agents sit closer to center — no exposure
-    const rx=baseR*Math.sin(phi)*Math.cos(theta), ry=baseR*Math.sin(phi)*Math.sin(theta), rz=baseR*Math.cos(phi);
+    const R=420;
+    placeSatellite(s, R*Math.sin(phi)*Math.cos(theta), R*Math.sin(phi)*Math.sin(theta), R*Math.cos(phi));
+  });
+
+  function placeSatellite(s, x, y, z){
+    const linked = s.links.length>0;
     const risk = s.risk_band==='critical'?0.9:s.risk_band==='elevated'||s.risk_band==='caution'?0.55:s.risk_band==='unregistered'?0.4:0.2;
     const r = 5 + risk*8;
-    const color = s.links.length>1 ? 0xffffff : (s.links.length===1 ? GRAPH_HUBS[s.links[0]].color : 0x475569);
+    const color = s.links.length>1 ? 0xffffff : (s.links.length===1 ? GRAPH_HUBS[s.links[0]].color : 0x3a4658);
     const geo=new THREE.IcosahedronGeometry(r,0);
-    const mat=new THREE.MeshBasicMaterial({color, transparent:true, opacity:s.links.length?0.92:0.4});
+    const mat=new THREE.MeshBasicMaterial({color, transparent:true, opacity: linked ? 0.95 : 0.28});
     const mesh=new THREE.Mesh(geo,mat);
-    mesh.position.set(rx,ry,rz);
+    mesh.position.set(x,y,z);
     graphGroup.add(mesh);
-    const restVec=new THREE.Vector3(rx,ry,rz);
+
+    // security ring — live exfiltration alert
+    let exfilRing=null;
+    if(s.exfiltration){
+      exfilRing=new THREE.Mesh(new THREE.TorusGeometry(r+3.5,0.8,6,24), new THREE.MeshBasicMaterial({color:0xef4444, transparent:true, opacity:0.85, blending:THREE.AdditiveBlending, depthWrite:false}));
+      exfilRing.position.copy(mesh.position);
+      graphGroup.add(exfilRing);
+    }
+    // isolation cage — quarantined agent
+    let isoCage=null;
+    if(s.isolated){
+      isoCage=new THREE.Mesh(new THREE.IcosahedronGeometry(r+5,1), new THREE.MeshBasicMaterial({color:0xf59e0b, wireframe:true, transparent:true, opacity:0.55}));
+      isoCage.position.copy(mesh.position);
+      graphGroup.add(isoCage);
+    }
+
+    const restVec=new THREE.Vector3(x,y,z);
     const explodedVecs={};
     s.links.forEach(hid=>{
       const hub=GRAPH_HUBS[hid];
       const hubVec=new THREE.Vector3(hub.x,hub.y,hub.z);
-      const dir=restVec.clone().sub(hubVec).multiplyScalar(2.1);
+      const dir=restVec.clone().sub(hubVec).multiplyScalar(1.5);
       explodedVecs[hid]=hubVec.clone().add(dir);
     });
-    satMeshes.push({def:s, mesh, restVec, explodedVecs, spin:(Math.random()-0.5)*0.01});
-  });
+    satMeshes.push({def:s, mesh, exfilRing, isoCage, restVec, explodedVecs, linked, spin:(Math.random()-0.5)*0.012});
+  }
 
-  // edges — ONLY for real active holds
+  // ── EDGES — real cylinders (visible width), always on for linked agents ──
   const edgeRefs=[];
+  const cylGeo=new THREE.CylinderGeometry(1,1,1,6,1,true);
+  cylGeo.translate(0,0.5,0);
   satMeshes.forEach(sm=>{
     sm.def.links.forEach(hid=>{
-      const geo=new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6),3));
-      const mat=new THREE.LineBasicMaterial({color:GRAPH_HUBS[hid].color, transparent:true, opacity:0.22});
-      const line=new THREE.Line(geo,mat);
-      graphGroup.add(line);
-      const pulse=new THREE.Mesh(new THREE.SphereGeometry(2.6,8,8), new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0.3, blending:THREE.AdditiveBlending, depthWrite:false}));
+      const mat=new THREE.MeshBasicMaterial({color:GRAPH_HUBS[hid].color, transparent:true, opacity:0.4});
+      const mesh=new THREE.Mesh(cylGeo, mat);
+      graphGroup.add(mesh);
+      const pulse=new THREE.Mesh(new THREE.SphereGeometry(3,8,8), new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0.85, blending:THREE.AdditiveBlending, depthWrite:false}));
       graphGroup.add(pulse);
-      edgeRefs.push({line,pulse,sat:sm,hubId:hid,phase:Math.random()});
+      edgeRefs.push({mesh,pulse,sat:sm,hubId:hid,phase:Math.random()});
     });
   });
 
-  // overlays
+  // ── OVERLAYS ──
   const hubOverlays={};
   Object.values(GRAPH_HUBS).forEach(f=>{
     const div=document.createElement('div');
@@ -1012,15 +1093,22 @@ function _buildGraphScene(satellites){
     const s=sm.def;
     const div=document.createElement('div');
     div.className='sat-card';
-    const borderColor = s.links.length>1 ? '#e2e8f0' : (s.links.length===1 ? GRAPH_HUBS[s.links[0]].hex : '#475569');
+    const flagged = !!s.exfiltration || s.isolated;
+    const borderColor = s.exfiltration ? '#ef4444' : s.isolated ? '#f59e0b' : (s.links.length>1 ? '#e2e8f0' : (s.links.length===1 ? GRAPH_HUBS[s.links[0]].hex : '#475569'));
     div.style.borderLeftColor=borderColor;
-    div.innerHTML=`<div class="lbl">${s.label}</div><div>${s.registered?'registered':'unregistered'} · ${s.risk_band}</div><div>${s.events} events · ${s.blocked} blocked</div>`;
+    const badges=[];
+    if(s.exfiltration) badges.push(`<span style="color:#ef4444">⚠ exfiltration risk ${(s.exfiltration.risk_score||0).toFixed(2)}</span>`);
+    if(s.isolated) badges.push(`<span style="color:#f59e0b">⊘ isolated</span>`);
+    if(s.swarmSuspect) badges.push(`<span style="color:#f59e0b">⟡ swarm suspect</span>`);
+    div.innerHTML=`<div class="lbl">${s.label}</div><div>${s.registered?'registered':'unregistered'} · ${s.risk_band}</div>${badges.length?badges.map(b=>`<div>${b}</div>`).join(''):`<div>${s.events} events · ${s.blocked} blocked</div>`}`;
     div.addEventListener('click',(e)=>{e.stopPropagation();renderGraphCard(s,'agent');markInteraction();});
     overlay.appendChild(div);
-    satOverlays.push({sm,div});
+    // always-on persistent label for linked or flagged agents; hover-only handled in animate loop
+    const alwaysOn = sm.linked || flagged;
+    satOverlays.push({sm,div,alwaysOn,flagged});
   });
 
-  // interaction state
+  // ── INTERACTION STATE ──
   let activeHub=null, hoveredHub=null;
   let isDragging=false,lastX=0,lastY=0,dragDist=0;
   let lastInteraction=Date.now();
@@ -1054,7 +1142,7 @@ function _buildGraphScene(satellites){
   let targetCameraZ=CAMERA_Z;
   canvas.addEventListener('wheel', e=>{
     e.preventDefault();
-    targetCameraZ=Math.max(280,Math.min(950,targetCameraZ+e.deltaY*0.4));
+    targetCameraZ=Math.max(320,Math.min(1100,targetCameraZ+e.deltaY*0.4));
     markInteraction();
   }, {passive:false});
 
@@ -1063,12 +1151,14 @@ function _buildGraphScene(satellites){
     if(activeHub) renderGraphCard(GRAPH_HUBS[activeHub],'hub'); else renderGraphEmpty();
   }
 
-  function tmpProjectSetup(){ return new THREE.Vector3(); }
   const tmpVec=new THREE.Vector3();
   function project(v3,w,h){
     tmpVec.copy(v3).applyMatrix4(graphGroup.matrixWorld).project(camera);
     return {x:(tmpVec.x*0.5+0.5)*w, y:(-tmpVec.y*0.5+0.5)*h, behind:tmpVec.z>1};
   }
+
+  const upVec=new THREE.Vector3(0,1,0);
+  const edgeDir=new THREE.Vector3();
 
   function animate(){
     graphThree.raf = requestAnimationFrame(animate);
@@ -1078,37 +1168,41 @@ function _buildGraphScene(satellites){
       velocity.x*=0.92; velocity.y*=0.92;
       if(Math.abs(velocity.x)<0.0002)velocity.x=0;
       if(Math.abs(velocity.y)<0.0002)velocity.y=0;
-      if(!velocity.x && !velocity.y && Date.now()-lastInteraction>4000) baseRotation.y+=0.0016;
+      if(!velocity.x && !velocity.y && Date.now()-lastInteraction>4000) baseRotation.y+=0.0014;
     }
-    const targetTiltX=mouseNDC.y*0.16, targetTiltY=mouseNDC.x*0.22;
+    const targetTiltX=mouseNDC.y*0.14, targetTiltY=mouseNDC.x*0.2;
     tiltCurrent.x+=(targetTiltX-tiltCurrent.x)*0.06;
     tiltCurrent.y+=(targetTiltY-tiltCurrent.y)*0.06;
     graphGroup.rotation.set(baseRotation.x+tiltCurrent.x, baseRotation.y+tiltCurrent.y, 0);
     camera.position.z += (targetCameraZ-camera.position.z)*0.12;
 
     satMeshes.forEach(sm=>{
-      const connected = activeHub && sm.def.links.includes(activeHub);
-      const target = connected ? sm.explodedVecs[activeHub] : sm.restVec;
+      const connectedToActive = activeHub && sm.def.links.includes(activeHub);
+      const target = connectedToActive ? sm.explodedVecs[activeHub] : sm.restVec;
       sm.mesh.position.lerp(target,0.12);
       sm.mesh.rotation.x+=sm.spin; sm.mesh.rotation.y+=sm.spin*1.3;
-      const dimmed = activeHub && !connected;
-      const baseOp = sm.def.links.length?0.92:0.4;
-      const targetOp = dimmed ? 0.06 : baseOp;
+      if(sm.exfilRing){ sm.exfilRing.position.copy(sm.mesh.position); const pulse=0.9+Math.sin(t*5)*0.35; sm.exfilRing.scale.setScalar(pulse); sm.exfilRing.rotation.z+=0.02; }
+      if(sm.isoCage){ sm.isoCage.position.copy(sm.mesh.position); sm.isoCage.rotation.y+=0.006; sm.isoCage.rotation.x+=0.003; }
+      const dimmed = activeHub && !connectedToActive;
+      const baseOp = sm.linked ? 0.95 : 0.28;
+      const targetOp = dimmed ? 0.05 : baseOp;
       sm.mesh.material.opacity += (targetOp - sm.mesh.material.opacity)*0.15;
     });
 
     edgeRefs.forEach(e=>{
       const hubMesh=hubMeshes[e.hubId].mesh, satMesh=e.sat.mesh;
-      const pos=e.line.geometry.attributes.position;
-      pos.setXYZ(0, satMesh.position.x, satMesh.position.y, satMesh.position.z);
-      pos.setXYZ(1, hubMesh.position.x, hubMesh.position.y, hubMesh.position.z);
-      pos.needsUpdate=true;
+      edgeDir.copy(hubMesh.position).sub(satMesh.position);
+      const len=edgeDir.length();
+      e.mesh.position.copy(satMesh.position);
       const connected=!activeHub || e.hubId===activeHub;
-      e.line.material.opacity += ((connected?0.4:0.03) - e.line.material.opacity)*0.15;
-      const speed=(activeHub===e.hubId)?0.5:0.12;
+      const targetWidth = connected ? (activeHub===e.hubId?2.4:1.6) : 0.6;
+      e.mesh.scale.set(targetWidth, len, targetWidth);
+      if(len>0.001) e.mesh.quaternion.setFromUnitVectors(upVec, edgeDir.clone().normalize());
+      e.mesh.material.opacity += ((connected?0.4:0.04) - e.mesh.material.opacity)*0.15;
+      const speed=(activeHub===e.hubId)?0.55:0.15;
       const phase=(t*speed+e.phase)%1;
       e.pulse.position.lerpVectors(satMesh.position, hubMesh.position, phase);
-      const pulseTarget=(activeHub===e.hubId)?0.95:(activeHub?0.03:0.22);
+      const pulseTarget=(activeHub===e.hubId)?0.95:(activeHub?0.03:0.35);
       e.pulse.material.opacity += (pulseTarget - e.pulse.material.opacity)*0.15;
     });
 
@@ -1118,9 +1212,9 @@ function _buildGraphScene(satellites){
       glow.scale.setScalar(breathe);
       ring.rotation.z+=0.0025;
       const dimmed=activeHub && activeHub!==def.id;
-      const targetOp=dimmed?0.22:(hovered?1:0.92);
+      const targetOp=dimmed?0.22:(hovered?1:0.95);
       mesh.material.opacity += (targetOp-mesh.material.opacity)*0.15;
-      const ringTarget=dimmed?0.08:0.45;
+      const ringTarget=dimmed?0.08:0.5;
       ring.material.opacity += (ringTarget-ring.material.opacity)*0.15;
     });
 
@@ -1133,10 +1227,11 @@ function _buildGraphScene(satellites){
       div.style.left=p.x+'px'; div.style.top=p.y+'px';
       div.style.opacity=p.behind?0.15:(activeHub && activeHub!==def.id?0.4:1);
     });
-    satOverlays.forEach(({sm,div})=>{
+    satOverlays.forEach(({sm,div,alwaysOn})=>{
       const p=project(sm.mesh.position,w,h);
       div.style.left=p.x+'px'; div.style.top=p.y+'px';
-      const shouldShow = activeHub && sm.def.links.includes(activeHub) && !p.behind;
+      const explodedShow = activeHub && sm.def.links.includes(activeHub);
+      const shouldShow = (alwaysOn || explodedShow) && !p.behind;
       div.classList.toggle('visible', !!shouldShow);
     });
   }
@@ -1151,13 +1246,13 @@ function _buildGraphScene(satellites){
   // legend
   document.getElementById('graph-legend').innerHTML = Object.values(GRAPH_HUBS).map(f=>
     `<div class="graph-legend-item"><span class="graph-legend-dot" style="background:${f.hex}"></span>${f.label}</div>`
-  ).join('') + '<div class="graph-legend-note">Satellite = real agent from /topology · edge = active legal hold from /legal-hold · white gem = agent under 2+ frameworks</div>';
+  ).join('') + `<div class="graph-legend-item"><span class="graph-legend-dot" style="background:#ef4444"></span>exfiltration alert</div><div class="graph-legend-item"><span class="graph-legend-dot" style="background:#f59e0b"></span>isolated agent</div>` +
+  '<div class="graph-legend-note">Bright cluster = linked to a hub (real active hold) · dim outer shell = no current exposure</div>';
 }
 
 function renderGraphCard(node, kind){
   const card=document.getElementById('graph-card');
   if(kind==='hub'){
-    const linkedAgents = graphThree ? null : null; // counts shown via legend/status; keep card focused on framework facts
     card.innerHTML=`
       <div class="graph-card-eyebrow">Framework</div>
       <div class="graph-card-title">${node.label}</div>
@@ -1165,6 +1260,10 @@ function renderGraphCard(node, kind){
       <div class="graph-card-desc">Notification window: <strong style="color:var(--text)">${node.deadline}</strong><br><br>Edges shown are real active legal holds from <code>/legal-hold?status=ACTIVE</code> tagged with this jurisdiction — not an estimate.</div>`;
   } else {
     const chips = node.links.map(hid=>`<span class="badge stable" style="border-color:${GRAPH_HUBS[hid].hex}55;color:${GRAPH_HUBS[hid].hex};background:${GRAPH_HUBS[hid].hex}18">${GRAPH_HUBS[hid].label}</span>`).join(' ');
+    const securityRows=[];
+    if(node.exfiltration) securityRows.push(`<div class="card-row" style="border-top:1px solid var(--border);padding:8px 0"><span class="k" style="color:#ef4444">⚠ Exfiltration risk</span><span class="v" style="color:#ef4444">${(node.exfiltration.risk_score||0).toFixed(2)}</span></div>`);
+    if(node.isolated) securityRows.push(`<div class="card-row" style="border-top:1px solid var(--border);padding:8px 0"><span class="k" style="color:#f59e0b">⊘ Status</span><span class="v" style="color:#f59e0b">ISOLATED</span></div>`);
+    if(node.swarmSuspect) securityRows.push(`<div class="card-row" style="border-top:1px solid var(--border);padding:8px 0"><span class="k" style="color:#f59e0b">⟡ Swarm</span><span class="v" style="color:#f59e0b">suspect</span></div>`);
     card.innerHTML=`
       <div class="graph-card-eyebrow">Agent</div>
       <div class="graph-card-title">${node.label}</div>
@@ -1172,6 +1271,7 @@ function renderGraphCard(node, kind){
       <div class="graph-card-desc">
         <div style="margin-bottom:8px">Events: <strong style="color:var(--text)">${node.events}</strong> · Blocked: <strong style="color:var(--text)">${node.blocked}</strong></div>
         ${node.links.length ? `<div style="margin-bottom:8px">Active holds under: ${chips}</div>` : `<div style="color:var(--muted2)">No active legal hold for this agent — no current regulatory exposure.</div>`}
+        ${securityRows.join('')}
       </div>`;
   }
 }
@@ -1180,8 +1280,9 @@ function renderGraphEmpty(){
     <div class="graph-card-eyebrow">Overview</div>
     <div class="graph-card-title">Select a framework</div>
     <div class="graph-card-sub">Click a hub to explode its connections</div>
-    <div class="graph-card-desc">Every satellite is a real agent from your topology. Only agents with an active legal hold are connected to a hub — an unconnected agent means no current regulatory exposure, not missing data.</div>`;
+    <div class="graph-card-desc">Bright clustered agents near a hub have a real active legal hold. The dim outer shell is every other agent — no current exposure, not missing data. Red rings mark a live exfiltration alert; amber cages mark isolated (quarantined) agents.</div>`;
 }
+
 
 /* ── EVENT LISTENERS ── */
 document.querySelectorAll('.ftab').forEach(t=>t.addEventListener('click',()=>{document.querySelectorAll('.ftab').forEach(x=>x.classList.remove('active'));t.classList.add('active');filter=t.dataset.f;refresh();}));
