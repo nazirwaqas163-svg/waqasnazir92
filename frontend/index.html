@@ -711,7 +711,7 @@ function refresh(){const f=filtered();renderRows(f);updateKpis(f);}
 
 /* ── VIEW SWITCHING ── */
 document.querySelectorAll('.nav-btn[data-view]').forEach(b=>b.addEventListener('click',()=>switchView(b.dataset.view)));
-const VIEW_LOADERS={'agents':()=>{if(!lastTopology)loadAgents();},'analytics':()=>{if(!lastDrift)loadAnalytics();},'circuit-breaker':()=>loadCircuitBreaker(),'compliance':()=>{if(!lastDeadlines)loadCompliance();},'settings':()=>{if(!lastHealth)loadSettings();},'graph':()=>{if(!graphLoaded)loadGraph();}};
+const VIEW_LOADERS={'agents':()=>{if(!lastTopology)loadAgents();},'analytics':()=>{if(!lastDrift)loadAnalytics();},'circuit-breaker':()=>loadCircuitBreaker(),'compliance':()=>{if(!lastDeadlines)loadCompliance();},'settings':()=>{if(!lastHealth)loadSettings();},'graph':()=>{window.open('topology.html','_blank');switchView('ledger');}};
 function switchView(view){
   document.querySelectorAll('.nav-btn[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===view));
   ['ledger','agents','analytics','circuit-breaker','compliance','settings','graph'].forEach(v=>{const el=document.getElementById('view-'+v);if(el)el.style.display=v===view?'':'none';});
