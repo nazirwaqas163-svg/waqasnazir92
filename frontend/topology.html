@@ -529,7 +529,7 @@ function buildScene(topo) {
     const color   = RISK_HEX(band);
     const isIso   = isolatedSet.has(node.agent_id);
     const isCrit  = band === 'critical';
-    const radius  = isCrit ? 0.70 : band === 'elevated' || band === 'caution' ? 0.58 : 0.48;
+    const radius  = isCrit ? 0.90 : band === 'elevated' || band === 'caution' ? 0.75 : 0.62;
 
     // Wireframe shell
     const wGeo = new THREE.IcosahedronGeometry(radius, 1);
@@ -573,12 +573,14 @@ function buildScene(topo) {
     // Label
     const el = document.createElement('div');
     el.className = 'node-label';
-    const shortId = (node.agent_id || node.label || '').slice(0, 20);
+    const shortId = (node.agent_id || node.label || '').slice(0, 22);
     const pct = node.events ? Math.round((node.blocked / node.events) * 100) : 0;
+    const nameColor = isCrit ? '#ff6b35' : band === 'elevated' || band === 'caution' ? '#f59e0b' : band === 'unregistered' ? '#a78bfa' : '#e2e8f0';
     el.innerHTML = `
-      <div class="nl-name">${shortId}</div>
+      <div class="nl-name" style="color:${nameColor}">${shortId}</div>
       <div class="nl-sub">${node.events || 0} evt · ${pct}% blk</div>
-      ${isCrit ? `<div class="nl-badge" style="background:rgba(255,107,53,0.15);color:#ff6b35">CRITICAL</div>` : ''}
+      ${isCrit ? `<div class="nl-badge" style="background:rgba(255,107,53,0.15);color:#ff6b35;border:1px solid rgba(255,107,53,0.3)">CRITICAL</div>` : ''}
+      ${band === 'unregistered' ? `<div class="nl-badge" style="background:rgba(139,92,246,0.15);color:#a78bfa;border:1px solid rgba(139,92,246,0.3)">UNREG</div>` : ''}
     `;
     document.getElementById('labels').appendChild(el);
     labelEls.push({ el, pos, radius });
@@ -597,7 +599,7 @@ function buildScene(topo) {
     const band   = node.risk_band || 'unknown';
     const color  = RISK_HEX(band);
     const isCrit = band === 'critical';
-    const radius = isCrit ? 0.42 : 0.30;
+    const radius = isCrit ? 0.55 : 0.38;
 
     const geo  = new THREE.SphereGeometry(radius, 20, 20);
     const mat  = new THREE.MeshPhongMaterial({ color, emissive: color, emissiveIntensity: isCrit ? 0.5 : 0.1, transparent: true, opacity: 0.75 });
@@ -616,14 +618,19 @@ function buildScene(topo) {
     const pos = new THREE.Vector3(x, y, z);
     posMap[node.id] = pos;
 
-    // Label — only for critical sessions
-    if (isCrit) {
-      const el = document.createElement('div');
-      el.className = 'node-label';
-      el.innerHTML = `<div class="nl-name" style="color:#ff6b35">${(node.session_id || '').slice(0, 16)}</div><div class="nl-sub">CRITICAL</div>`;
-      document.getElementById('labels').appendChild(el);
-      labelEls.push({ el, pos, radius });
-    }
+    // Label — all session nodes
+    const elS = document.createElement('div');
+    elS.className = 'node-label';
+    const sessShort = (node.session_id || '').slice(0, 14);
+    const sessColor = isCrit ? '#ff6b35' : band === 'elevated' ? '#f59e0b' : '#475569';
+    const agentShort = (node.agent_id || '').slice(0, 14);
+    elS.innerHTML = `
+      <div class="nl-name" style="color:${sessColor};font-size:8px">${sessShort}</div>
+      <div class="nl-sub" style="font-size:7px">${agentShort}</div>
+      ${isCrit ? `<div class="nl-badge" style="background:rgba(255,107,53,0.15);color:#ff6b35;font-size:7px">CRIT</div>` : ''}
+    `;
+    document.getElementById('labels').appendChild(elS);
+    labelEls.push({ el: elS, pos, radius });
 
     sceneObjects.push({
       _isNodeRef: true,
