@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Forensa AI — Agent Topology</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@300;400;500;600&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#080c14;--bg2:#0d1117;--bg3:#111827;--bg4:#1a2235;--bg5:#1f2a3d;
+  --border:#1e2d45;--border2:#253550;
+  --text:#e2e8f0;--muted:#64748b;--muted2:#475569;
+  --accent:#00d4ff;
+  --ok:#10b981;--warn:#f59e0b;--danger:#ef4444;--critical:#ff6b35;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;overflow:hidden}
+
+/* ── Layout ── */
+.shell{display:flex;flex-direction:column;height:100vh}
+
+/* ── Topbar ── */
+.topbar{
+  height:46px;background:var(--bg2);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;padding:0 18px;gap:14px;flex-shrink:0;z-index:10
+}
+.topbar-logo{
+  display:flex;align-items:center;gap:8px;text-decoration:none;
+}
+.topbar-wordmark{
+  font-family:'Inter',sans-serif;font-size:14px;font-weight:600;
+  color:var(--text);letter-spacing:-0.02em;
+}
+.topbar-wordmark span{color:var(--accent)}
+.topbar-title{font-size:11px;color:var(--muted);letter-spacing:0.04em;text-transform:uppercase}
+.topbar-sep{color:var(--border2);font-size:16px}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.tb-pill{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:3px 9px;border-radius:999px;font-size:10px;font-weight:600;
+  font-family:'JetBrains Mono',monospace;letter-spacing:0.04em;
+}
+.tb-pill.live{background:rgba(16,185,129,0.1);color:var(--ok);border:1px solid rgba(16,185,129,0.25)}
+.tb-pill-dot{width:5px;height:5px;border-radius:50%;background:currentColor;animation:blink 2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+.tb-stat{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);white-space:nowrap}
+.tb-stat strong{color:var(--text)}
+.tb-btn{
+  background:var(--bg4);border:1px solid var(--border);border-radius:5px;
+  padding:4px 10px;color:var(--muted);cursor:pointer;font-size:10px;
+  font-family:'Inter',sans-serif;transition:all 0.12s;text-decoration:none;
+  display:inline-flex;align-items:center;gap:5px;
+}
+.tb-btn:hover{color:var(--accent);border-color:rgba(0,212,255,0.3)}
+
+/* ── Main body ── */
+.body{flex:1;display:flex;overflow:hidden;min-height:0}
+
+/* ── Canvas ── */
+#canvas-wrap{
+  flex:1;position:relative;overflow:hidden;
+  cursor:grab;min-height:0;
+}
+#canvas-wrap.dragging{cursor:grabbing}
+#canvas-wrap canvas{display:block;width:100%!important;height:100%!important}
+
+/* ── Labels ── */
+#labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.node-label{
+  position:absolute;transform:translate(-50%,-50%);
+  pointer-events:none;text-align:center;transition:opacity 0.2s;
+}
+.node-label .nl-name{
+  font-size:10px;font-weight:600;color:#e2e8f0;
+  text-shadow:0 0 8px rgba(0,0,0,0.95),0 0 3px rgba(0,0,0,1);
+  white-space:nowrap;font-family:'Inter',sans-serif;letter-spacing:0.01em;
+}
+.node-label .nl-sub{
+  font-size:8px;color:#64748b;
+  text-shadow:0 0 6px rgba(0,0,0,1);
+  white-space:nowrap;font-family:'JetBrains Mono',monospace;margin-top:1px;
+}
+.node-label .nl-badge{
+  font-size:7px;font-weight:700;padding:1px 5px;border-radius:3px;
+  margin-top:2px;display:inline-block;letter-spacing:0.05em;text-transform:uppercase;
+}
+
+/* ── Tooltip ── */
+#tooltip{
+  position:absolute;pointer-events:none;
+  background:rgba(13,17,23,0.94);border:1px solid var(--border2);
+  border-radius:7px;padding:8px 12px;font-size:10px;color:var(--text);
+  display:none;z-index:20;backdrop-filter:blur(8px);max-width:220px;
+  box-shadow:0 4px 24px rgba(0,0,0,0.5);
+}
+#tooltip .tt-name{font-weight:600;margin-bottom:4px;color:var(--accent);font-size:11px}
+#tooltip .tt-type{color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px}
+#tooltip .tt-row{display:flex;justify-content:space-between;gap:16px;margin-bottom:2px;font-size:10px}
+#tooltip .tt-k{color:var(--muted)}
+#tooltip .tt-v{font-family:'JetBrains Mono',monospace}
+
+/* ── Side panel ── */
+.side{
+  width:280px;flex-shrink:0;
+  background:var(--bg2);border-left:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden;
+}
+.side-hdr{padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+.side-hdr-eye{font-size:9px;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);font-weight:600;margin-bottom:4px}
+.side-hdr-val{font-size:14px;font-weight:600;color:var(--text);line-height:1.3}
+.side-hdr-badge{
+  display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;
+  font-size:9px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;margin-top:6px;
+}
+.side-body{flex:1;overflow-y:auto;padding:14px}
+.side-body::-webkit-scrollbar{width:3px}
+.side-body::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.side-sec{margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border)}
+.side-sec:last-child{border-bottom:none;margin-bottom:0}
+.side-sec-title{
+  font-size:9px;text-transform:uppercase;letter-spacing:0.09em;
+  color:var(--muted);font-weight:600;margin-bottom:8px;
+  display:flex;align-items:center;gap:5px;
+}
+.side-sec-title::before{content:'';width:4px;height:4px;border-radius:50%;background:var(--accent);display:inline-block}
+.kv{display:flex;justify-content:space-between;align-items:flex-start;padding:5px 0;border-bottom:1px solid rgba(30,45,69,0.4);font-size:10px;gap:8px}
+.kv:last-child{border-bottom:none}
+.kv-k{color:var(--muted);flex-shrink:0}
+.kv-v{color:var(--text);font-family:'JetBrains Mono',monospace;font-size:10px;text-align:right;word-break:break-all}
+.badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:999px;font-size:9px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase}
+.badge.critical{background:rgba(255,107,53,0.12);color:#ff6b35;border:1px solid rgba(255,107,53,0.3)}
+.badge.elevated{background:rgba(245,158,11,0.1);color:#f59e0b;border:1px solid rgba(245,158,11,0.25)}
+.badge.caution{background:rgba(245,158,11,0.07);color:#f59e0b;border:1px solid rgba(245,158,11,0.18)}
+.badge.stable{background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.25)}
+.badge.unregistered{background:rgba(139,92,246,0.1);color:#a78bfa;border:1px solid rgba(139,92,246,0.25)}
+.badge.unknown{background:rgba(100,116,139,0.1);color:#64748b;border:1px solid rgba(100,116,139,0.2)}
+.side-hint{padding:28px 16px;text-align:center;color:var(--muted2);font-size:11px;line-height:1.8}
+.side-hint-icon{font-size:28px;opacity:0.2;margin-bottom:10px}
+
+/* ── Controls ── */
+.controls{position:absolute;bottom:20px;left:16px;display:flex;flex-direction:column;gap:6px;z-index:5}
+.ctrl-btn{
+  width:32px;height:32px;background:rgba(13,17,23,0.88);
+  border:1px solid var(--border);border-radius:8px;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;color:var(--muted);font-size:14px;
+  transition:all 0.12s;user-select:none;backdrop-filter:blur(4px);
+}
+.ctrl-btn:hover{color:var(--accent);border-color:rgba(0,212,255,0.35)}
+
+/* ── Legend ── */
+.legend{
+  position:absolute;bottom:20px;right:16px;
+  background:rgba(13,17,23,0.88);border:1px solid var(--border);
+  border-radius:8px;padding:10px 14px;backdrop-filter:blur(4px);
+  display:flex;flex-direction:column;gap:5px;z-index:5;
+}
+.leg-item{display:flex;align-items:center;gap:7px;font-size:9px;color:var(--muted);font-family:'JetBrains Mono',monospace;letter-spacing:0.03em}
+.leg-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.leg-sq{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+.leg-sep{height:1px;background:var(--border);margin:2px 0}
+
+/* ── Hint overlay ── */
+.hint-overlay{
+  position:absolute;top:12px;left:50%;transform:translateX(-50%);
+  font-family:'JetBrains Mono',monospace;font-size:9px;
+  color:rgba(100,116,139,0.55);letter-spacing:0.06em;
+  pointer-events:none;white-space:nowrap;
+}
+
+/* ── Filter bar ── */
+.filter-bar{
+  padding:8px 14px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:6px;flex-shrink:0;
+  background:var(--bg2);
+}
+.filter-btn{
+  padding:3px 10px;border-radius:5px;font-size:10px;font-weight:500;
+  cursor:pointer;color:var(--muted);background:transparent;
+  border:1px solid transparent;transition:all 0.12s;
+  font-family:'Inter',sans-serif;
+}
+.filter-btn:hover{color:var(--text);background:var(--bg5)}
+.filter-btn.active{color:var(--accent);background:rgba(0,212,255,0.07);border-color:rgba(0,212,255,0.2)}
+.filter-sep{width:1px;height:16px;background:var(--border);flex-shrink:0}
+
+/* ── Loading ── */
+#loading{
+  position:absolute;inset:0;background:var(--bg);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:14px;z-index:30;
+}
+.spin{width:18px;height:18px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{font-size:12px;color:var(--muted);font-family:'JetBrains Mono',monospace;letter-spacing:0.05em}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <a class="topbar-logo" href="index.html">
+      <svg width="22" height="22" viewBox="0 0 96 96" fill="none">
+        <path stroke="#00C2D4" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" d="M30 14 L42 7 L54 14 L54 28 L42 35 L30 28 Z"/>
+        <path stroke="#00C2D4" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.55" d="M12 42 L24 35 L36 42 L36 56 L24 63 L12 56 Z"/>
+        <path stroke="#E8A030" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.85" d="M48 42 L60 35 L72 42 L72 56 L60 63 L48 56 Z"/>
+        <circle fill="#00C2D4" cx="48" cy="42" r="2.5"/>
+      </svg>
+      <span class="topbar-wordmark">forensa<span>.ai</span></span>
+    </a>
+    <span class="topbar-sep">·</span>
+    <span class="topbar-title">Agent Topology — 3D View</span>
+    <div class="topbar-right">
+      <span class="tb-pill live" id="status-pill"><span class="tb-pill-dot"></span><span id="status-text">Loading…</span></span>
+      <span class="tb-stat" id="tb-stats"></span>
+      <button class="tb-btn" onclick="loadTopology(true)">↻ Refresh</button>
+      <a class="tb-btn" href="index.html">← Dashboard</a>
+    </div>
+  </div>
+
+  <!-- FILTER BAR -->
+  <div class="filter-bar">
+    <span style="font-size:9px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-right:4px">Show</span>
+    <button class="filter-btn active" data-filter="all">All</button>
+    <button class="filter-btn" data-filter="agent">Agents only</button>
+    <button class="filter-btn" data-filter="session">Sessions only</button>
+    <div class="filter-sep"></div>
+    <button class="filter-btn active" data-risk="all">All risk</button>
+    <button class="filter-btn" data-risk="critical">Critical</button>
+    <button class="filter-btn" data-risk="elevated">Elevated</button>
+    <button class="filter-btn" data-risk="stable">Stable</button>
+    <div class="filter-sep"></div>
+    <button class="filter-btn" id="btn-isolate-view" data-iso="false">⊘ Isolated only</button>
+  </div>
+
+  <!-- BODY -->
+  <div class="body">
+
+    <div id="canvas-wrap">
+      <div id="loading">
+        <div class="spin"></div>
+        <div class="loading-text" id="loading-text">Connecting to topology endpoint…</div>
+      </div>
+      <canvas id="topo-canvas"></canvas>
+      <div id="labels"></div>
+      <div id="tooltip">
+        <div class="tt-name" id="tt-name"></div>
+        <div class="tt-type" id="tt-type"></div>
+        <div id="tt-rows"></div>
+      </div>
+      <div class="controls">
+        <div class="ctrl-btn" id="btn-reset" title="Reset camera">⊙</div>
+        <div class="ctrl-btn" id="btn-zi" title="Zoom in">+</div>
+        <div class="ctrl-btn" id="btn-zo" title="Zoom out">−</div>
+        <div class="ctrl-btn" id="btn-agents" title="Focus agents" style="font-size:10px;font-family:'JetBrains Mono',monospace">AG</div>
+      </div>
+      <div class="hint-overlay">Drag to orbit · Scroll to zoom · Click node to inspect</div>
+      <div class="legend">
+        <div class="leg-item"><div class="leg-dot" style="background:#ff6b35"></div>Critical</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#f59e0b"></div>Elevated</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#10b981"></div>Stable</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#a78bfa"></div>Unregistered</div>
+        <div class="leg-sep"></div>
+        <div class="leg-item"><div class="leg-sq" style="background:rgba(255,107,53,0.3);border:1px solid #ff6b35"></div>Agent node</div>
+        <div class="leg-item"><div class="leg-sq" style="background:rgba(0,212,255,0.15);border:1px solid #00d4ff;border-radius:50%"></div>Session node</div>
+        <div class="leg-sep"></div>
+        <div class="leg-item" style="color:#475569">— owns edge</div>
+        <div class="leg-item" style="color:#253550">⋯ spawned edge</div>
+      </div>
+    </div>
+
+    <!-- SIDE PANEL -->
+    <div class="side">
+      <div class="side-hdr">
+        <div class="side-hdr-eye">Selected Node</div>
+        <div class="side-hdr-val" id="sel-title">Click a node</div>
+        <div id="sel-badge"></div>
+      </div>
+      <div class="side-body" id="side-body">
+        <div class="side-hint">
+          <div class="side-hint-icon">⬡</div>
+          Click any node in the 3D graph to inspect it here.<br><br>
+          <span style="color:var(--muted);font-size:10px">Agent nodes are icosahedrons.<br>Session nodes are spheres.</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const API = 'https://pulse-proxy-8dqx.onrender.com';
+
+// ── Risk colours (matching topology.py bands) ──────────────────────────────
+const RISK_COLOR = {
+  critical:     '#ff6b35',
+  elevated:     '#f59e0b',
+  caution:      '#f59e0b',
+  unregistered: '#a78bfa',
+  stable:       '#10b981',
+  unknown:      '#475569'
+};
+const RISK_HEX = band => new THREE.Color(RISK_COLOR[band] || RISK_COLOR.unknown);
+
+// ── State ──────────────────────────────────────────────────────────────────
+let topoData = null;
+let sceneObjects = [];
+let labelEls = [];
+let selectedObj = null;
+let nodeFilter = 'all';
+let riskFilter = 'all';
+let isoOnly = false;
+let isolatedSet = new Set();
+
+// ── Filters ────────────────────────────────────────────────────────────────
+document.querySelectorAll('[data-filter]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-filter]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    nodeFilter = btn.dataset.filter;
+    rebuildScene();
+  });
+});
+document.querySelectorAll('[data-risk]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-risk]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    riskFilter = btn.dataset.risk;
+    rebuildScene();
+  });
+});
+document.getElementById('btn-isolate-view').addEventListener('click', function() {
+  isoOnly = !isoOnly;
+  this.classList.toggle('active', isoOnly);
+  rebuildScene();
+});
+
+function nodeVisible(node) {
+  if (nodeFilter !== 'all' && node.type !== nodeFilter) return false;
+  if (riskFilter !== 'all' && node.risk_band !== riskFilter) return false;
+  if (isoOnly && !isolatedSet.has(node.agent_id || node.id)) return false;
+  return true;
+}
+
+// ── Fetch topology ─────────────────────────────────────────────────────────
+async function loadTopology(force) {
+  if (topoData && !force) return;
+  setLoadingText('Connecting to topology endpoint…');
+  showLoading(true);
+
+  try {
+    const [topo, isoRes] = await Promise.all([
+      fetch(API + '/topology', { cache: 'no-store' }).then(r => r.json()),
+      fetch(API + '/agents/isolated?active_only=true', { cache: 'no-store' }).then(r => r.json()).catch(() => ({ isolated_agents: [] }))
+    ]);
+
+    isolatedSet = new Set((isoRes.isolated_agents || []).map(r => r.agent_id));
+    topoData = topo;
+
+    const s = topo.summary || {};
+    document.getElementById('status-text').textContent = 'Live';
+    document.getElementById('tb-stats').innerHTML =
+      `<strong>${s.agents || 0}</strong> agents · <strong>${s.sessions || 0}</strong> sessions · <strong>${s.edges || 0}</strong> edges`;
+
+    showLoading(false);
+    buildScene(topo);
+  } catch (err) {
+    setLoadingText('⚠ ' + err.message);
+    document.getElementById('status-text').textContent = 'Error';
+  }
+}
+
+function showLoading(v) { document.getElementById('loading').style.display = v ? 'flex' : 'none'; }
+function setLoadingText(t) { document.getElementById('loading-text').textContent = t; }
+
+// ── Three.js runtime ───────────────────────────────────────────────────────
+let renderer, scene, camera, animRAF;
+let theta = 0.4, phi = 1.25, camR = 32;
+const camTarget = new THREE.Vector3(0, 0, 0);
+const MIN_R = 8, MAX_R = 80;
+let isDragging = false, prevMouse = { x: 0, y: 0 };
+const raycaster = new THREE.Raycaster();
+const mouse2d = new THREE.Vector2();
+const tmpV = new THREE.Vector3();
+let accentLight;
+let tick = 0;
+
+function initRenderer() {
+  const wrap = document.getElementById('canvas-wrap');
+  const canvas = document.getElementById('topo-canvas');
+
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setClearColor(0x080c14, 1);
+
+  scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0x080c14, 0.009);
+
+  camera = new THREE.PerspectiveCamera(46, wrap.clientWidth / wrap.clientHeight, 0.1, 800);
+
+  // Lighting
+  scene.add(new THREE.AmbientLight(0xffffff, 0.18));
+  const dLight = new THREE.DirectionalLight(0xffffff, 0.45);
+  dLight.position.set(8, 14, 10);
+  scene.add(dLight);
+  accentLight = new THREE.PointLight(0x00d4ff, 2.8, 50);
+  accentLight.position.set(0, 10, 8);
+  scene.add(accentLight);
+
+  // Star field — 3 layers
+  [
+    [1600, 75, 0x1e2d45, 0.09, 0.65],
+    [500,  40, 0x1e3a5f, 0.14, 0.5],
+    [100,  18, 0x00d4ff, 0.06, 0.22]
+  ].forEach(([count, rMin, color, size, opacity]) => {
+    const geo = new THREE.BufferGeometry();
+    const v = [];
+    for (let i = 0; i < count; i++) {
+      const r = rMin + Math.random() * 30;
+      const t = Math.random() * Math.PI * 2;
+      const p = Math.acos(2 * Math.random() - 1);
+      v.push(r*Math.sin(p)*Math.cos(t), r*Math.sin(p)*Math.sin(t), r*Math.cos(p));
+    }
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
+    scene.add(new THREE.Points(geo, new THREE.PointsMaterial({ color, size, transparent: true, opacity })));
+  });
+
+  resizeRenderer();
+  window.addEventListener('resize', resizeRenderer);
+
+  // Interaction
+  const wrap2 = document.getElementById('canvas-wrap');
+  wrap2.addEventListener('mousedown', e => { isDragging = true; prevMouse = { x: e.clientX, y: e.clientY }; wrap2.classList.add('dragging'); });
+  window.addEventListener('mouseup', () => { isDragging = false; wrap2.classList.remove('dragging'); });
+  window.addEventListener('mousemove', e => {
+    if (isDragging) {
+      const dx = e.clientX - prevMouse.x, dy = e.clientY - prevMouse.y;
+      theta -= dx * 0.007;
+      phi = Math.max(0.12, Math.min(Math.PI - 0.12, phi + dy * 0.007));
+      prevMouse = { x: e.clientX, y: e.clientY };
+      updateCam();
+    } else {
+      handleHover(e);
+    }
+  });
+  wrap2.addEventListener('wheel', e => {
+    e.preventDefault();
+    camR = Math.max(MIN_R, Math.min(MAX_R, camR + e.deltaY * 0.014));
+    updateCam();
+  }, { passive: false });
+  wrap2.addEventListener('click', e => {
+    if (isDragging) return;
+    const hit = getHit(e);
+    if (hit) selectNode(hit);
+    else clearSelection();
+  });
+
+  // Controls
+  document.getElementById('btn-reset').onclick  = () => { theta=0.4; phi=1.25; camR=32; updateCam(); };
+  document.getElementById('btn-zi').onclick     = () => { camR = Math.max(MIN_R, camR - 3); updateCam(); };
+  document.getElementById('btn-zo').onclick     = () => { camR = Math.min(MAX_R, camR + 3); updateCam(); };
+  document.getElementById('btn-agents').onclick = () => { theta=0; phi=Math.PI/2; camR=22; updateCam(); };
+
+  updateCam();
+  animate();
+}
+
+function resizeRenderer() {
+  const wrap = document.getElementById('canvas-wrap');
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+
+function updateCam() {
+  camera.position.x = camTarget.x + camR * Math.sin(phi) * Math.sin(theta);
+  camera.position.y = camTarget.y + camR * Math.cos(phi);
+  camera.position.z = camTarget.z + camR * Math.sin(phi) * Math.cos(theta);
+  camera.lookAt(camTarget);
+}
+
+// ── Build scene from topology data ─────────────────────────────────────────
+function buildScene(topo) {
+  // Clear previous objects (keep stars + lights)
+  sceneObjects.forEach(o => scene.remove(o));
+  sceneObjects = [];
+  document.getElementById('labels').innerHTML = '';
+  labelEls = [];
+  selectedObj = null;
+
+  const nodes  = (topo.nodes  || []).filter(nodeVisible);
+  const edges  = topo.edges   || [];
+  const nodeById = {};
+  topo.nodes.forEach(n => nodeById[n.id] = n);
+
+  // Position nodes: agents on inner sphere, sessions on outer sphere
+  // Use Fibonacci sphere for even distribution
+  const agents   = nodes.filter(n => n.type === 'agent');
+  const sessions = nodes.filter(n => n.type === 'session');
+
+  function fibSphere(items, radius) {
+    return items.map((item, i) => {
+      const n = items.length;
+      const phi = Math.acos(1 - 2 * (i + 0.5) / Math.max(n, 1));
+      const theta = Math.PI * (1 + Math.sqrt(5)) * i;
+      return {
+        item,
+        x: radius * Math.sin(phi) * Math.cos(theta),
+        y: radius * Math.sin(phi) * Math.sin(theta),
+        z: radius * Math.cos(phi)
+      };
+    });
+  }
+
+  const agentR   = Math.max(5, Math.min(10, agents.length * 0.6));
+  const sessionR = agentR + 7;
+
+  const agentPositions   = fibSphere(agents,   agentR);
+  const sessionPositions = fibSphere(sessions, sessionR);
+
+  const posMap = {}; // node.id → THREE.Vector3
+
+  // Render agents — icosahedron (angular, authority)
+  agentPositions.forEach(({ item: node, x, y, z }) => {
+    const band    = node.risk_band || 'unknown';
+    const color   = RISK_HEX(band);
+    const isIso   = isolatedSet.has(node.agent_id);
+    const isCrit  = band === 'critical';
+    const radius  = isCrit ? 0.70 : band === 'elevated' || band === 'caution' ? 0.58 : 0.48;
+
+    // Wireframe shell
+    const wGeo = new THREE.IcosahedronGeometry(radius, 1);
+    const wMat = new THREE.MeshBasicMaterial({ color, wireframe: true, transparent: true, opacity: isCrit ? 0.8 : 0.45 });
+    const wMesh = new THREE.Mesh(wGeo, wMat);
+    wMesh.position.set(x, y, z);
+    scene.add(wMesh);
+    sceneObjects.push(wMesh);
+
+    // Solid core
+    const cGeo  = new THREE.SphereGeometry(radius * 0.3, 12, 12);
+    const cMat  = new THREE.MeshPhongMaterial({ color, emissive: color, emissiveIntensity: isCrit ? 0.7 : 0.2, transparent: true, opacity: 0.9 });
+    const cMesh = new THREE.Mesh(cGeo, cMat);
+    cMesh.position.set(x, y, z);
+    scene.add(cMesh);
+    sceneObjects.push(cMesh);
+
+    // Glow halo
+    const gGeo  = new THREE.SphereGeometry(radius * 2, 12, 12);
+    const gMat  = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: isCrit ? 0.1 : 0.04, side: THREE.BackSide });
+    const gMesh = new THREE.Mesh(gGeo, gMat);
+    gMesh.position.set(x, y, z);
+    scene.add(gMesh);
+    sceneObjects.push(gMesh);
+
+    // Isolation cage
+    let cage = null;
+    if (isIso) {
+      cage = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(radius * 1.9, 1),
+        new THREE.MeshBasicMaterial({ color: 0xf59e0b, wireframe: true, transparent: true, opacity: 0.55 })
+      );
+      cage.position.set(x, y, z);
+      scene.add(cage);
+      sceneObjects.push(cage);
+    }
+
+    const pos = new THREE.Vector3(x, y, z);
+    posMap[node.id] = pos;
+
+    // Label
+    const el = document.createElement('div');
+    el.className = 'node-label';
+    const shortId = (node.agent_id || node.label || '').slice(0, 20);
+    const pct = node.events ? Math.round((node.blocked / node.events) * 100) : 0;
+    el.innerHTML = `
+      <div class="nl-name">${shortId}</div>
+      <div class="nl-sub">${node.events || 0} evt · ${pct}% blk</div>
+      ${isCrit ? `<div class="nl-badge" style="background:rgba(255,107,53,0.15);color:#ff6b35">CRITICAL</div>` : ''}
+    `;
+    document.getElementById('labels').appendChild(el);
+    labelEls.push({ el, pos, radius });
+
+    sceneObjects.push({
+      _isNodeRef: true,
+      mesh: wMesh, coreMesh: cMesh, glowMesh: gMesh, cage,
+      node, pos, radius,
+      band, isCrit, isIso,
+      spin: (Math.random() - 0.5) * 0.015
+    });
+  });
+
+  // Render sessions — spheres (organic, flowing)
+  sessionPositions.forEach(({ item: node, x, y, z }) => {
+    const band   = node.risk_band || 'unknown';
+    const color  = RISK_HEX(band);
+    const isCrit = band === 'critical';
+    const radius = isCrit ? 0.42 : 0.30;
+
+    const geo  = new THREE.SphereGeometry(radius, 20, 20);
+    const mat  = new THREE.MeshPhongMaterial({ color, emissive: color, emissiveIntensity: isCrit ? 0.5 : 0.1, transparent: true, opacity: 0.75 });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(x, y, z);
+    scene.add(mesh);
+    sceneObjects.push(mesh);
+
+    const gGeo = new THREE.SphereGeometry(radius * 2.5, 8, 8);
+    const gMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: isCrit ? 0.08 : 0.025, side: THREE.BackSide });
+    const gMesh = new THREE.Mesh(gGeo, gMat);
+    gMesh.position.set(x, y, z);
+    scene.add(gMesh);
+    sceneObjects.push(gMesh);
+
+    const pos = new THREE.Vector3(x, y, z);
+    posMap[node.id] = pos;
+
+    // Label — only for critical sessions
+    if (isCrit) {
+      const el = document.createElement('div');
+      el.className = 'node-label';
+      el.innerHTML = `<div class="nl-name" style="color:#ff6b35">${(node.session_id || '').slice(0, 16)}</div><div class="nl-sub">CRITICAL</div>`;
+      document.getElementById('labels').appendChild(el);
+      labelEls.push({ el, pos, radius });
+    }
+
+    sceneObjects.push({
+      _isNodeRef: true,
+      mesh, coreMesh: mesh, glowMesh: gMesh, cage: null,
+      node, pos, radius,
+      band, isCrit, isIso: false,
+      spin: (Math.random() - 0.5) * 0.008
+    });
+  });
+
+  // Draw edges
+  edges.forEach(edge => {
+    const fromPos = posMap[edge.source];
+    const toPos   = posMap[edge.target];
+    if (!fromPos || !toPos) return;
+
+    const isSpawned = edge.type === 'spawned';
+    const color     = isSpawned ? 0x253550 : 0x1e3a5f;
+    const opacity   = isSpawned ? 0.25 : 0.4;
+
+    const geo  = new THREE.BufferGeometry().setFromPoints([fromPos.clone(), toPos.clone()]);
+    const mat  = new THREE.LineBasicMaterial({ color, transparent: true, opacity });
+    const line = new THREE.Line(geo, mat);
+    scene.add(line);
+    sceneObjects.push(line);
+  });
+}
+
+function rebuildScene() {
+  if (!topoData) return;
+  buildScene(topoData);
+}
+
+// ── Animation loop ─────────────────────────────────────────────────────────
+function animate() {
+  animRAF = requestAnimationFrame(animate);
+  tick += 0.014;
+
+  // Slow auto-rotate
+  if (!isDragging) theta += 0.0015;
+  updateCam();
+
+  // Animate node objects
+  const nodeRefs = sceneObjects.filter(o => o._isNodeRef);
+  nodeRefs.forEach(o => {
+    if (o.node.type === 'agent') {
+      o.mesh.rotation.x += o.spin;
+      o.mesh.rotation.y += o.spin * 1.3;
+    }
+    if (o.isCrit) {
+      o.coreMesh.material.emissiveIntensity = 0.55 + Math.sin(tick * 2.2) * 0.18;
+      o.glowMesh.material.opacity = 0.07 + Math.sin(tick * 1.7) * 0.035;
+    }
+    if (o.cage) {
+      o.cage.rotation.y += 0.007;
+      o.cage.rotation.x += 0.004;
+    }
+  });
+
+  // Accent light orbit
+  accentLight.position.x = Math.sin(tick * 0.22) * 12;
+  accentLight.position.z = Math.cos(tick * 0.22) * 12 + 8;
+
+  updateLabels();
+  renderer.render(scene, camera);
+}
+
+// ── Label projection ───────────────────────────────────────────────────────
+function updateLabels() {
+  const wrap = document.getElementById('canvas-wrap');
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  labelEls.forEach(({ el, pos, radius }) => {
+    tmpV.copy(pos).project(camera);
+    if (tmpV.z > 1) { el.style.opacity = '0'; return; }
+    const x = (tmpV.x * 0.5 + 0.5) * w;
+    const y = (-tmpV.y * 0.5 + 0.5) * h + radius * 30;
+    el.style.left = x + 'px';
+    el.style.top  = y + 'px';
+    el.style.opacity = '1';
+  });
+}
+
+// ── Raycasting ─────────────────────────────────────────────────────────────
+function getHitMeshes() {
+  return sceneObjects.filter(o => o._isNodeRef).map(o => o.mesh);
+}
+
+function getHit(e) {
+  const wrap = document.getElementById('canvas-wrap');
+  const rect = wrap.getBoundingClientRect();
+  mouse2d.x =  ((e.clientX - rect.left) / rect.width)  * 2 - 1;
+  mouse2d.y = -((e.clientY - rect.top)  / rect.height) * 2 + 1;
+  raycaster.setFromCamera(mouse2d, camera);
+  const hits = raycaster.intersectObjects(getHitMeshes());
+  if (!hits.length) return null;
+  return sceneObjects.filter(o => o._isNodeRef).find(o => o.mesh === hits[0].object);
+}
+
+// ── Hover tooltip ──────────────────────────────────────────────────────────
+let hoveredObj = null;
+const tooltip = document.getElementById('tooltip');
+
+function handleHover(e) {
+  const obj = getHit(e);
+  if (obj !== hoveredObj) {
+    hoveredObj = obj;
+    const wrap = document.getElementById('canvas-wrap');
+    if (obj) {
+      wrap.style.cursor = 'pointer';
+      const nd = obj.node;
+      document.getElementById('tt-name').textContent = nd.agent_id || nd.session_id || nd.label || nd.id;
+      document.getElementById('tt-type').textContent = nd.type === 'agent' ? 'Agent Node' : 'Session Node';
+      let rows = '';
+      if (nd.type === 'agent') {
+        rows += ttRow('Risk', nd.risk_band, RISK_COLOR[nd.risk_band]);
+        rows += ttRow('Events', nd.events || 0);
+        rows += ttRow('Blocked', nd.blocked || 0);
+        rows += ttRow('Registered', nd.registered ? 'Yes' : 'No', nd.registered ? '#10b981' : '#a78bfa');
+      } else {
+        rows += ttRow('Risk', nd.risk_band, RISK_COLOR[nd.risk_band]);
+        rows += ttRow('Drift', nd.drift_status || '—');
+        rows += ttRow('Turns', nd.turns || 0);
+        rows += ttRow('Blocked', nd.blocked || 0);
+      }
+      document.getElementById('tt-rows').innerHTML = rows;
+      tooltip.style.display = 'block';
+    } else {
+      wrap.style.cursor = 'grab';
+      tooltip.style.display = 'none';
+    }
+  }
+  if (hoveredObj) {
+    tooltip.style.left = (e.clientX + 16) + 'px';
+    tooltip.style.top  = (e.clientY - 12) + 'px';
+  }
+}
+
+function ttRow(k, v, color) {
+  return `<div class="tt-row"><span class="tt-k">${k}</span><span class="tt-v" ${color ? `style="color:${color}"` : ''}>${v}</span></div>`;
+}
+
+// ── Node selection ─────────────────────────────────────────────────────────
+function selectNode(obj) {
+  selectedObj = obj;
+  const nd = obj.node;
+  const band = nd.risk_band || 'unknown';
+  const color = RISK_COLOR[band];
+
+  document.getElementById('sel-title').textContent =
+    (nd.agent_id || nd.session_id || nd.label || nd.id || '').slice(0, 28);
+
+  const badgeEl = document.getElementById('sel-badge');
+  badgeEl.innerHTML = `<span class="side-hdr-badge" style="background:${color}18;color:${color};border:1px solid ${color}44">${band.toUpperCase()}</span>`;
+
+  let html = '';
+
+  if (nd.type === 'agent') {
+    const pct = nd.events ? Math.round((nd.blocked / nd.events) * 100) : 0;
+    const isIso = isolatedSet.has(nd.agent_id);
+    html += `<div class="side-sec">
+      <div class="side-sec-title">Agent Identity</div>
+      <div class="kv"><span class="kv-k">Agent ID</span><span class="kv-v" style="color:var(--accent)">${nd.agent_id || '—'}</span></div>
+      <div class="kv"><span class="kv-k">Risk Band</span><span class="kv-v" style="color:${color}">${band}</span></div>
+      <div class="kv"><span class="kv-k">Registered</span><span class="kv-v" style="color:${nd.registered ? 'var(--ok)' : '#a78bfa'}">${nd.registered ? 'Yes' : 'No'}</span></div>
+      ${isIso ? `<div class="kv"><span class="kv-k">Status</span><span class="kv-v" style="color:var(--warn)">⊘ Isolated</span></div>` : ''}
+    </div>
+    <div class="side-sec">
+      <div class="side-sec-title">Activity</div>
+      <div class="kv"><span class="kv-k">Total Events</span><span class="kv-v">${nd.events || 0}</span></div>
+      <div class="kv"><span class="kv-k">Blocked</span><span class="kv-v" style="color:${(nd.blocked||0) > 0 ? 'var(--danger)' : 'var(--muted)'}">${nd.blocked || 0} (${pct}%)</span></div>
+    </div>
+    <div class="side-sec" style="border-bottom:none">
+      <button onclick="window.open('${API}/agents/${encodeURIComponent(nd.agent_id)}/passport?format=pdf','_blank')"
+        style="width:100%;padding:8px;border-radius:6px;border:1px solid rgba(0,212,255,0.2);background:rgba(0,212,255,0.06);color:var(--accent);cursor:pointer;font-size:10px;font-weight:600;font-family:'Inter',sans-serif;transition:all 0.12s"
+        onmouseover="this.style.background='rgba(0,212,255,0.12)'" onmouseout="this.style.background='rgba(0,212,255,0.06)'">
+        ⬇ Download Passport PP-1
+      </button>
+    </div>`;
+  } else {
+    // Session node
+    html += `<div class="side-sec">
+      <div class="side-sec-title">Session</div>
+      <div class="kv"><span class="kv-k">Session ID</span><span class="kv-v" style="color:var(--accent);font-size:9px">${nd.session_id || '—'}</span></div>
+      <div class="kv"><span class="kv-k">Agent</span><span class="kv-v">${nd.agent_id || '—'}</span></div>
+      ${nd.parent_session_id ? `<div class="kv"><span class="kv-k">Spawned from</span><span class="kv-v" style="font-size:9px">${nd.parent_session_id.slice(0,18)}…</span></div>` : ''}
+    </div>
+    <div class="side-sec">
+      <div class="side-sec-title">Behaviour</div>
+      <div class="kv"><span class="kv-k">Risk Band</span><span class="kv-v" style="color:${color}">${band}</span></div>
+      <div class="kv"><span class="kv-k">Drift Status</span><span class="kv-v" style="color:${nd.drift_status === 'critical' ? 'var(--danger)' : nd.drift_status === 'elevated' ? 'var(--warn)' : 'var(--ok)'}">${nd.drift_status || '—'}</span></div>
+      ${nd.drift_score != null ? `<div class="kv"><span class="kv-k">Drift Score</span><span class="kv-v">${nd.drift_score.toFixed ? nd.drift_score.toFixed(3) : nd.drift_score}</span></div>` : ''}
+      <div class="kv"><span class="kv-k">Turns</span><span class="kv-v">${nd.turns || 0}</span></div>
+      <div class="kv"><span class="kv-k">Blocked</span><span class="kv-v" style="color:${(nd.blocked||0) > 0 ? 'var(--danger)' : 'var(--muted)'}">${nd.blocked || 0}</span></div>
+    </div>`;
+  }
+
+  document.getElementById('side-body').innerHTML = html;
+}
+
+function clearSelection() {
+  selectedObj = null;
+  document.getElementById('sel-title').textContent = 'Click a node';
+  document.getElementById('sel-badge').innerHTML = '';
+  document.getElementById('side-body').innerHTML = `
+    <div class="side-hint">
+      <div class="side-hint-icon">⬡</div>
+      Click any node in the 3D graph to inspect it here.
+    </div>`;
+}
+
+// ── Boot ───────────────────────────────────────────────────────────────────
+initRenderer();
+loadTopology();
+</script>
+</body>
+</html>
