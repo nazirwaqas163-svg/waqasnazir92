@@ -390,6 +390,10 @@ def _calculate_shannon_entropy(text: str) -> float:
     text = text or ""
     if not text:
         return 0.0
+        # Phase FP-1: short messages (<15 chars) are not meaningful entropy signals
+    # "hi", "ok", "yes" score artificially high due to low character diversity
+    if len(text.strip()) < 15:
+        return 0.0
     frequencies: dict[str, int] = {}
     for symbol in text:
         frequencies[symbol] = frequencies.get(symbol, 0) + 1
