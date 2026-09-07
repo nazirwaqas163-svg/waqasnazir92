@@ -623,22 +623,62 @@ const POLICY_KEYWORDS=['customer_id','email','phone'];
 function cemPolicyViolations(events){return events.filter(e=>{const text=(e.text||'').toLowerCase();return POLICY_KEYWORDS.some(kw=>text.includes(kw));}).length;}
 function cemPolicyAgents(events){return new Set(events.filter(e=>{const text=(e.text||'').toLowerCase();return POLICY_KEYWORDS.some(kw=>text.includes(kw));}).map(e=>e.data?.agent_id||e.raw?.agent_id).filter(Boolean)).size;}
 
+let cemDeadlines = {};
+async function fetchCEMDeadlines(){
+  try{
+    const data = await fetch(API+'/compliance/deadlines?auto_hold=false',{cache:'no-store'}).then(r=>r.json());
+    (data.deadlines||[]).forEach(d=>{
+      const key = d.jurisdiction==='MY'?'pdpa':d.jurisdiction==='SG'?'mgf':d.jurisdiction==='VN'?'vietnam':null;
+      if(key) cemDeadlines[key]=d;
+    });
+  }catch(_){}
+}
+
 function renderCEM(){
-  const events=ALL,crits=events.filter(e=>sev(e)==='critical').length,exfils=events.filter(e=>isExfiltration(e)).length;
-  const policyViolations=cemPolicyViolations(events),policyAgents=cemPolicyAgents(events);
+  const events=ALL,policyViolations=cemPolicyViolations(events),policyAgents=cemPolicyAgents(events);
   const fwData=[
-    {...CEM_FRAMEWORKS[0],critCount:Math.ceil(crits*0.5),exfilCount:exfils,agents:cemAgentCount(CEM_FRAMEWORKS[0],events)},
-    {...CEM_FRAMEWORKS[1],critCount:Math.ceil(crits*0.7),exfilCount:Math.floor(exfils*0.6),agents:cemAgentCount(CEM_FRAMEWORKS[1],events)},
-    {...CEM_FRAMEWORKS[2],critCount:Math.floor(crits*0.4),exfilCount:Math.floor(exfils*0.4),agents:Math.max(0,cemAgentCount(CEM_FRAMEWORKS[2],events)-1)},
-    {...CEM_FRAMEWORKS[3],critCount:policyViolations,exfilCount:0,agents:policyAgents},
+    {...CEM_FRAMEWORKS[0],agents:cemAgentCount(CEM_FRAMEWORKS[0],events)},
+    {...CEM_FRAMEWORKS[1],agents:cemAgentCount(CEM_FRAMEWORKS[1],events)},
+    {...CEM_FRAMEWORKS[2],agents:Math.max(0,cemAgentCount(CEM_FRAMEWORKS[2],events)-1)},
+    {...CEM_FRAMEWORKS[3],violations:policyViolations,agents:policyAgents},
   ];
   const html=fwData.map(fw=>{
-    const level=cemRiskLevel(fw.critCount,fw.exfilCount),isActive=cemFilter===fw.key;
-    const dotColor=level==='high'?'var(--critical)':level==='medium'?'var(--warn)':'var(--ok)';
-    const windowLabel=fw.window_hours?`${fw.jurisdiction} · ${fw.window_hours}hr window`:`${fw.jurisdiction} · Custom Rules`;
-    const statusText=fw.key==='company'?(level==='high'?'Policy violations detected':level==='medium'?'Some violations flagged':'No policy violations'):(level==='high'?'Immediate notification required':level==='medium'?'Monitor — approaching threshold':'Within compliance window');
-    const statsHtml=fw.key==='company'?`<div class="cem-stats"><div class="cem-stat"><span class="cem-stat-val" style="color:${fw.critCount>0?'var(--danger)':'var(--ok)'}">${fw.critCount}</span><span class="cem-stat-lbl">Violations</span></div><div class="cem-stat"><span class="cem-stat-val" style="color:var(--accent)">${fw.agents}</span><span class="cem-stat-lbl">Agents</span></div><div class="cem-stat"><span class="cem-stat-val" style="color:var(--ok)">1</span><span class="cem-stat-lbl">Policies</span></div></div>`:`<div class="cem-stats"><div class="cem-stat"><span class="cem-stat-val" style="color:${fw.critCount>0?'var(--danger)':'var(--ok)'}">${fw.critCount}</span><span class="cem-stat-lbl">Critical</span></div><div class="cem-stat"><span class="cem-stat-val" style="color:${fw.exfilCount>0?'var(--critical)':'var(--ok)'}">${fw.exfilCount}</span><span class="cem-stat-lbl">Exfiltration</span></div><div class="cem-stat"><span class="cem-stat-val" style="color:var(--accent)">${fw.agents}</span><span class="cem-stat-lbl">Agents</span></div></div>`;
-    return `<div class="cem-card cem-${level}${isActive?' cem-active':''}" onclick="toggleCEMFilter('${fw.key}','${fw.framework}')"><div class="cem-top"><span class="cem-jurisdiction">${windowLabel}</span><span class="cem-risk-badge ${level}">${cemRiskLabel(level)} RISK</span></div><div class="cem-framework">${fw.framework}</div><div class="cem-obligation">${fw.obligation}</div>${statsHtml}<div class="cem-window"><span class="cem-window-dot" style="background:${dotColor}"></span>${statusText}</div></div>`;
+    const isActive=cemFilter===fw.key;
+    const dl=cemDeadlines[fw.key];
+    let level,statusIcon,statusLine,actionLine,detailLine;
+    if(fw.key==='company'){
+      level=policyViolations>0?'high':'low';
+      statusIcon=policyViolations>0?'🔴':'🟢';
+      statusLine=policyViolations>0?`<strong style="color:var(--danger)">Action Required</strong>`:`<strong style="color:var(--ok)">Within compliance window</strong>`;
+      actionLine=policyViolations>0?`${policyViolations} policy violation${policyViolations===1?'':'s'} detected`:`All agents compliant`;
+      detailLine=`${fw.agents} agent${fw.agents===1?'':'s'} monitored · 1 active policy`;
+    } else if(dl){
+      const breached=dl.breached||dl.status==='BREACHED';
+      const critical=dl.status==='CRITICAL'||dl.hours_remaining<(fw.window_hours*0.25);
+      level=breached?'high':critical?'high':dl.status==='WARNING'?'medium':'low';
+      statusIcon=breached||critical?'🔴':level==='medium'?'🟡':'🟢';
+      const hrs=dl.hours_remaining||0;
+      const timeLeft=hrs<1?`${Math.round(hrs*60)}m`:hrs<24?`${hrs.toFixed(0)}h`:`${(hrs/24).toFixed(1)}d`;
+      statusLine=breached?`<strong style="color:var(--danger)">Action Required</strong>`:critical?`<strong style="color:var(--critical)">Action Required</strong>`:level==='medium'?`<strong style="color:var(--warn)">Monitor Closely</strong>`:`<strong style="color:var(--ok)">Within compliance window</strong>`;
+      actionLine=breached?`Window breached — notify regulator now`:critical?`Notify regulator · ${timeLeft} remaining`:level==='medium'?`${timeLeft} remaining in window`:`${timeLeft} remaining in window`;
+      detailLine=`${fw.agents} agent${fw.agents===1?'':'s'} in scope`;
+    } else {
+      const exfils=events.filter(e=>isExfiltration(e)).length;
+      const crits=events.filter(e=>sev(e)==='critical').length;
+      level=exfils>0||crits>10?'high':crits>2?'medium':'low';
+      statusIcon=level==='high'?'🔴':level==='medium'?'🟡':'🟢';
+      statusLine=level==='high'?`<strong style="color:var(--danger)">Action Required</strong>`:level==='medium'?`<strong style="color:var(--warn)">Monitor Closely</strong>`:`<strong style="color:var(--ok)">Within compliance window</strong>`;
+      actionLine=level==='high'?`Breach events detected — review immediately`:`No immediate action required`;
+      detailLine=`${fw.agents} agent${fw.agents===1?'':'s'} in scope`;
+    }
+    const windowLabel=fw.window_hours?`${fw.jurisdiction} · ${fw.window_hours}hr notification window`:`${fw.jurisdiction} · Custom Rules`;
+    return `<div class="cem-card cem-${level}${isActive?' cem-active':''}" onclick="toggleCEMFilter('${fw.key}','${fw.framework}')">
+      <div class="cem-top"><span class="cem-jurisdiction">${windowLabel}</span><span class="cem-risk-badge ${level}">${cemRiskLabel(level)} RISK</span></div>
+      <div class="cem-framework">${fw.framework}</div>
+      <div style="margin:10px 0 6px 0;font-size:13px">${statusIcon} ${statusLine}</div>
+      <div style="font-size:11px;color:var(--text);margin-bottom:4px">${actionLine}</div>
+      <div style="font-size:10px;color:var(--muted)">${detailLine}</div>
+    </div>`;
   }).join('');
   document.getElementById('cem-cards').innerHTML=html;
 }
@@ -1754,7 +1794,7 @@ async function markReplayReviewed(){
   catch(err){btn.disabled=false;btn.textContent='✓ Mark as Reviewed';alert('Failed: '+err.message);}
 }
 
-if(!sessionStorage.getItem('welcomed')){sessionStorage.setItem('welcomed','1');window.location.replace('welcome.html');}else{load();setInterval(load,10000);}
+if(!sessionStorage.getItem('welcomed')){sessionStorage.setItem('welcomed','1');window.location.replace('welcome.html');}else{fetchCEMDeadlines().then(()=>load());setInterval(()=>{fetchCEMDeadlines();load();},10000);}
 </script>
 
 <!-- Phase 12: Replay Modal -->
