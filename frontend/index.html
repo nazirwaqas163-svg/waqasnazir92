@@ -357,9 +357,9 @@ svg.hm{width:100%;height:55px}
       <!-- KPI STRIP -->
       <div class="kpi-row">
         <div class="kpi"><div class="kpi-label">Total Events</div><div class="kpi-val c-blue" id="k-total">—</div><div class="kpi-sub" id="k-total-sub">loading…</div></div>
-        <div class="kpi kpi-red"><div class="kpi-label">Critical Alerts</div><div class="kpi-val c-red" id="k-crit">—</div><div class="kpi-sub">Requires immediate review</div></div>
+        <div class="kpi kpi-red"><div class="kpi-label">Critical Events</div><div class="kpi-val c-red" id="k-crit">—</div><div class="kpi-sub">Requires immediate review</div></div>
         <div class="kpi kpi-amber"><div class="kpi-label">Avg Entropy</div><div class="kpi-val c-amber" id="k-ent">—</div><div class="kpi-sub">0.00–1.00 scale</div></div>
-        <div class="kpi kpi-red"><div class="kpi-label">Exfiltration Alerts</div><div class="kpi-val c-red" id="k-exfil">—</div><div class="kpi-sub">Data export / leak detected</div></div>
+        <div class="kpi kpi-red"><div class="kpi-label">Exfiltration Alerts</div><div class="kpi-val c-red" id="k-exfil">—</div><div class="kpi-sub" title="Detections above exfiltration-risk threshold (token collapse + input anomaly signals). Not confirmed exfiltration.">Risk threshold exceeded</div></div>
         <div class="kpi kpi-green"><div class="kpi-label">Circuit Breaker</div><div class="kpi-val c-green" id="k-cb">—</div><div class="kpi-sub">Failures: <span id="k-fail">0</span></div></div>
       </div>
 
@@ -394,7 +394,7 @@ svg.hm{width:100%;height:55px}
             <div>Actor · Action</div>
             <div>Severity</div>
             <div>BDI Score<span class="th-info">i<span class="th-tip"><strong>Behavioral Drift Index.</strong> Tracks escalating risk across the whole session — repeated override/bypass language, anomalous turns. Primary signal driving governance decisions.</span></span></div>
-            <div>Entropy<span class="th-info">i<span class="th-tip"><strong>Message Entropy (0.00–1.00).</strong> Character-randomness of this single message — secondary check. Very short text ("ack") can score near 1.00 even when low-risk. Read alongside BDI and Severity.</span></span></div>
+            <div>Entropy<span class="th-info">i<span class="th-tip"><strong>Message Entropy (0.00–1.00).</strong> Measures output distribution deviation — not maliciousness by itself. Very short text scores near 1.00 even when low-risk. BDI + session drift + historical baseline determine final severity. Read alongside BDI and Severity.</span></span></div>
             <div>Pulse</div>
           </div>
           <div id="tbody"><div class="loading"><div class="spin"></div>Loading events…</div></div>
@@ -523,7 +523,7 @@ svg.hm{width:100%;height:55px}
           <div class="inv-sec-title">◆ Executive Insight</div>
           <div class="tags" id="i-tags"></div>
           <div class="chart-box">
-            <div class="chart-lbl" id="hm-lbl">▼ Heart Monitor — Session Entropy History</div>
+            <div class="chart-lbl" id="hm-lbl">▼ Current Session Signal</div>
             <svg class="hm" viewBox="0 0 400 55" preserveAspectRatio="none">
               <polyline id="hm-line" points="" fill="none" stroke="#00d4ff" stroke-width="1.5"/>
               <circle id="hm-dot" cx="400" cy="27" r="3.5" fill="#ef4444"/>
@@ -540,10 +540,10 @@ svg.hm{width:100%;height:55px}
           <div id="i-exfil-body"></div>
         </div>
         <div class="inv-sec">
-          <div class="inv-sec-title">◎ Signal-to-Noise — Confidence Logic</div>
+          <div class="inv-sec-title">◎ Detection Confidence</div>
           <div class="sig-row">
-            <span style="font-size:10px;color:var(--danger);font-weight:600">NOISE</span>
-            <span style="font-size:10px;color:var(--ok);font-weight:600">SIGNAL</span>
+            <span style="font-size:10px;color:var(--muted);font-weight:600">Low confidence</span>
+            <span style="font-size:10px;color:var(--ok);font-weight:600">High confidence</span>
           </div>
           <div class="sig-pct" id="i-signal">—</div>
           <ul class="tl-list" id="i-tl"></ul>
