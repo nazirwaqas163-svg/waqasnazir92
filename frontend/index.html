@@ -690,7 +690,7 @@ function matchesCEMFilter(e){if(!cemFilter)return true;const fw=CEM_FRAMEWORKS.f
 function tick(){document.getElementById('clock').textContent=new Date().toISOString().replace('T',' ').slice(0,19)+' UTC';}
 tick();setInterval(tick,1000);
 
-function sev(e){const en=e.data?.entropy??0,bd=e.data?.bdi_score??0;if(en>=0.7||bd>=0.65)return 'critical';if(en>=0.4||bd>=0.35)return 'elevated';return 'stable';}
+function sev(e){const en=e.data?.entropy??0,bd=e.data?.bdi_score??0;if(en>=0.75&&bd>=0.65)return 'critical';if(en>=0.5||bd>=0.45)return 'elevated';return 'stable';}
 function bdiC(v){return v>=0.65?'var(--danger)':v>=0.35?'var(--warn)':'var(--ok)';}
 function entC(v){return v>=0.7?'var(--danger)':v>=0.4?'var(--warn)':'var(--muted)';}
 function pulseClass(s){return s==='critical'?'err':s==='elevated'?'warn':'ok';}
@@ -1345,7 +1345,7 @@ function openInv(idx){
   const s=sev(e),bd=e.data?.bdi_score??0,en=e.data?.entropy??0,ts=e.created_at?new Date(e.created_at).toLocaleString():'Unknown';
   const si=document.getElementById('i-sev');si.textContent=s.toUpperCase();si.className='inv-sev '+s;
   document.getElementById('i-title').textContent=`Investigator: ${evId(idx)}`;
-  document.getElementById('i-meta').innerHTML=`<span>Agent: <strong>${e.data?.agent_id||'unknown'}</strong></span><span>Triggered: <strong>${ts}</strong></span><span>Entropy: <strong style="color:${entC(en)}">${en.toFixed(2)}</strong></span>`;
+  const whyText=s==='critical'?`Entropy spike (${en.toFixed(2)}) with BDI escalation (${Math.round(bd*100)}%) — consistent with boundary-testing or data exfiltration pattern`:s==='elevated'?`Elevated entropy (${en.toFixed(2)}) detected — session drift above threshold, monitoring active`:`Routine intercept — signals within normal range (entropy ${en.toFixed(2)}, BDI ${Math.round(bd*100)}%)`; document.getElementById('i-meta').innerHTML=`<span>Agent: <strong>${e.data?.agent_id||'unknown'}</strong></span><span>Triggered: <strong>${ts}</strong></span><span>Entropy: <strong style="color:${entC(en)}">${en.toFixed(2)}</strong></span><div style="margin-top:8px;padding:8px 10px;background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,0.12);border-radius:6px;font-size:10px;color:var(--muted);line-height:1.5"><strong style="color:var(--accent)">Why Pulse intervened:</strong> ${whyText}</div>`;
   const tags=['#'+e.kind];
   if(en>=0.7)tags.push('#high-entropy');if(bd>=0.65)tags.push('#bdi-critical');if(s==='critical')tags.push('#auto-isolated');if(e.kind==='governance')tags.push('#circuit-breaker');if(isExfiltration(e))tags.push('#exfiltration');
   document.getElementById('i-tags').innerHTML=tags.map(t=>{const cls=t==='#exfiltration'?'tag exfiltration':'tag';return `<span class="${cls}">${t}</span>`;}).join('');
