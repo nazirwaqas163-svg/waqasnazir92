@@ -673,6 +673,8 @@ async def _maybe_open_legal_hold(
     deadlines: Optional[List[Dict[str, Any]]] = None,
     exfiltration: Optional[Dict[str, Any]] = None,
     policy_violations: Optional[List[Dict[str, Any]]] = None,
+    calibration: Optional[Dict[str, Any]] = None,
+    
 ) -> List[Dict[str, Any]]:
     # Phase 7 Stage 1 — Auto-Response Security Protocol:
     # exfiltration alerts, org policy violations, and live swarm suspicion
@@ -1337,6 +1339,7 @@ async def intercept(payload: InterceptRequest, request: Request) -> Dict[str, An
                 },
             },
             policy_violations=policy_violations,
+            calibration=calibration,
         )
         raise HTTPException(
             status_code=409,
@@ -1409,6 +1412,7 @@ async def intercept(payload: InterceptRequest, request: Request) -> Dict[str, An
             },
         },
         policy_violations=policy_violations,
+        calibration=calibration,
     )
     return {
         "ok": True,
