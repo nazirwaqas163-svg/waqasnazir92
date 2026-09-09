@@ -738,6 +738,32 @@ async def _maybe_open_legal_hold(
                 reason=hold["reason"],
                 hold_id=hold["id"],
             )
+                                feed.add(
+                        PulseEvent(
+                            kind="alert",
+                            text=f"Agent {agent_id} isolated — swarm behaviour detected",
+                            data={
+                                "decision": "alert",
+                                "status_code": 423,
+                                "severity": "HIGH",
+                                "trigger_type": "agent_isolated",
+                                "agent_id": agent_id,
+                                "reason": hold["reason"],
+                                "hold_id": hold["id"],
+                            },
+                        )
+                    )
+                                await _insert_ai_event_log(
+                        event_id=str(uuid.uuid4()),
+                        agent_id=agent_id,
+                        action="agent_isolated",
+                        input_text="",
+                        output_text=f"Agent isolated — swarm behaviour detected. Hold: {hold['id']}",
+                        bdi_score=bdi_score,
+                        policy_result="blocked",
+                        session_id=session_id,
+                        entropy=None,
+                    )
         # Phase 7 Stage 4 — auto-generate sealed incident report
         try:
             agent_events = await supabase_audit_client.get_recent_events(limit=500)
@@ -2077,6 +2103,32 @@ async def isolate_agent(agent_id: str, payload: AgentIsolateRequest) -> Dict[str
     record = session_store.isolate_agent(
         agent_id, reason=payload.reason, hold_id=payload.hold_id
     )
+            feed.add(
+            PulseEvent(
+                kind="alert",
+                text=f"Agent {agent_id} manually isolated",
+                data={
+                    "decision": "alert",
+                    "status_code": 423,
+                    "severity": "HIGH",
+                    "trigger_type": "agent_isolated",
+                    "agent_id": agent_id,
+                    "reason": payload.reason,
+                    "hold_id": payload.hold_id,
+                },
+            )
+        )
+        await _insert_ai_event_log(
+            event_id=str(uuid.uuid4()),
+            agent_id=agent_id,
+            action="agent_isolated",
+            input_text="",
+            output_text=f"Agent manually isolated. Reason: {payload.reason}",
+            bdi_score=None,
+            policy_result="blocked",
+            session_id=None,
+            entropy=None,
+        )
     return {"ok": True, "isolated": True, "isolation": record.to_dict()}
 
 @app.post("/agents/{agent_id}/release")
