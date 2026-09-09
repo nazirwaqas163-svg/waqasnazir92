@@ -313,6 +313,10 @@ svg.hm{width:100%;height:55px}
     <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
   Compliance
   </button>
+    <button class="nav-btn" title="Isolated Agents" data-view="isolated">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/><line x1="4" y1="4" x2="20" y2="20"/></svg>
+  Isolated
+  </button>
   <div style="flex:1"></div>
   <button class="nav-btn" title="Settings" data-view="settings">
     <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l.06.06a2 2 0 0 1-2.83-2.83l-.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -479,7 +483,16 @@ svg.hm{width:100%;height:55px}
         <div id="settings-body"><div class="loading"><div class="spin"></div>Loading system settings…</div></div>
       </div>
     </div>
-
+    <!-- ISOLATED AGENTS VIEW -->
+    <div class="ledger" id="view-isolated" style="display:none">
+      <div>
+        <div class="tbl-head-row">
+          <div class="section-label">Isolated Agents</div>
+          <div class="tools-row"><button class="refresh-btn" onclick="loadIsolated()">↻ Refresh</button></div>
+        </div>
+        <div id="isolated-body"><div class="loading"><div class="spin"></div>Loading isolated agents…</div></div>
+      </div>
+    </div>
     <!-- GRAPH EXPLORER VIEW (Phase 18) -->
     <div id="view-graph" style="display:none">
       <div class="graph-toolbar">
@@ -758,10 +771,10 @@ function refresh(){const f=filtered();renderRows(f);updateKpis(f);}
 
 /* ── VIEW SWITCHING ── */
 document.querySelectorAll('.nav-btn[data-view]').forEach(b=>b.addEventListener('click',()=>switchView(b.dataset.view)));
-const VIEW_LOADERS={'agents':()=>{if(!lastTopology)loadAgents();},'analytics':()=>{if(!lastDrift)loadAnalytics();},'circuit-breaker':()=>loadCircuitBreaker(),'compliance':()=>{if(!lastDeadlines)loadCompliance();},'settings':()=>{if(!lastHealth)loadSettings();},'graph':()=>{window.open('topology.html','_blank');switchView('ledger');}};
+const VIEW_LOADERS={'agents':()=>{if(!lastTopology)loadAgents();},'analytics':()=>{if(!lastDrift)loadAnalytics();},'circuit-breaker':()=>loadCircuitBreaker(),'compliance':()=>{if(!lastDeadlines)loadCompliance();},'settings':()=>{if(!lastHealth)loadSettings();},'isolated':()=>loadIsolated(),'graph':()=>{window.open('topology.html','_blank');switchView('ledger');}};
 function switchView(view){
   document.querySelectorAll('.nav-btn[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===view));
-  ['ledger','agents','analytics','circuit-breaker','compliance','settings','graph'].forEach(v=>{const el=document.getElementById('view-'+v);if(el)el.style.display=v===view?'':'none';});
+  ['ledger','agents','analytics','circuit-breaker','compliance','settings','isolated','graph'].forEach(v=>{const el=document.getElementById('view-'+v);if(el)el.style.display=v===view?'':'none';});
   closeInv();
   if(VIEW_LOADERS[view])VIEW_LOADERS[view]();
   if(view==='graph')setTimeout(graphResize,50);
@@ -1714,7 +1727,40 @@ async function generateIncidentReport(){
   }catch(err){alert('Report generation failed: '+err.message);}
   btn.disabled=false;btn.textContent='☰ Generate Full Incident Report';
 }
+/* ── ISOLATED AGENTS ── */
+async function loadIsolated(){
+  const box=document.getElementById('isolated-body');
+  box.innerHTML='<div class="loading"><div class="spin"></div>Loading isolated agents…</div>';
+  try{
+    const data=await apiFetch('/agents/isolated?active_only=false',{cache:'no-store'}).then(r=>r.json());
+    const agents=data.isolated_agents||[];
+    if(!agents.length){box.innerHTML='<div class="empty"><div class="empty-icon">◎</div><div>No isolated agents.</div></div>';return;}
+    box.innerHTML=agents.map(a=>{
+      const active=!a.released_at;
+      return `<div class="settings-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-weight:600;font-size:12px">${a.agent_id}</span>
+            <span class="badge ${active?'critical':'stable'}">${active?'⊘ ISOLATED':'RELEASED'}</span>
+          </div>
+          ${active?`<button onclick="releaseAgent('${a.agent_id}')" class="refresh-btn" style="color:var(--ok);border-color:var(--ok-border)">✓ Release</button>`:''}
+        </div>
+        <div class="settings-row"><span class="settings-key">Reason</span><span class="settings-val" style="color:var(--warn)">${a.reason||'—'}</span></div>
+        <div class="settings-row"><span class="settings-key">Isolated At</span><span class="settings-val">${a.isolated_at?new Date(a.isolated_at).toLocaleString():'—'}</span></div>
+        <div class="settings-row"><span class="settings-key">Hold ID</span><span class="settings-val">${a.hold_id||'—'}</span></div>
+        ${a.released_at?`<div class="settings-row"><span class="settings-key">Released At</span><span class="settings-val" style="color:var(--ok)">${new Date(a.released_at).toLocaleString()}</span></div>`:''}
+      </div>`;
+    }).join('');
+  }catch(err){box.innerHTML=`<div class="empty"><div style="color:var(--danger)">⚠ ${err.message}</div></div>`;}
+}
 
+async function releaseAgent(agentId){
+  if(!confirm('Release agent '+agentId+' from isolation?'))return;
+  try{
+    await apiFetch('/agents/'+encodeURIComponent(agentId)+'/release',{method:'POST',body:JSON.stringify({released_by:'dashboard'})});
+    loadIsolated();
+  }catch(err){alert('Failed: '+err.message);}
+}
 /* ── MAIN LOAD ── */
 async function load(){
   try{
