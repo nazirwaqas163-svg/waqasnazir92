@@ -732,7 +732,7 @@ async def _maybe_open_legal_hold(
         )
         await supabase_audit_client.insert_legal_hold(hold)
         # Phase 7 Stage 3 — auto-isolate the offending agent on swarm detection
-                if hold["trigger_type"] == "swarm" and agent_id:
+        if hold["trigger_type"] == "swarm" and agent_id:
             session_store.isolate_agent(
                 agent_id,
                 reason=hold["reason"],
@@ -759,7 +759,7 @@ async def _maybe_open_legal_hold(
                 action="agent_isolated",
                 input_text="",
                 output_text=f"Agent isolated — swarm behaviour detected. Hold: {hold['id']}",
-                bdi_score=bdi_score,
+                bdi_score=None,
                 policy_result="blocked",
                 session_id=session_id,
                 entropy=None,
@@ -2100,7 +2100,7 @@ class AgentReleaseRequest(BaseModel):
 @app.post("/agents/{agent_id}/isolate")
 async def isolate_agent(agent_id: str, payload: AgentIsolateRequest) -> Dict[str, Any]:
     """Quarantine an agent — all future /intercept calls return 423 Locked."""
-        record = session_store.isolate_agent(
+    record = session_store.isolate_agent(
         agent_id, reason=payload.reason, hold_id=payload.hold_id
     )
     feed.add(
