@@ -362,7 +362,7 @@ class SupabaseAuditClient:
         if org_id:
             params["org_id"] = f"eq.{org_id}"
         else:
-            params["org_id"] = "is.null"
+            params["or"] = "(org_id.is.null,org_id.eq.demo-org)"
         try:
             async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
                 response = await client.get(
