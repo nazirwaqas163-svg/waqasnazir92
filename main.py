@@ -1241,9 +1241,8 @@ async def intercept(payload: InterceptRequest, request: Request) -> Dict[str, An
         else _calculate_shannon_entropy(payload.input_text)
     )
 
-    session_events = await supabase_audit_client.get_recent_events(limit=500)
-    session_turns = [e for e in session_events if e.get("session_id") == payload.session_id]
-    policy_blocked_turns = sum(1 for e in session_turns if e.get("policy_result") == "blocked")
+    session_turns = await supabase_audit_client.get_session_turns(payload.session_id)
+    policy_blocked_turns = sum(1 for e in session_turns if e.get("status") == "blocked")
     policy_total_turns = len(session_turns)
 
     threat_classification = threat_classifier.classify(
