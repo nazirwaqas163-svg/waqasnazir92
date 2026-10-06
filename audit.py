@@ -374,7 +374,28 @@ class SupabaseAuditClient:
         except httpx.HTTPError:
             logger.exception("Failed to fetch recent events")
             return []
-
+    async def get_session_turns(self, session_id: Optional[str], limit: int = 200) -> List[Dict[str, Any]]:
+        """Narrow per-session lookup used by /intercept: only status + entropy
+        for this session's turns, newest first."""
+        if not self.configured or not session_id:
+            return []
+        params = {
+            "session_id": f"eq.{session_id}",
+            "select": "status,entropy",
+            "order": "created_at.desc",
+            "limit": str(limit),
+        }
+        try:
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.get(
+                    f"{self.url}/rest/v1/ai_events",
+                    headers={"apikey": self.key or "", "authorization": f"Bearer {self.key}"},
+                    params=params,
+                )
+                return response.json() if response.status_code == 200 else []
+        except httpx.HTTPError:
+            logger.exception("Failed to fetch session turns")
+            return []
     async def get_ai_events_chain(self, limit: int = 100) -> List[Dict[str, Any]]:
         if not self.configured:
             return []
