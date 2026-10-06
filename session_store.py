@@ -1,10 +1,68 @@
 from __future__ import annotations
 
 import math
+import re
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+
+
+# ----------------------------------------------------------------------
+# BDI risk signals (FP-3)
+# ----------------------------------------------------------------------
+_INPUT_RISK_PATTERNS = {
+    "override": r"\boverrid(?:e|es|ing)\b",
+    "ignore_instructions": r"\bignore\s+(?:all\s+|any\s+|the\s+|your\s+|previous\s+|prior\s+)+(?:instructions?|rules?|polic(?:y|ies)|guidelines?)",
+    "bypass": r"\bbypass(?:es|ing)?\b",
+    "disable_security": r"\bdisabl(?:e|es|ing)\s+(?:the\s+|all\s+|any\s+)?(?:security|safety|guard|guardrails?|logging|audit|monitoring|filters?|policy|policies)",
+    "sudo": r"\bsudo\b",
+    "root_access": r"\broot\s+(?:access|shell|privileges?|password)",
+    "admin_credentials": r"\badmin(?:istrator)?\s+(?:password|credentials?|access|token)",
+    "exfiltrate": r"\bexfiltrat(?:e|es|ing|ion)\b",
+    "steal": r"\bsteal(?:s|ing)?\b",
+    "leak": r"\bleak(?:s|ing)?\s+(?:the\s+|all\s+|any\s+|customer\s+|user\s+)?(?:data|records?|passwords?|credentials?|keys?|secrets?|pii)",
+    "exploit": r"\bexploit(?:s|ing)?\b",
+    "hack": r"\bhack(?:s|ing|ed)?\b",
+    "inject": r"\b(?:sql\s+|prompt\s+|code\s+)?inject(?:ion)?\b",
+    "drop_table": r"\bdrop\s+(?:table|database|schema)\b",
+    "delete_all": r"\b(?:delete|wipe|erase|purge)\s+(?:all|every|the\s+entire)\b",
+    "dump_data": r"\b(?:dump|export|send|upload|forward)\s+(?:all|every|the\s+entire|the\s+full|complete)\s+(?:customer|user|client|database|records?|data|table|credentials?)",
+    "system_prompt": r"\b(?:reveal|show|print|repeat|leak)\s+(?:your\s+|the\s+)?system\s+prompt\b",
+    "credentials": r"\b(?:api[\s_-]?key|secret[\s_-]?key|private[\s_-]?key|access[\s_-]?token|password)s?\b.{0,30}\b(?:send|post|email|forward|paste|reveal|share|output)\b",
+    "external_endpoint": r"\b(?:curl|wget|nc|netcat)\b\s+\S*(?:https?://|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})",
+}
+_OUTPUT_RISK_PATTERNS = {
+    "private_key_block": r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----",
+    "aws_key": r"\bAKIA[0-9A-Z]{16}\b",
+    "bearer_secret": r"\b(?:sk|pk|rk)[-_](?:live|test)?[-_]?[A-Za-z0-9]{20,}\b",
+}
+_INPUT_RE = {k: re.compile(v, re.I) for k, v in _INPUT_RISK_PATTERNS.items()}
+_OUTPUT_RE = {k: re.compile(v) for k, v in _OUTPUT_RISK_PATTERNS.items()}
+
+
+def _risk_hits(text: str, patterns=None) -> set:
+    if not text:
+        return set()
+    table = _OUTPUT_RE if patterns is _OUTPUT_RISK_PATTERNS else _INPUT_RE
+    return {name for name, rx in table.items() if rx.search(text)}
+
+
+def _normalized_char_entropy(text: str) -> float:
+    """Normalised Shannon entropy of characters; 0.0 for <15 chars (FP-1 rule)."""
+    text = text or ""
+    if len(text.strip()) < 15:
+        return 0.0
+    freq: dict = {}
+    for ch in text:
+        freq[ch] = freq.get(ch, 0) + 1
+    length = len(text)
+    ent = 0.0
+    for count in freq.values():
+        p = count / length
+        ent -= p * math.log2(p)
+    max_ent = math.log2(len(freq)) if len(freq) > 1 else 1.0
+    return ent / max_ent if max_ent > 0 else 0.0
 
 
 @dataclass
@@ -13,35 +71,50 @@ class SessionState:
     agent_id: str
     turn_count: int = 0
     bdi_score: float = 0.0
+    _seen_risk: set = field(default_factory=set, repr=False)
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     last_seen: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
     def record_turn(self, input_text: str, output_text: str) -> float:
+        """Update and return the session's behavioural-deviation index (0..1).
+
+        FP-3 rewrite: the old version added ~0.55 of raw character entropy on every
+        turn with no decay, so any English session saturated at 1.0 by turn 2.
+        Now the score moves only on real risk signals and relaxes on clean turns:
+          * risk phrases in the input (whole-word match) raise it,
+          * near-random input (encoded blobs / payloads) raises it slightly,
+          * a clean turn decays it, so benign sessions settle near zero.
+        """
         self.turn_count += 1
         self.last_seen = datetime.now(timezone.utc).isoformat()
         text = input_text or ""
-        if text:
-            freq: dict[str, int] = {}
-            for ch in text:
-                freq[ch] = freq.get(ch, 0) + 1
-            length = len(text)
-            entropy = 0.0
-            for count in freq.values():
-                p = count / length
-                entropy -= p * math.log2(p)
-            max_entropy = math.log2(len(freq)) if freq else 1.0
-            normalized_entropy = entropy / max_entropy if max_entropy > 0 else 0.0
+        out = output_text or ""
+
+        hits = _risk_hits(text)
+        # Echoed secrets/credentials in the model output are a strong signal too.
+        out_hits = _risk_hits(out, _OUTPUT_RISK_PATTERNS)
+
+        increment = 0.0
+        if hits:
+            increment += min(0.45, 0.14 * len(hits))
+            # Repeating the same risk behaviour across turns compounds.
+            repeats = len(hits & self._seen_risk)
+            increment += min(0.20, 0.08 * repeats)
+            self._seen_risk |= hits
+        if out_hits:
+            increment += min(0.30, 0.15 * len(out_hits))
+        # Encoded / near-random payloads (base64, hex dumps). Normal English
+        # sits around 0.80-0.90 normalised character entropy; only the extreme
+        # tail contributes.
+        ent = _normalized_char_entropy(text)
+        if ent > 0.95:
+            increment += min(0.15, (ent - 0.95) * 3.0)
+
+        if increment > 0.0:
+            self.bdi_score = min(1.0, self.bdi_score + increment)
         else:
-            normalized_entropy = 0.0
-        risk_keywords = [
-            "override", "ignore", "bypass", "disable", "delete", "drop",
-            "admin", "root", "execute", "sudo", "hack", "inject",
-            "exfiltrate", "leak", "steal", "exploit",
-        ]
-        keyword_bonus = 0.15 if any(k in input_text.lower() for k in risk_keywords) else 0.0
-        length_bonus = 0.02 if len(output_text) > 500 else 0.0
-        increment = (normalized_entropy * 0.6) + keyword_bonus + length_bonus
-        self.bdi_score = min(1.0, self.bdi_score + increment)
+            # Clean turn: relax toward zero.
+            self.bdi_score = max(0.0, self.bdi_score * 0.80 - 0.01)
         return self.bdi_score
 
     def to_dict(self) -> dict:
