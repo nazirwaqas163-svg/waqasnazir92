@@ -712,7 +712,8 @@ function sev(e){const d=e.data||{},bd=d.bdi_score??0,en=d.entropy??0,dec=String(
   if(bd>=0.35||d.trigger_type==='policy_violation'||d.trigger_type==='calibration_failure'||(d.severity&&String(d.severity).toUpperCase()==='HIGH'))return 'elevated';
   return 'stable';}
 function bdiC(v){return v>=0.65?'var(--danger)':v>=0.35?'var(--warn)':'var(--ok)';}
-function entC(v){return v>=0.7?'var(--danger)':v>=0.4?'var(--warn)':'var(--muted)';}
+// FP-3: character entropy of normal English is ~0.9, so it is shown neutral unless near-random (>=0.97).
+function entC(v){return v>=0.97?'var(--danger)':'var(--muted)';}
 function pulseClass(s){return s==='critical'?'err':s==='elevated'?'warn':'ok';}
 function pulseIcon(s){return s==='critical'?'✕':s==='elevated'?'!':'✓';}
 function evId(ridx){return 'EV-'+String(ALL.length-ridx).padStart(4,'0');}
@@ -1375,8 +1376,9 @@ document.getElementById('i-meta').innerHTML=`<span>Agent: <strong>${e.data?.agen
   const exfilSec=document.getElementById('i-exfil-sec'),exfilBody=document.getElementById('i-exfil-body');
   if(isExfiltration(e)){const ex=e.data.exfiltration||{},comp=ex.components||{};exfilSec.style.display='block';exfilBody.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><span class="badge exfiltration">EXFILTRATION DETECTED</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--critical)">risk ${(ex.risk_score??0).toFixed(2)}</span></div><div style="font-size:10px;color:var(--muted);line-height:1.5;margin-bottom:8px">Agent output matches data-export / external-endpoint exfiltration pattern. Source: ${ex.source||'api'}.</div><div class="settings-row"><span class="settings-key">Input anomaly</span><span class="settings-val">${(comp.input_anomaly??0).toFixed(2)}</span></div><div class="settings-row"><span class="settings-key">Token collapse</span><span class="settings-val">${(comp.token_collapse??0).toFixed(2)}</span></div>`;}else{exfilSec.style.display='none';exfilBody.innerHTML='';}
   loadHeartMonitor(e);
-  const sig=Math.round((1-en)*100),sp=document.getElementById('i-signal');sp.textContent=sig+'%';sp.style.color=sig>60?'var(--ok)':sig>30?'var(--warn)':'var(--danger)';
-  const tl=[{t:'T+0',c:'#10b981',x:'System Normal — Entropy baseline at '+(Math.max(0,en-0.25)).toFixed(2)},{t:'T+1',c:'#f59e0b',x:'Anomaly Detected — Output distribution shifted from baseline'},{t:'T+2',c:'#f59e0b',x:'Confidence Dropping — Token probability collapse '+Math.round(en*90)+'%'}];
+  const sig=Math.round((1-bd)*100),sp=document.getElementById('i-signal');sp.textContent=sig+'%';sp.style.color=sig>60?'var(--ok)':sig>30?'var(--warn)':'var(--danger)';
+  const tl=[{t:'T+0',c:'#10b981',x:'Session baseline normal'}];
+  if(s!=='stable'){tl.push({t:'T+1',c:'#f59e0b',x:'Behavioural signals detected — BDI '+Math.round(bd*100)+'%'});tl.push({t:'T+2',c:'#f59e0b',x:'Risk indicators above normal range for this session'});}
   const dec=String(e.data?.decision||e.data?.policy_result||'allowed').toLowerCase();
   if(dec==='blocked'||dec==='dropped'){tl.push({t:'T+3',c:'#ef4444',x:'Request blocked by circuit breaker — BDI '+Math.round(bd*100)+'%, entropy '+en.toFixed(2)});tl.push({t:'T+4',c:'#0ea5e9',x:'Block recorded to the immutable audit ledger'});}
   else if(isExfiltration(e)){tl.push({t:'T+3',c:'#ef4444',x:'Exfiltration alert raised — legal hold and incident report opened by the backend'});}
