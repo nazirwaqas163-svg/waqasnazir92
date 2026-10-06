@@ -632,9 +632,11 @@ const CEM_FRAMEWORKS = [
 function cemRiskLevel(critCount,exfilCount){if(critCount>20||exfilCount>0)return 'high';if(critCount>5)return 'medium';return 'low';}
 function cemRiskLabel(level){return{high:'HIGH',medium:'MEDIUM',low:'LOW'}[level]||'LOW';}
 function cemAgentCount(fw,events){const agents=new Set();events.forEach(e=>{const s=sev(e);if(s==='critical'||isExfiltration(e)){const agent=e.data?.agent_id||e.raw?.agent_id;if(agent)agents.add(agent);}});return agents.size;}
-const POLICY_KEYWORDS=['customer_id','email','phone'];
-function cemPolicyViolations(events){return events.filter(e=>{const text=(e.text||'').toLowerCase();return POLICY_KEYWORDS.some(kw=>text.includes(kw));}).length;}
-function cemPolicyAgents(events){return new Set(events.filter(e=>{const text=(e.text||'').toLowerCase();return POLICY_KEYWORDS.some(kw=>text.includes(kw));}).map(e=>e.data?.agent_id||e.raw?.agent_id).filter(Boolean)).size;}
+// FP-3: a policy violation is an event the backend policy engine actually flagged
+// (trigger_type 'policy_violation'), not an event whose text happens to contain 'email'.
+function isPolicyViolation(e){const d=e.data||{};return d.trigger_type==='policy_violation'||(Array.isArray(d.policy_violations)&&d.policy_violations.length>0);}
+function cemPolicyViolations(events){return events.filter(isPolicyViolation).length;}
+function cemPolicyAgents(events){return new Set(events.filter(isPolicyViolation).map(e=>e.data?.agent_id||e.raw?.agent_id).filter(Boolean)).size;}
 
 let cemDeadlines = {};
 async function fetchCEMDeadlines(){
@@ -698,12 +700,17 @@ function renderCEM(){
 
 function toggleCEMFilter(key,label){if(cemFilter===key){clearCEMFilter();return;}cemFilter=key;const bar=document.getElementById('cem-filter-bar');bar.style.display='flex';document.getElementById('cem-filter-label').textContent=`Showing events relevant to ${label}`;renderCEM();refresh();}
 function clearCEMFilter(){cemFilter=null;document.getElementById('cem-filter-bar').style.display='none';renderCEM();refresh();}
-function matchesCEMFilter(e){if(!cemFilter)return true;const fw=CEM_FRAMEWORKS.find(f=>f.key===cemFilter);if(!fw)return true;const s=sev(e),isExfil=isExfiltration(e);if(fw.key==='company'){const text=(e.text||'').toLowerCase();return fw.keywords.some(k=>text.includes(k.toLowerCase()));}if(s==='critical'||isExfil)return true;const text=(e.text||'').toLowerCase();return fw.keywords.some(k=>text.includes(k.toLowerCase()));}
+function matchesCEMFilter(e){if(!cemFilter)return true;const fw=CEM_FRAMEWORKS.find(f=>f.key===cemFilter);if(!fw)return true;const s=sev(e),isExfil=isExfiltration(e);if(fw.key==='company'){return isPolicyViolation(e);}if(s==='critical'||isExfil)return true;const text=(e.text||'').toLowerCase();return fw.keywords.some(k=>text.includes(k.toLowerCase()));}
 
 function tick(){document.getElementById('clock').textContent=new Date().toISOString().replace('T',' ').slice(0,19)+' UTC';}
 tick();setInterval(tick,1000);
 
-function sev(e){const en=e.data?.entropy??0,bd=e.data?.bdi_score??0;if(en>=0.75&&bd>=0.65)return 'critical';if(en>=0.5||bd>=0.45)return 'elevated';return 'stable';}
+// FP-3: severity comes from behavioural signals. Character entropy is ~0.9 for any English text,
+// so it can no longer promote an event on its own; it only corroborates a raised BDI.
+function sev(e){const d=e.data||{},bd=d.bdi_score??0,en=d.entropy??0,dec=String(d.decision||d.policy_result||'').toLowerCase();
+  if(isExfiltration(e)||dec==='blocked'||dec==='dropped'||(bd>=0.65&&en>=0.5))return 'critical';
+  if(bd>=0.35||d.trigger_type==='policy_violation'||d.trigger_type==='calibration_failure'||(d.severity&&String(d.severity).toUpperCase()==='HIGH'))return 'elevated';
+  return 'stable';}
 function bdiC(v){return v>=0.65?'var(--danger)':v>=0.35?'var(--warn)':'var(--ok)';}
 function entC(v){return v>=0.7?'var(--danger)':v>=0.4?'var(--warn)':'var(--muted)';}
 function pulseClass(s){return s==='critical'?'err':s==='elevated'?'warn':'ok';}
@@ -1360,17 +1367,22 @@ function openInv(idx){
   document.getElementById('i-title').textContent=`Investigator: ${evId(idx)}`;
   const collapse=Math.round(en*90);
 const whySignals=s==='critical'?`Entropy spike (${en.toFixed(2)}) · BDI escalation (${Math.round(bd*100)}%) · token probability collapse (${collapse}%) across session`:s==='elevated'?`Elevated entropy (${en.toFixed(2)}) · BDI (${Math.round(bd*100)}%) · session drift above threshold`:`Entropy (${en.toFixed(2)}) · BDI (${Math.round(bd*100)}%) · signals within normal range`;
-const whyAssessment=s==='critical'?`High-confidence behavioral anomaly consistent with <em>potential</em> data exfiltration activity. Forensa detected signals — not confirmed exfiltration.`:s==='elevated'?`Moderate behavioral anomaly detected. Session requires monitoring. No containment action taken.`:`No anomaly detected. Event logged to immutable audit ledger.`;
+const whyAssessment=s==='critical'?`High-risk behavioural signals on this event. Forensa detected signals — not confirmed exfiltration.`:s==='elevated'?`Moderate behavioral anomaly detected. Session requires monitoring. No containment action taken.`:`No anomaly detected. Event logged to immutable audit ledger.`;
 document.getElementById('i-meta').innerHTML=`<span>Agent: <strong>${e.data?.agent_id||'unknown'}</strong></span><span>Triggered: <strong>${ts}</strong></span><span>Entropy: <strong style="color:${entC(en)}">${en.toFixed(2)}</strong></span><div style="margin-top:8px;padding:8px 10px;background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,0.12);border-radius:6px;font-size:10px;color:var(--muted);line-height:1.6"><div style="margin-bottom:4px"><strong style="color:var(--accent)">Why Pulse intervened</strong></div><div style="margin-bottom:6px">${whySignals}</div><div><strong style="color:${s==='critical'?'var(--critical)':s==='elevated'?'var(--warn)':'var(--ok)'};font-size:9px;text-transform:uppercase;letter-spacing:0.05em">Assessment</strong> <span style="color:var(--text)">${whyAssessment}</span></div></div>`;
-  const tags=['#'+e.kind];
-  if(en>=0.7)tags.push('#high-entropy');if(bd>=0.65)tags.push('#bdi-critical');if(s==='critical')tags.push('#auto-isolated');if(e.kind==='governance')tags.push('#circuit-breaker');if(isExfiltration(e))tags.push('#exfiltration');
+  const dec0=String(e.data?.decision||e.data?.policy_result||'').toLowerCase();const tags=['#'+e.kind];
+  if(en>=0.97)tags.push('#high-entropy');if(bd>=0.65)tags.push('#bdi-critical');if(dec0==='blocked'||dec0==='dropped')tags.push('#blocked');if(e.kind==='governance')tags.push('#circuit-breaker');if(isExfiltration(e))tags.push('#exfiltration');
   document.getElementById('i-tags').innerHTML=tags.map(t=>{const cls=t==='#exfiltration'?'tag exfiltration':'tag';return `<span class="${cls}">${t}</span>`;}).join('');
   const exfilSec=document.getElementById('i-exfil-sec'),exfilBody=document.getElementById('i-exfil-body');
   if(isExfiltration(e)){const ex=e.data.exfiltration||{},comp=ex.components||{};exfilSec.style.display='block';exfilBody.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><span class="badge exfiltration">EXFILTRATION DETECTED</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--critical)">risk ${(ex.risk_score??0).toFixed(2)}</span></div><div style="font-size:10px;color:var(--muted);line-height:1.5;margin-bottom:8px">Agent output matches data-export / external-endpoint exfiltration pattern. Source: ${ex.source||'api'}.</div><div class="settings-row"><span class="settings-key">Input anomaly</span><span class="settings-val">${(comp.input_anomaly??0).toFixed(2)}</span></div><div class="settings-row"><span class="settings-key">Token collapse</span><span class="settings-val">${(comp.token_collapse??0).toFixed(2)}</span></div>`;}else{exfilSec.style.display='none';exfilBody.innerHTML='';}
   loadHeartMonitor(e);
   const sig=Math.round((1-en)*100),sp=document.getElementById('i-signal');sp.textContent=sig+'%';sp.style.color=sig>60?'var(--ok)':sig>30?'var(--warn)':'var(--danger)';
   const tl=[{t:'T+0',c:'#10b981',x:'System Normal — Entropy baseline at '+(Math.max(0,en-0.25)).toFixed(2)},{t:'T+1',c:'#f59e0b',x:'Anomaly Detected — Output distribution shifted from baseline'},{t:'T+2',c:'#f59e0b',x:'Confidence Dropping — Token probability collapse '+Math.round(en*90)+'%'}];
-  if(s==='critical'){tl.push({t:'T+3',c:'#ef4444',x:'LOCKDOWN — Entropy '+en.toFixed(2)+'. Model isolated. Rollback initiated'});tl.push({t:'T+4',c:'#ef4444',x:'Alert Dispatched — CISO + Legal notified via PagerDuty'});tl.push({t:'T+5',c:'#0ea5e9',x:'Recovery Complete — Stable state restored. Incident report generated.'});}else{tl.push({t:'T+3',c:'#10b981',x:'Recovery Complete — Stable state restored. Incident report generated.'});}
+  const dec=String(e.data?.decision||e.data?.policy_result||'allowed').toLowerCase();
+  if(dec==='blocked'||dec==='dropped'){tl.push({t:'T+3',c:'#ef4444',x:'Request blocked by circuit breaker — BDI '+Math.round(bd*100)+'%, entropy '+en.toFixed(2)});tl.push({t:'T+4',c:'#0ea5e9',x:'Block recorded to the immutable audit ledger'});}
+  else if(isExfiltration(e)){tl.push({t:'T+3',c:'#ef4444',x:'Exfiltration alert raised — legal hold and incident report opened by the backend'});}
+  else if(s==='critical'){tl.push({t:'T+3',c:'#f59e0b',x:'Flagged for review — BDI '+Math.round(bd*100)+'%. Request was not blocked.'});}
+  else if(s==='elevated'){tl.push({t:'T+3',c:'#f59e0b',x:'Elevated — logged and monitored. No containment action taken.'});}
+  else{tl.push({t:'T+3',c:'#10b981',x:'Request allowed — event recorded to the immutable audit ledger.'});}
   document.getElementById('i-tl').innerHTML=tl.map(t=>`<li class="tl-item"><span class="tl-t">${t.t}</span><div class="tl-dot" style="background:${t.c}"></div><span class="tl-text">${t.x}</span></li>`).join('');
   const regs=isExfiltration(e)?[{n:'PDPA Malaysia — Data Breach',r:'HIGH',d:'Personal / customer data exported to external endpoint. 24-hour PDPC notification window.',a:'Isolate agent. Export evidence package. Notify DPO immediately.'},{n:'Singapore MGF — Clause 2.5',r:'HIGH',d:'AI incident involving unauthorized data disclosure.',a:'File incident report within 72 hours.'},{n:'Vietnam AI Law',r:'HIGH',d:'Report AI system incident involving data leakage to competent authority.',a:'Prepare incident summary. Notify compliance officer.'}]:s==='critical'?[{n:'PDPA Malaysia',r:'HIGH',d:'Notify PDPC of personal data breach. 24-hour notification window from incident detection.',a:'Export evidence package. Submit to compliance officer immediately.'},{n:'Singapore MGF — Clause 2.5',r:'HIGH',d:'Document and report AI incidents within the MGF 72-hour window.',a:'Export evidence package. Submit to compliance officer.'},{n:'Vietnam AI Law',r:'HIGH',d:'Report AI system incident to the competent authority within 72 hours.',a:'Notify data protection officer. Prepare incident summary.'}]:s==='elevated'?[{n:'Singapore MGF — Clause 2.1',r:'MED',d:'Ensure senior management oversight of AI decisions at elevated risk.',a:'Escalate to AI governance owner. Log decision rationale.'},{n:'Singapore MGF — Clause 2.3',r:'MED',d:'Monitor AI system operations and log anomalous behaviour.',a:'Review session event chain. Verify no policy boundary crossed.'}]:[{n:'PDPA Malaysia',r:'LOW',d:'Routine processing — no breach threshold reached.',a:'No action required. Continue standard logging.'},{n:'ISO/IEC 42001',r:'LOW',d:'Log and assess AI management system activity.',a:'Event recorded to the immutable audit ledger.'}];
   document.getElementById('i-regs').innerHTML=regs.map(r=>`<div class="reg-card"><div class="reg-hdr"><span class="reg-name">${r.n}</span><span class="badge ${r.r==='HIGH'?'critical':r.r==='MED'?'elevated':'stable'}">${r.r}</span></div><div class="reg-desc">${r.d}</div><div class="reg-action">↳ ${r.a}</div></div>`).join('');
@@ -1644,7 +1656,7 @@ async function openChainView(e) {
       <div class="chain-lineage-title">Session Lineage — ${siblings.length} turns</div>`;
     siblings.forEach((turn, i) => {
       const tEn = turn.entropy ?? 0, tBdi = turn.bdi_score ?? 0;
-      const tSev = (tEn >= 0.7 || tBdi >= 0.65) ? 'critical' : (tEn >= 0.4 || tBdi >= 0.35) ? 'elevated' : 'stable';
+      const tSev = (tBdi >= 0.65) ? 'critical' : (tBdi >= 0.35) ? 'elevated' : 'stable';
       const bc = tSev === 'critical' ? '#ef4444' : tSev === 'elevated' ? '#f59e0b' : '#10b981';
       lineageHtml += `<div class="chain-turn">
         <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);width:26px;flex-shrink:0">T+${i+1}</span>
