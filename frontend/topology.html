@@ -68,8 +68,13 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter'
 #labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
 .node-label{
   position:absolute;transform:translate(-50%,-50%);
-  pointer-events:none;text-align:center;transition:opacity 0.2s;
+  pointer-events:none;text-align:center;transition:opacity 0.16s,filter 0.16s;
+  padding:4px 7px;border:1px solid rgba(37,53,80,0.72);border-radius:7px;
+  background:rgba(8,12,20,0.82);backdrop-filter:blur(5px);
+  box-shadow:0 5px 18px rgba(0,0,0,0.28);
 }
+.node-label.is-focus{border-color:rgba(0,212,255,0.36);background:rgba(13,20,33,0.96);z-index:3}
+.node-label.is-muted{opacity:0!important}
 .node-label .nl-name{
   font-size:10px;font-weight:600;color:#e2e8f0;
   text-shadow:0 0 8px rgba(0,0,0,0.95),0 0 3px rgba(0,0,0,1);
@@ -583,7 +588,7 @@ function buildScene(topo) {
       ${band === 'unregistered' ? `<div class="nl-badge" style="background:rgba(139,92,246,0.15);color:#a78bfa;border:1px solid rgba(139,92,246,0.3)">UNREG</div>` : ''}
     `;
     document.getElementById('labels').appendChild(el);
-    labelEls.push({ el, pos, radius });
+    labelEls.push({ el, pos, radius, node, isSession: false });
 
     sceneObjects.push({
       _isNodeRef: true,
@@ -630,7 +635,7 @@ function buildScene(topo) {
       ${isCrit ? `<div class="nl-badge" style="background:rgba(255,107,53,0.15);color:#ff6b35;font-size:7px">CRIT</div>` : ''}
     `;
     document.getElementById('labels').appendChild(elS);
-    labelEls.push({ el: elS, pos, radius });
+    labelEls.push({ el: elS, pos, radius, node, isSession: true });
 
     sceneObjects.push({
       _isNodeRef: true,
@@ -702,14 +707,20 @@ function animate() {
 function updateLabels() {
   const wrap = document.getElementById('canvas-wrap');
   const w = wrap.clientWidth, h = wrap.clientHeight;
-  labelEls.forEach(({ el, pos, radius }) => {
+  labelEls.forEach(({ el, pos, radius, node, isSession }) => {
     tmpV.copy(pos).project(camera);
     if (tmpV.z > 1) { el.style.opacity = '0'; return; }
+    const isFocused = (selectedObj && selectedObj.node.id === node.id) || (hoveredObj && hoveredObj.node.id === node.id);
+    const isPriority = node.risk_band === 'critical';
+    // Keep the overview calm; reveal detail progressively as the user zooms in.
+    const showLabel = isFocused || (isPriority && !isSession) || camR < (isSession ? 15 : 22);
     const x = (tmpV.x * 0.5 + 0.5) * w;
     const y = (-tmpV.y * 0.5 + 0.5) * h + radius * 30;
     el.style.left = x + 'px';
     el.style.top  = y + 'px';
-    el.style.opacity = '1';
+    el.classList.toggle('is-focus', Boolean(isFocused));
+    el.classList.toggle('is-muted', !showLabel);
+    el.style.opacity = showLabel ? (isFocused ? '1' : isPriority ? '0.94' : '0.82') : '0';
   });
 }
 
