@@ -29,6 +29,14 @@ Copy `pulse_sdk.py` into your project root, or add it to your package.
 
 ---
 
+## Admin API access
+
+Privileged control-plane routes require the backend environment variable `PULSE_ADMIN_API_KEY`. Set it to a long random secret in the hosting environment, then enter the same key in the dashboard's **Admin API Key** setting. The dashboard keeps it in the current browser tab and sends it only as `X-Admin-API-Key`.
+
+If the variable is not configured, privileged routes return HTTP 503; normal agent interception and read-only dashboard views remain available.
+
+---
+
 ## Quick Start
 
 ```python
