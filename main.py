@@ -196,6 +196,9 @@ _ADMIN_PROTECTED_EXACT_PATHS = {
 @app.middleware("http")
 async def protect_sensitive_routes(request: Request, call_next):
     """Require the admin credential on sensitive dashboard and control-plane APIs."""
+    # Let CORS handle browser preflight before checking headers that preflight omits.
+    if request.method == "OPTIONS":
+        return await call_next(request)
     path = request.url.path
     protected = path in _ADMIN_PROTECTED_EXACT_PATHS
     protected = protected or path.startswith(("/agents/", "/replay/"))
