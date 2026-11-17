@@ -53,12 +53,19 @@ class PulseCircuitTrippedException(Exception):
 
 
 class PulseGuard:
-    def __init__(self, base_url: str, agent_id: str, fail_open: bool = True) -> None:
+    def __init__(self, base_url: str, agent_id: str, fail_open: bool = True, api_key: Optional[str] = None) -> None:
         self.base_url = base_url.rstrip("/")
         self.agent_id = agent_id
         self.fail_open = fail_open
+        self.api_key = api_key
         self._session_id: Optional[str] = None
         self._client = httpx.Client(timeout=30.0)
+
+    def _request_headers(self) -> Dict[str, str]:
+        headers = {"x-agent-id": self.agent_id}
+        if self.api_key:
+            headers["x-api-key"] = self.api_key
+        return headers
 
     def new_session(self) -> str:
         self._session_id = str(uuid.uuid4())
@@ -98,7 +105,7 @@ class PulseGuard:
             response = self._client.post(
                 f"{self.base_url}/intercept",
                 json=body,
-                headers={"x-agent-id": self.agent_id},
+                headers=self._request_headers(),
             )
         except httpx.HTTPError as exc:
             if self.fail_open:
@@ -159,7 +166,7 @@ class PulseGuard:
             response = self._client.post(
                 f"{self.base_url}/intercept",
                 json=body,
-                headers={"x-agent-id": self.agent_id},
+                headers=self._request_headers(),
             )
         except httpx.HTTPError as exc:
             if self.fail_open:

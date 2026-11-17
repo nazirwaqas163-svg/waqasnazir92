@@ -81,6 +81,23 @@ def test_intercept_manual(mock_client_cls: MagicMock) -> None:
     )
 
 
+
+@patch("pulse_sdk.httpx.Client")
+def test_intercept_sends_org_api_key(mock_client_cls: MagicMock) -> None:
+    mock_client = _mock_client()
+    mock_client.post.return_value = _ok_response("unchanged output")
+    mock_client_cls.return_value = mock_client
+
+    guard = PulseGuard(
+        "http://127.0.0.1:8000", agent_id="test-agent", api_key="pulse_test_key"
+    )
+    guard.intercept("user input", "unchanged output")
+
+    assert mock_client.post.call_args.kwargs["headers"] == {
+        "x-agent-id": "test-agent",
+        "x-api-key": "pulse_test_key",
+    }
+
 def test_new_session() -> None:
     guard = PulseGuard("http://127.0.0.1:8000", agent_id="test-agent")
     session_id = guard.new_session()
