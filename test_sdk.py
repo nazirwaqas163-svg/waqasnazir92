@@ -143,6 +143,40 @@ def test_circuit_trip(mock_client_cls: MagicMock) -> None:
     assert "Circuit breaker tripped" in str(exc_info.value)
 
 
+@patch("pulse_sdk.httpx.Client")
+def test_isolated_agent_423_is_always_blocked(mock_client_cls: MagicMock) -> None:
+    mock_client = _mock_client()
+    response = MagicMock(spec=httpx.Response)
+    response.status_code = 423
+    response.headers = {}
+    response.content = b'{"detail":{"error":"Agent is isolated"}}'
+    response.json.return_value = {"detail": {"error": "Agent is isolated"}}
+    mock_client.post.return_value = response
+    mock_client_cls.return_value = mock_client
+
+    guard = PulseGuard("http://127.0.0.1:8000", agent_id="test-agent", fail_open=True)
+    with pytest.raises(PulseCircuitTrippedException) as exc_info:
+        guard.intercept("in", "out")
+    assert exc_info.value.status_code == 423
+
+
+@patch("pulse_sdk.httpx.Client")
+def test_intercept_raw_raises_for_isolated_agent(mock_client_cls: MagicMock) -> None:
+    mock_client = _mock_client()
+    response = MagicMock(spec=httpx.Response)
+    response.status_code = 423
+    response.headers = {}
+    response.content = b'{"detail":{"error":"Agent is isolated"}}'
+    response.json.return_value = {"detail": {"error": "Agent is isolated"}}
+    mock_client.post.return_value = response
+    mock_client_cls.return_value = mock_client
+
+    guard = PulseGuard("http://127.0.0.1:8000", agent_id="test-agent", fail_open=True)
+    with pytest.raises(PulseCircuitTrippedException) as exc_info:
+        guard.intercept_raw("in", "out")
+    assert exc_info.value.status_code == 423
+
+
 # ── Phase 6 Stage 4 tests ───────────────────────────────────────────────────
 
 def test_pulse_result_stable() -> None:

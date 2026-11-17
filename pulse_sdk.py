@@ -217,7 +217,9 @@ class PulseGuard:
             return False
         if response.headers.get("x-request-dropped") == "1":
             return True
-        if response.status_code == 409:
+        # Isolation is a hard governance block even when FastAPI returns its
+        # usual JSON error body. Never fail open on HTTP 423.
+        if response.status_code in {409, 423}:
             return True
         if response.status_code == 503 and not response.content:
             return True
