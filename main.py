@@ -182,6 +182,33 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Keep operational and customer data endpoints behind the dashboard admin key.
+_ADMIN_PROTECTED_EXACT_PATHS = {
+    "/circuit-breaker/status", "/pulse", "/events", "/pulse/bdi", "/pulse/reset",
+    "/drift", "/drift/recent", "/synthesis/report", "/synthesis/run",
+    "/compliance/export", "/compliance/events", "/compliance/deadlines", "/compliance/mgf",
+    "/trust/score", "/agt/bridge", "/ledger/integrity", "/ledger/integrity/ai_events",
+    "/agents", "/agents/isolated", "/alerts", "/topology", "/swarm/detect", "/shadow/score",
+    "/legal-hold", "/replay", "/orgs",
+}
+
+
+@app.middleware("http")
+async def protect_sensitive_routes(request: Request, call_next):
+    """Require the admin credential on sensitive dashboard and control-plane APIs."""
+    path = request.url.path
+    protected = path in _ADMIN_PROTECTED_EXACT_PATHS
+    protected = protected or path.startswith(("/agents/", "/replay/"))
+    protected = protected or (path.startswith("/legal-hold/") and not path.endswith("/view"))
+    protected = protected or bool(re.fullmatch(r"/drift/[^/]+", path))
+    protected = protected or bool(re.fullmatch(r"/session/(?:lineage|tree)/[^/]+", path))
+    if protected:
+        try:
+            require_admin(request)
+        except HTTPException as exc:
+            return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+    return await call_next(request)
+
 feed = PulseFeed(max_events=int(os.getenv("PULSE_FEED_LIMIT", "500")))
 bdi_state = BDIState()
 circuit_breaker = CircuitBreakerMiddleware(agent_cooldown_seconds=AGENT_COOLDOWN_SECONDS)
@@ -508,24 +535,17 @@ def _payload_override(value: Any) -> Optional[float]:
         return None
 
 def _effective_bdi_score(payload: ChatProxyRequest, pulse: Dict[str, Any]) -> float:
-    override = _payload_override(payload.bdi_score)
-    if override is not None:
-        return override
-    extra_fields = _extra_payload_fields(payload)
-    override = _payload_override(extra_fields.get("bdi_score"))
-    if override is not None:
-        return override
-    return float(pulse.get("bdi_score") or 0.0)
+    """Use the server's score only; never trust caller-supplied risk overrides."""
+    try:
+        score = float(pulse.get("bdi_score") or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+    return min(1.0, max(0.0, score)) if score == score else 0.0
 
 def _effective_entropy(payload: ChatProxyRequest, prompt_text: str) -> float:
-    override = _payload_override(payload.entropy)
-    if override is not None:
-        return override
-    extra_fields = _extra_payload_fields(payload)
-    override = _payload_override(extra_fields.get("entropy"))
-    if override is not None:
-        return override
-    return _calculate_shannon_entropy(prompt_text)
+    """Calculate entropy from prompt text rather than accepting a client score."""
+    score = float(_calculate_shannon_entropy(prompt_text))
+    return min(1.0, max(0.0, score)) if score == score else 0.0
 
 def _enforce_policy(operation: str | None, agent_id: Optional[str] = None) -> PolicyEvaluation:
     evaluation = evaluate_tool_call(operation)
@@ -1086,6 +1106,8 @@ def pulse_bdi() -> Dict[str, Any]:
 
 @app.post("/v1/chat/completions")
 async def chat_completions(payload: ChatProxyRequest, request: Request):
+    # The proxy uses a server-side upstream credential, so callers must belong to a known org.
+    await get_org_from_api_key(request)
     extra_fields = _extra_payload_fields(payload)
     if extra_fields.get("operation") is not None:
         _enforce_policy(str(extra_fields["operation"]), agent_id=_agent_id(payload, request))
@@ -1307,11 +1329,11 @@ async def intercept(payload: InterceptRequest, request: Request) -> Dict[str, An
     # ------------------------------------------------------------------
     # Phase 6 Stage 2 — Org Policy Enforcement
     # Load org policies and check input text against them.
-    # org_id defaults to "demo-org"; pass via metadata.org_id to override.
+    # Organization scope comes only from a verified API key; anonymous traffic is demo-org.
     # ------------------------------------------------------------------
     api_key = request.headers.get("x-api-key")     
     org = await get_org_from_api_key(request) if api_key else None     
-    org_id = org.get("org_id") if org else (payload.metadata or {}).get("org_id", "demo-org")
+    org_id = org.get("org_id") if org else "demo-org"
     policy_violations = await evaluate_org_policies(
         input_text=payload.input_text,
         output_text=payload.output_text,
@@ -1477,7 +1499,7 @@ async def intercept(payload: InterceptRequest, request: Request) -> Dict[str, An
     }
 
 @app.post("/pulse/reset")
-def reset() -> Dict[str, Any]:
+def reset(_admin: None = Depends(require_admin)) -> Dict[str, Any]:
     feed.clear()
     bdi_state.reset()
     session_store.reset()
