@@ -28,10 +28,10 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);heigh
 
 /* ── LABELS OVERLAY ── */
 #labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
-.node-label{position:absolute;transform:translate(-50%,-50%);pointer-events:none;text-align:center;transition:opacity 0.2s}
+.node-label{position:absolute;transform:translate(-50%,-50%);pointer-events:none;text-align:center;transition:opacity 0.16s,filter 0.16s;padding:5px 8px;border:1px solid rgba(37,53,80,.82);border-radius:8px;background:rgba(8,12,20,.88);backdrop-filter:blur(6px);box-shadow:0 6px 20px rgba(0,0,0,.35);z-index:1}.node-label.is-focus{border-color:rgba(0,212,255,.42);background:rgba(13,20,33,.97);z-index:4;box-shadow:0 8px 24px rgba(0,0,0,.48),0 0 18px rgba(0,212,255,.08)}
 .node-label .lbl-name{font-size:10px;font-weight:600;color:#e2e8f0;text-shadow:0 0 8px rgba(0,0,0,0.9),0 0 3px rgba(0,0,0,1);white-space:nowrap;font-family:'Inter',sans-serif;letter-spacing:0.02em}
 .node-label .lbl-sub{font-size:8px;color:#64748b;text-shadow:0 0 6px rgba(0,0,0,1);white-space:nowrap;font-family:'JetBrains Mono',monospace;margin-top:2px}
-.node-label .lbl-clause{font-size:8px;font-weight:700;padding:1px 6px;border-radius:3px;margin-top:3px;display:inline-block;letter-spacing:0.04em;text-transform:uppercase}
+.node-label .lbl-clause{font-size:8px;font-weight:700;padding:1px 6px;border-radius:3px;margin-top:3px;display:none;letter-spacing:0.04em;text-transform:uppercase;white-space:normal;max-width:190px;line-height:1.35}.node-label.is-focus .lbl-clause{display:inline-block}
 
 /* ── SIDE PANEL ── */
 .side{width:290px;background:var(--bg2);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;flex-shrink:0;transition:background 0.2s}
@@ -222,8 +222,8 @@ function init(data) {
     // Glow halo for violated
     let glowMesh = null;
     if (violated) {
-      const gGeo = new THREE.SphereGeometry(radius*1.6, 24, 24);
-      const gMat = new THREE.MeshBasicMaterial({ color: hexColor(color), transparent:true, opacity:0.07, side:THREE.BackSide });
+      const gGeo = new THREE.SphereGeometry(radius*1.35, 24, 24);
+      const gMat = new THREE.MeshBasicMaterial({ color: hexColor(color), transparent:true, opacity:0.045, side:THREE.BackSide });
       glowMesh = new THREE.Mesh(gGeo, gMat);
       glowMesh.position.set(...pos);
       scene.add(glowMesh);
@@ -269,7 +269,7 @@ function init(data) {
 
   // Agent node — top, slightly back in Z
   const agentMesh = makeNode({
-    pos: [0, 5.5, -1.5], radius: 0.75,
+    pos: [0, 6.2, -1.5], radius: 0.58,
     color: '#00d4ff', emissive: '#00d4ff', emissiveInt: 0.25,
     label: (data.agent_id||'unknown').length > 16 ? (data.agent_id||'unknown').slice(0,16)+'…' : (data.agent_id||'unknown'),
     sublabel: 'AI Agent',
@@ -278,7 +278,7 @@ function init(data) {
   });
 
   // Event node — center, prominent
-  const evR = isViolation ? 1.15 : 0.85;
+  const evR = isViolation ? 0.88 : 0.72;
   const eventMesh = makeNode({
     pos: [0, 0, 0], radius: evR,
     color: evColor, emissive: evColor, emissiveInt: isViolation?0.55:0.15,
@@ -299,7 +299,7 @@ function init(data) {
     const ay = -4.2 - Math.abs(t)*0.4;
     const az = t * 1.8; // Z spread for real 3D depth
     const aMesh = makeNode({
-      pos: [ax, ay, az], radius: 0.52,
+      pos: [ax, ay, az], radius: 0.40,
       color: act.color, emissive: act.color, emissiveInt: 0.15,
       label: act.label, sublabel: act.icon,
       nodeData: { type:'action', label:act.label, color:act.color, icon:act.icon },
@@ -310,7 +310,7 @@ function init(data) {
 
   // Jurisdiction satellite nodes — orbit event in true 3D sphere positions
   if (isViolation && jurs.length > 0) {
-    const orbitR = 3.5;
+    const orbitR = 4.6;
     jurs.forEach((jur, i) => {
       const pc = POLICY_CLAUSES[jur]; if (!pc) return;
       // Distribute around event in 3D, not just 2D ring
@@ -320,7 +320,7 @@ function init(data) {
       const jy = Math.cos(phi)*orbitR*0.6;
       const jz = Math.sin(phi)*Math.sin(theta)*orbitR;
       const jMesh = makeNode({
-        pos: [jx, jy, jz], radius: 0.44,
+        pos: [jx, jy, jz], radius: 0.35,
         color: pc.color, emissive: pc.color, emissiveInt: 0.5,
         label: pc.label, sublabel: null,
         clauseLabel: pc.clause, clauseColor: pc.color,
@@ -552,13 +552,14 @@ function init(data) {
     const w=W(), h=H();
     labelEls.forEach(({el, mesh, offset}) => {
       const pos=mesh.position.clone();
-      // Project a point above the node
-      const above=pos.clone().add(new THREE.Vector3(0, offset+0.6, 0));
+      const above=pos.clone().add(new THREE.Vector3(0, offset+0.42, 0));
       above.project(camera);
       const x=(above.x*0.5+0.5)*w;
       const y=(-above.y*0.5+0.5)*h;
-      // Hide if behind camera
       if (above.z > 1) { el.style.opacity='0'; return; }
+      const node=nodeObjects.find(n=>n.mesh===mesh);
+      const focused=node && (node===selectedNode || node===hoveredNode);
+      el.classList.toggle('is-focus', Boolean(focused));
       el.style.opacity='1';
       el.style.left=x+'px';
       el.style.top=y+'px';
