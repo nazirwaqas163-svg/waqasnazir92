@@ -48,6 +48,7 @@ UPSTREAM_CHAT_URL = os.getenv("PULSE_UPSTREAM_CHAT_URL", "https://api.openai.com
 UPSTREAM_API_KEY = os.getenv("OPENAI_API_KEY") or os.getenv("PULSE_UPSTREAM_API_KEY")
 UPSTREAM_TIMEOUT = float(os.getenv("PULSE_UPSTREAM_TIMEOUT", "120"))
 AGENT_COOLDOWN_SECONDS = float(os.getenv("PULSE_AGENT_COOLDOWN_SECONDS", "30"))
+PULSE_ADMIN_API_KEY = os.getenv("PULSE_ADMIN_API_KEY", "")
 BASELINE_MIN_TURNS = int(os.getenv("PULSE_BASELINE_MIN_TURNS", "5"))
 FINANCIAL_TRANSACTION_LIMIT = Decimal("5000")
 FINANCIAL_KEYWORDS = {
@@ -99,6 +100,14 @@ AGENT_CACHE_TTL = 60.0
 # ------------------------------------------------------------------
 _org_cache: Dict[str, Dict[str, Any]] = {}
 ORG_CACHE_TTL = 300.0  # 5-minute TTL
+
+def require_admin(request: Request) -> None:
+    """Require the configured admin key for privileged control-plane actions."""
+    if not PULSE_ADMIN_API_KEY:
+        raise HTTPException(status_code=503, detail="Admin API is disabled: configure PULSE_ADMIN_API_KEY")
+    supplied = request.headers.get("x-admin-api-key", "")
+    if not supplied or not secrets.compare_digest(supplied, PULSE_ADMIN_API_KEY):
+        raise HTTPException(status_code=401, detail="Valid X-Admin-API-Key header required")
 
 async def get_org_from_api_key(request: Request) -> Dict[str, Any]:
     """Resolve X-API-Key header to an org. Returns org dict or raises 401."""
@@ -1024,14 +1033,14 @@ def circuit_breaker_status() -> dict[str, object]:
     return circuit_breaker.status()
 
 @app.post("/circuit-breaker/open")
-def circuit_breaker_open(payload: CircuitBreakerOpenRequest) -> dict[str, object]:
+def circuit_breaker_open(payload: CircuitBreakerOpenRequest, _admin: None = Depends(require_admin)) -> dict[str, object]:
     circuit_breaker.open(reason=payload.reason, bdi_score=payload.bdi_score, entropy=payload.entropy)
     if circuit_breaker.last_failure is not None:
         circuit_breaker.last_failure["manual"] = True
     return {"ok": True, "message": "Circuit breaker manually opened", "status_code": 503, **circuit_breaker.status()}
 
 @app.post("/circuit-breaker/close")
-def circuit_breaker_close(payload: CircuitBreakerCloseRequest) -> dict[str, object]:
+def circuit_breaker_close(payload: CircuitBreakerCloseRequest, _admin: None = Depends(require_admin)) -> dict[str, object]:
     circuit_breaker.close(reason=payload.reason, bdi_score=payload.bdi_score, entropy=payload.entropy)
     return {"ok": True, "message": "Circuit breaker reset to closed", "status_code": 200, **circuit_breaker.status()}
 
@@ -1867,7 +1876,7 @@ async def ledger_integrity(limit: int = 100) -> Dict[str, Any]:
     }
 
 @app.post("/agents/register")
-async def register_agent(payload: AgentRegisterRequest) -> Dict[str, Any]:
+async def register_agent(payload: AgentRegisterRequest, _admin: None = Depends(require_admin)) -> Dict[str, Any]:
     result = await supabase_audit_client.register_agent(
         agent_id=payload.agent_id,
         name=payload.name,
@@ -1980,7 +1989,7 @@ def send_welcome_email(to_email: str, org_name: str, api_key: str, org_id: str) 
     except Exception:
         return False
 @app.post("/org/policies")
-async def create_org_policy(payload: OrgPolicyRequest) -> Dict[str, Any]:
+async def create_org_policy(payload: OrgPolicyRequest, _admin: None = Depends(require_admin)) -> Dict[str, Any]:
     """Create or update org policy. Stored durably in Supabase."""
     try:
         result = await supabase_audit_client.insert_org_policy(
@@ -1999,7 +2008,7 @@ async def create_org_policy(payload: OrgPolicyRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(exc))
 
 @app.get("/org/policies")
-async def list_org_policies(org_id: str) -> Dict[str, Any]:
+async def list_org_policies(org_id: str, _admin: None = Depends(require_admin)) -> Dict[str, Any]:
     """List all active policies for an org."""
     try:
         policies = await supabase_audit_client.list_org_policies(org_id=org_id)
@@ -2013,7 +2022,7 @@ async def list_org_policies(org_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(exc))
 
 @app.delete("/org/policies/{policy_id}")
-async def delete_org_policy(policy_id: str, org_id: str) -> Dict[str, Any]:
+async def delete_org_policy(policy_id: str, org_id: str, _admin: None = Depends(require_admin)) -> Dict[str, Any]:
     """Deactivate a policy (soft delete)."""
     try:
         result = await supabase_audit_client.deactivate_org_policy(
@@ -2043,7 +2052,7 @@ class WebhookRegistrationRequest(BaseModel):
     events: Optional[List[str]] = None
 
 @app.post("/webhooks")
-async def register_webhook(payload: WebhookRegistrationRequest) -> Dict[str, Any]:
+async def register_webhook(payload: WebhookRegistrationRequest, _admin: None = Depends(require_admin)) -> Dict[str, Any]:
     """Register a webhook URL to receive signed breach alerts."""
     try:
         result = await supabase_audit_client.insert_webhook_registration(
@@ -2062,7 +2071,7 @@ async def register_webhook(payload: WebhookRegistrationRequest) -> Dict[str, Any
         raise HTTPException(status_code=500, detail=str(exc))
 
 @app.get("/webhooks")
-async def list_webhooks(org_id: str) -> Dict[str, Any]:
+async def list_webhooks(org_id: str, _admin: None = Depends(require_admin)) -> Dict[str, Any]:
     """List active webhook registrations for an org."""
     try:
         webhooks = await supabase_audit_client.list_webhook_registrations(org_id=org_id)
@@ -2071,7 +2080,7 @@ async def list_webhooks(org_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(exc))
 
 @app.delete("/webhooks/{webhook_id}")
-async def delete_webhook(webhook_id: str, org_id: str) -> Dict[str, Any]:
+async def delete_webhook(webhook_id: str, org_id: str, _admin: None = Depends(require_admin)) -> Dict[str, Any]:
     """Deactivate a webhook registration."""
     try:
         result = await supabase_audit_client.deactivate_webhook_registration(
@@ -2097,7 +2106,7 @@ class AgentReleaseRequest(BaseModel):
     released_by: str = "dashboard"
 
 @app.post("/agents/{agent_id}/isolate")
-async def isolate_agent(agent_id: str, payload: AgentIsolateRequest) -> Dict[str, Any]:
+async def isolate_agent(agent_id: str, payload: AgentIsolateRequest, _admin: None = Depends(require_admin)) -> Dict[str, Any]:
     """Quarantine an agent — all future /intercept calls return 423 Locked."""
     record = session_store.isolate_agent(
         agent_id, reason=payload.reason, hold_id=payload.hold_id
@@ -2131,7 +2140,7 @@ async def isolate_agent(agent_id: str, payload: AgentIsolateRequest) -> Dict[str
     return {"ok": True, "isolated": True, "isolation": record.to_dict()}
 
 @app.post("/agents/{agent_id}/release")
-async def release_agent(agent_id: str, payload: AgentReleaseRequest) -> Dict[str, Any]:
+async def release_agent(agent_id: str, payload: AgentReleaseRequest, _admin: None = Depends(require_admin)) -> Dict[str, Any]:
     """Release an agent from isolation."""
     record = session_store.release_agent(agent_id, released_by=payload.released_by)
     if record is None:
@@ -2873,7 +2882,7 @@ async def register_org(request: OrgRegistrationRequest):
 
 
 @app.get("/orgs")
-async def list_orgs():
+async def list_orgs(_admin: None = Depends(require_admin)):
     try:
         headers = {
             "apikey": supabase_audit_client.key or "",
