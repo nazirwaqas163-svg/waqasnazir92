@@ -8,12 +8,19 @@
 
 ## Overview
 
-The Pulse SDK lets you add ASEAN-compliant AI agent governance to any Python application in under 10 lines. It intercepts every agent action, scores it for risk, enforces org policies, and raises `GovernanceException` if a breach is detected — before the action executes.
+The Pulse SDK sends agent input and output to the Pulse service for monitoring. The `watch` decorator reports the result after the wrapped function runs, so it is for monitoring and logging; use a separate pre-execution policy gate when an action must be stopped before it runs.
 
 ```python
 from pulse_sdk import PulseGuard
 
-guard = PulseGuard(agent_id="my-agent", pulse_url="https://pulse-proxy-8dqx.onrender.com")
+import os
+
+# Store an organization API key in your agent environment.
+guard = PulseGuard(
+    base_url="https://pulse-proxy-8dqx.onrender.com",
+    agent_id="my-agent",
+    api_key=os.getenv("PULSE_ORG_API_KEY"),
+)
 result = guard.intercept(input_text="...", output_text="...")
 ```
 
