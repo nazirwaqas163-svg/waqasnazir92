@@ -21,6 +21,20 @@
 .nav-btn{width:70px;min-height:54px;font-size:9px;letter-spacing:0;text-transform:none}
 .nav-btn .nav-icon svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .nav-btn .nav-icon{font-size:17px;line-height:18px;color:var(--accent)}
+.getting-started{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:16px}
+.getting-started-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:13px}
+.getting-started-head h2{font-size:16px;font-weight:600;margin-top:7px}
+.getting-started-head p{font-size:11px;color:var(--muted);margin-top:5px}
+.getting-started-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
+.getting-started-step{display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:7px;min-height:132px;padding:12px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-family:'Inter',sans-serif;cursor:pointer;transition:border-color .15s,background .15s}
+.getting-started-step:hover{border-color:var(--accent);background:var(--bg4)}
+.getting-started-step:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.getting-started-step strong{font-size:11px}
+.getting-started-step>span:not(.step-index){font-size:10px;line-height:1.5;color:var(--muted)}
+.getting-started-step .step-index{font:500 10px 'JetBrains Mono',monospace;color:var(--accent)}
+.getting-started-step .step-link{margin-top:auto;color:var(--accent)!important}
+@media(max-width:900px){.getting-started-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:520px){.getting-started-grid{grid-template-columns:1fr}}
 .section-nav{min-height:42px;display:flex;align-items:center;gap:6px;padding:5px 18px;background:var(--bg2);border-bottom:1px solid var(--border);overflow-x:auto}
 .section-nav button{border:0;border-radius:6px;background:transparent;color:var(--muted);padding:7px 11px;font:500 11px 'Inter',sans-serif;white-space:nowrap;cursor:pointer}
 .section-nav button:hover{background:var(--bg4);color:var(--text)}
@@ -448,6 +462,19 @@ a{transition:color .16s ease}
         <div class="attention-actions">
           <button id="attention-review-flagged" onclick="focusAttention('exfiltration')">Review flagged events</button>
           <button id="attention-review-critical" onclick="focusAttention('critical')">Review critical events</button>
+        </div>
+      </section>
+
+      <section class="getting-started" aria-labelledby="getting-started-title">
+        <div class="getting-started-head">
+          <div><div class="section-label">A clear path through Pulse</div><h2 id="getting-started-title">Start with one useful step</h2><p>Connect your organization, observe an agent, then review its behavior and governance.</p></div>
+          <span class="cnt">Quick guide</span>
+        </div>
+        <div class="getting-started-grid">
+          <button type="button" onclick="switchView('settings')" class="getting-started-step"><span class="step-index">01</span><strong>Connect access</strong><span>Add your organization key in Settings. Admin actions use a separate admin key.</span><span class="step-link">Open Settings →</span></button>
+          <button type="button" onclick="switchView('agents','monitor')" class="getting-started-step"><span class="step-index">02</span><strong>Find an agent</strong><span>Review registered agents, sessions, risk, and topology.</span><span class="step-link">View Agents →</span></button>
+          <button type="button" onclick="switchView('traces','monitor')" class="getting-started-step"><span class="step-index">03</span><strong>Follow a request</strong><span>Use traces to understand which steps ran and where errors occurred.</span><span class="step-link">Explore Traces →</span></button>
+          <button type="button" onclick="switchView('evaluations','governance')" class="getting-started-step"><span class="step-index">04</span><strong>Review readiness</strong><span>Check evaluations, approvals, and compliance deadlines.</span><span class="step-link">Open Governance →</span></button>
         </div>
       </section>
 
