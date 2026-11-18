@@ -1005,6 +1005,56 @@ class SupabaseAuditClient:
             return None
 
 
+    async def get_circuit_breaker_state(self) -> Dict[str, Any]:
+        """Read the shared circuit-breaker state. An empty table means closed."""
+        if not self.configured:
+            raise RuntimeError("Supabase is not configured")
+        try:
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.get(
+                    f"{self.url}/rest/v1/circuit_breaker_state",
+                    headers=self._headers(),
+                    params={"singleton_id": "eq.true", "select": "*", "limit": "1"},
+                )
+                response.raise_for_status()
+                rows = response.json()
+                return rows[0] if rows else {
+                    "singleton_id": True, "state": "closed", "reason": "initial state",
+                    "bdi_score": 0.0, "entropy": 0.0, "opened_at": None,
+                }
+        except Exception as exc:
+            raise RuntimeError("Could not read durable circuit-breaker state") from exc
+
+    async def set_circuit_breaker_state(
+        self, *, state: str, reason: str, bdi_score: float = 0.0, entropy: float = 0.0
+    ) -> Dict[str, Any]:
+        """Persist the global circuit-breaker state using a singleton upsert."""
+        if not self.configured:
+            raise RuntimeError("Supabase is not configured")
+        now = datetime.now(timezone.utc).isoformat()
+        row = {
+            "singleton_id": True, "state": state, "reason": reason,
+            "bdi_score": float(bdi_score), "entropy": float(entropy),
+            "opened_at": now if state == "open" else None, "updated_at": now,
+        }
+        try:
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.post(
+                    f"{self.url}/rest/v1/circuit_breaker_state",
+                    headers={
+                        **self._headers(),
+                        "content-type": "application/json",
+                        "prefer": "resolution=merge-duplicates,return=representation",
+                    },
+                    params={"on_conflict": "singleton_id"},
+                    json=row,
+                )
+                response.raise_for_status()
+                rows = response.json()
+                return rows[0] if rows else row
+        except Exception as exc:
+            raise RuntimeError("Could not persist durable circuit-breaker state") from exc
+
 supabase_audit_client = SupabaseAuditClient(SUPABASE_URL, SUPABASE_KEY)
 
 
