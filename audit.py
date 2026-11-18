@@ -19,6 +19,10 @@ logger = logging.getLogger(__name__)
 
 # SHA-256 hex digest of empty input — genesis predecessor for the first event.
 GENESIS_HASH = hashlib.sha256(b"").hexdigest()
+AI_EVENT_HASH_FIELDS = (
+    "event_id", "timestamp", "agent_id", "action", "input_text", "output_text",
+    "bdi_score", "status", "session_id", "parent_session_id", "entropy", "org_id",
+)
 
 
 def _canonical_json(payload: Dict[str, Any]) -> bytes:
@@ -28,6 +32,16 @@ def _canonical_json(payload: Dict[str, Any]) -> bytes:
 def _entry_hash(event_data: Dict[str, Any], previous_hash: str) -> str:
     material = {"data": event_data, "previous_hash": previous_hash}
     return hashlib.sha256(_canonical_json(material)).hexdigest()
+
+
+def verify_ai_event_row(row: Dict[str, Any]) -> bool:
+    """Verify a persisted ai_events row against its stored payload and predecessor."""
+    previous_hash = row.get("prev_hash")
+    row_hash = row.get("row_hash")
+    if not isinstance(previous_hash, str) or not isinstance(row_hash, str):
+        return False
+    payload = {field: row.get(field) for field in AI_EVENT_HASH_FIELDS}
+    return _entry_hash(payload, previous_hash) == row_hash
 
 
 class Logger:
@@ -222,7 +236,7 @@ class SupabaseAuditClient:
                         "select": (
                             "event_id,timestamp,agent_id,action,input_text,output_text,"
                             "bdi_score,status,session_id,parent_session_id,entropy,"
-                            "prev_hash,row_hash"
+                            "org_id,prev_hash,row_hash"
                         ),
                     },
                 )
@@ -230,7 +244,7 @@ class SupabaseAuditClient:
                 data = response.json()
                 for row in data:
                     if "status" in row:
-                        row["policy_result"] = row.pop("status")
+                        row["policy_result"] = row["status"]
                 return data
         except httpx.HTTPError:
             logger.exception("Failed to fetch session events for %s", session_id)
@@ -406,7 +420,7 @@ class SupabaseAuditClient:
                     headers={"apikey": self.key or "", "authorization": f"Bearer {self.key}"},
                     params={
                         "order": "created_at.asc",
-                        "select": "id,event_id,created_at,agent_id,prev_hash,row_hash",
+                        "select": "id,event_id,created_at,agent_id,action,input_text,output_text,bdi_score,status,session_id,parent_session_id,entropy,org_id,prev_hash,row_hash",
                         "limit": str(limit),
                     },
                 )
@@ -856,3 +870,4 @@ async def mark_replay_reviewed(
     except Exception as e:
         logger.error(f"mark_replay_reviewed error: {e}")
         return False
+
