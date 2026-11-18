@@ -46,6 +46,22 @@ For named dashboard access, configure `PULSE_ADMIN_KEYS_JSON` as a JSON array of
 
 Anonymous demo interception is disabled by default. Set `PULSE_ALLOW_ANONYMOUS_DEMO=true` only for an isolated demo environment.
 
+## Trace ingestion
+
+The tenant API accepts OpenTelemetry-style spans at `POST /v1/traces` and returns recent spans from `GET /v1/traces` or one trace by ID from `GET /v1/traces/{trace_id}`. Send the organization API key in `X-API-Key`. Apply `migrations/0002_agent_traces.sql` to Supabase before use. Batches are limited to 100 spans and 2 MB; each JSON attribute/resource/event field is limited to 64 KB. The service stores telemetry as submitted, so instrumentations should avoid sending secrets or unneeded personal data.
+
+```python
+guard.ingest_trace_spans([{
+    "trace_id": "0123456789abcdef0123456789abcdef",
+    "span_id": "0123456789abcdef",
+    "name": "agent.invoke",
+    "started_at": "2026-11-18T10:00:00Z",
+    "ended_at": "2026-11-18T10:00:01Z",
+    "status": "ok",
+    "attributes": {"gen_ai.operation.name": "chat"},
+}])
+```
+
 ---
 
 ## Quick Start
