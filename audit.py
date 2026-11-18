@@ -1100,6 +1100,78 @@ class SupabaseAuditClient:
         except Exception as exc:
             raise RuntimeError("Could not list evaluation runs") from exc
 
+    async def claim_webhook_delivery(
+        self, *, delivery_key: str, org_id: str, registration_id: str,
+        event_type: str, event_reference: str
+    ) -> bool:
+        if not self.configured:
+            raise RuntimeError("Supabase is not configured")
+        params = {
+            "p_delivery_key": delivery_key, "p_org_id": org_id,
+            "p_registration_id": registration_id, "p_event_type": event_type,
+            "p_event_reference": event_reference,
+        }
+        try:
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.post(
+                    f"{self.url}/rest/v1/rpc/pulse_claim_webhook_delivery",
+                    headers=self._headers(), json=params,
+                )
+                response.raise_for_status()
+                return bool(response.json())
+        except Exception as exc:
+            raise RuntimeError("Could not claim webhook delivery") from exc
+
+    async def complete_webhook_delivery(
+        self, *, delivery_key: str, delivered: bool, attempts: int,
+        response_status: Optional[int], error: Optional[str] = None
+    ) -> bool:
+        if not self.configured:
+            return False
+        now = datetime.now(timezone.utc).isoformat()
+        row = {
+            "status": "delivered" if delivered else "failed",
+            "attempt_count": attempts,
+            "response_status": response_status,
+            "last_error": error,
+            "updated_at": now,
+            "delivered_at": now if delivered else None,
+        }
+        try:
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.patch(
+                    f"{self.url}/rest/v1/webhook_delivery_logs",
+                    headers={**self._headers(), "content-type": "application/json"},
+                    params={"delivery_key": f"eq.{delivery_key}"},
+                    json=row,
+                )
+                response.raise_for_status()
+                return response.status_code in (200, 204)
+        except Exception:
+            logger.exception("Could not complete webhook delivery record")
+            return False
+
+    async def list_webhook_deliveries(
+        self, *, org_id: str, limit: int = 100
+    ) -> List[Dict[str, Any]]:
+        if not self.configured:
+            raise RuntimeError("Supabase is not configured")
+        try:
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.get(
+                    f"{self.url}/rest/v1/webhook_delivery_logs",
+                    headers=self._headers(),
+                    params={
+                        "org_id": f"eq.{org_id}", "order": "created_at.desc",
+                        "select": "delivery_key,registration_id,event_type,event_reference,status,attempt_count,response_status,last_error,created_at,updated_at,delivered_at",
+                        "limit": str(limit),
+                    },
+                )
+                response.raise_for_status()
+                return response.json()
+        except Exception as exc:
+            raise RuntimeError("Could not list webhook delivery history") from exc
+
     async def get_circuit_breaker_state(self) -> Dict[str, Any]:
         """Read the shared circuit-breaker state. An empty table means closed."""
         if not self.configured:
