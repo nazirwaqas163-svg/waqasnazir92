@@ -19,6 +19,7 @@ This roadmap translates the product review into deliverable stages. Arthur, Cred
 - Add tenant-scoped, immutable evaluation dataset versions and run records with five safe deterministic evaluators and configurable pass-rate release gates. Apply `migrations/0007_versioned_evaluations.sql`, then set `PULSE_EVALUATIONS_ENABLED=true`.
 - Add signed, idempotently claimed webhook deliveries with retries and delivery history for legal hold and failed evaluation gate events. Apply `migrations/0010_webhook_delivery_history.sql`.
 - Add standardized provider/model, token-usage, and cost fields to traces with provider/model filters and usage totals. Apply `migrations/0011_genai_trace_usage_fields.sql`.
+- Add a tenant-scoped versioned agent registry, risk/data classification, append-only review events, and an optional intercept gate for unapproved versions. Apply `migrations/0012_agent_governance_workflows.sql`; configure organization-scoped admin keys before enabling the gate.
 
 ## Next: reliability foundation
 
@@ -32,9 +33,8 @@ This roadmap translates the product review into deliverable stages. Arthur, Cred
 
 ## Then: governance lifecycle
 
-1. Add an agent/model registry with owners, versions, environments, data classifications, risk assessments, and approval history.
-2. Add review workflows for policy/model changes, deployment approvals, periodic recertification, and evidence packages tied to a versioned control set.
-3. Add enterprise identity (OIDC/SAML), organization membership, scoped roles, and auditable access changes. The current role keys are a bootstrap mechanism, not an SSO implementation.
+1. Extend approvals to policy/model changes, deployment approvals, periodic recertification, and evidence packages tied to a versioned control set.
+2. Add enterprise identity (OIDC/SAML), organization membership, scoped roles, and auditable access changes. The current role keys are a bootstrap mechanism, not an SSO implementation.
 
 ## Release gates
 
