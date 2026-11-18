@@ -386,3 +386,6 @@ except Exception:
 
 *Pulse AI Governance Middleware — ASEAN-native, vendor-neutral, intercepts before execution.*
 
+## Durable circuit-breaker state
+
+To share the kill-switch state across API instances, apply `migrations/0005_durable_circuit_breaker.sql` to Supabase and set `PULSE_DURABLE_CIRCUIT_BREAKER_ENABLED=true` on the API service. Gated requests then read the shared state before evaluation; database errors return HTTP 503. Until the migration and flag are active, breaker state is process-local and health reports degraded readiness.
