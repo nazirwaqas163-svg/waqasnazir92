@@ -2848,6 +2848,10 @@ async def submit_agent_governance_version(
         raise HTTPException(status_code=422, detail="Unsupported risk tier")
     if payload.data_classification not in {"public", "internal", "confidential", "restricted"}:
         raise HTTPException(status_code=422, detail="Unsupported data classification")
+    if len(payload.scope) > 100 or any(not item or len(item) > 256 for item in payload.scope):
+        raise HTTPException(status_code=422, detail="scope must contain at most 100 non-empty strings of at most 256 characters")
+    if len(json.dumps(payload.metadata, ensure_ascii=False).encode("utf-8")) > 64 * 1024:
+        raise HTTPException(status_code=413, detail="agent metadata exceeds the 64 KB limit")
     try:
         version = await supabase_audit_client.submit_agent_governance_version(
             org_id=org_id,
@@ -2864,8 +2868,10 @@ async def submit_agent_governance_version(
             metadata=payload.metadata,
             created_by=org_id,
         )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail="Agent version already exists") from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=409, detail="Agent version already exists or registry storage is unavailable") from exc
+        raise HTTPException(status_code=503, detail="Agent registry storage is unavailable") from exc
     return {"ok": True, "agent_version": version}
 
 
@@ -2926,8 +2932,10 @@ async def review_agent_governance_version(
             reviewer=reviewer["user_id"],
             notes=payload.notes,
         )
-    except RuntimeError as exc:
+    except ValueError as exc:
         raise HTTPException(status_code=409, detail="Agent version is missing or no longer pending") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail="Agent approval storage is unavailable") from exc
     return {"ok": True, "agent_version": result}
 
 
