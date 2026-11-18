@@ -16,6 +16,7 @@
 - `/health` reports degraded readiness when required dependencies are unavailable; inspect `degraded_reasons` and `dependencies`.
 - Replay verifies individual event hashes but does not assert complete-chain integrity or external anchoring.
 - Tenant-scoped trace ingestion and lookup are implemented at `/v1/traces`; apply `migrations/0002_agent_traces.sql` to Supabase before using those endpoints.
+- Agent isolation and release records are now scoped by organization; dashboards pass the selected organization when listing or releasing an agent.
 
 ## Known production gaps
 
