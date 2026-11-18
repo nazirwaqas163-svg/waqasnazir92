@@ -400,3 +400,7 @@ Apply `migrations/0007_versioned_evaluations.sql` and set `PULSE_EVALUATIONS_ENA
 Supported deterministic evaluator names are `exact_match`, `contains`, `not_contains`, `contains_any`, and `json_field_equals`. A case contains a unique `case_id`, `evaluator`, `candidate_output`, and `expected` value; `json_field_equals` also takes a dotted `field` path. These evaluators score supplied outputs and do not invoke a model.
 
 Endpoints: `POST /v1/evaluations/datasets`, `GET /v1/evaluations/datasets`, `POST /v1/evaluations/run`, and `GET /v1/evaluations/runs`.
+
+## Alert delivery history
+
+Apply `migrations/0010_webhook_delivery_history.sql` before using durable delivery history. Webhook subscriptions can receive `legal_hold.opened` and `evaluation.release_gate_failed` events. Deliveries are signed, retried up to three times, claimed idempotently per event and registration, and include an `X-Pulse-Delivery-ID` for receiver-side deduplication. Failed or stale pending deliveries can be reclaimed; inspect outcomes with `GET /webhooks/deliveries?org_id=...` using dashboard admin access.

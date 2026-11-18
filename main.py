@@ -359,6 +359,55 @@ async def _close_circuit_breaker(*, reason: str, bdi_score: float = 0.0, entropy
     await _persist_circuit_breaker_state(reason)
 
 
+async def _dispatch_alert_webhooks(
+    *, org_id: str, event_type: str, event_reference: str, payload: Dict[str, Any]
+) -> List[Dict[str, Any]]:
+    """Claim and deliver idempotent alert events; webhook outages never block governance."""
+    try:
+        registrations = await supabase_audit_client.list_webhook_registrations(org_id=org_id)
+    except Exception:
+        logger.exception("Could not load alert registrations for org_id=%s", org_id)
+        return []
+    selected: List[Dict[str, Any]] = []
+    delivery_keys: Dict[str, str] = {}
+    for registration in registrations:
+        registration_id = str(registration.get("id") or "")
+        if event_type not in (registration.get("events") or ["legal_hold.opened"]):
+            continue
+        try:
+            delivery_key = hashlib.sha256(
+                f"{org_id}:{event_type}:{event_reference}:{registration_id}".encode("utf-8")
+            ).hexdigest()
+            claimed = await supabase_audit_client.claim_webhook_delivery(
+                delivery_key=delivery_key,
+                org_id=org_id,
+                registration_id=registration_id,
+                event_type=event_type,
+                event_reference=event_reference,
+            )
+        except Exception:
+            logger.exception("Could not claim webhook delivery for registration_id=%s", registration_id)
+            continue
+        if claimed:
+            selected.append(registration)
+            delivery_keys[registration_id] = delivery_key
+    results = await fire_webhooks(
+        payload, selected, event_type=event_type, delivery_keys=delivery_keys
+    )
+    for result in results:
+        delivery_key = result.get("delivery_id")
+        if not delivery_key:
+            continue
+        await supabase_audit_client.complete_webhook_delivery(
+            delivery_key=delivery_key,
+            delivered=bool(result.get("delivered")),
+            attempts=int(result.get("attempts") or 0),
+            response_status=result.get("response_status"),
+            error=result.get("error"),
+        )
+    return results
+
+
 def _as_isolation_dict(record: Any) -> Optional[Dict[str, Any]]:
     if record is None:
         return None
@@ -1082,9 +1131,12 @@ async def _maybe_open_legal_hold(
             pass  # incident report failure must never block the governance engine
         # Phase 7 Stage 2 — fire signed webhook alerts for this hold
         org_id = hold.get("evidence", {}).get("org_id") or "demo-org"
-        registrations = await supabase_audit_client.list_webhook_registrations(org_id=org_id)
-        if registrations:
-            await fire_webhooks(hold, registrations)
+        await _dispatch_alert_webhooks(
+            org_id=str(org_id),
+            event_type="legal_hold.opened",
+            event_reference=str(hold.get("id") or event_id),
+            payload=hold,
+        )
         opened.append(hold)
     return opened
 
@@ -2376,14 +2428,22 @@ class WebhookRegistrationRequest(BaseModel):
 
 @app.post("/webhooks")
 async def register_webhook(payload: WebhookRegistrationRequest, _admin: None = Depends(require_admin)) -> Dict[str, Any]:
-    """Register a webhook URL to receive signed breach alerts."""
+    """Register a webhook URL to receive signed alert events."""
+    supported_events = {"legal_hold.opened", "evaluation.release_gate_failed"}
+    events = payload.events or ["legal_hold.opened"]
+    unknown_events = sorted(set(events) - supported_events)
+    if unknown_events:
+        raise HTTPException(
+            status_code=422,
+            detail={"unsupported_events": unknown_events, "supported_events": sorted(supported_events)},
+        )
     try:
         result = await supabase_audit_client.insert_webhook_registration(
             org_id=payload.org_id,
             name=payload.name,
             url=payload.url,
             secret=payload.secret,
-            events=payload.events or ["legal_hold.opened"],
+            events=events,
         )
         if isinstance(result, dict) and result.get("ok") is False:
             raise HTTPException(status_code=500, detail=result.get("reason"))
@@ -2401,6 +2461,20 @@ async def list_webhooks(org_id: str, _admin: None = Depends(require_admin)) -> D
         return {"ok": True, "org_id": org_id, "total": len(webhooks), "webhooks": webhooks}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
+
+@app.get("/webhooks/deliveries")
+async def list_webhook_deliveries(
+    org_id: str, limit: int = Query(100, ge=1, le=500),
+    _admin: Dict[str, str] = Depends(require_admin),
+) -> Dict[str, Any]:
+    try:
+        deliveries = await supabase_audit_client.list_webhook_deliveries(
+            org_id=org_id, limit=limit
+        )
+        return {"ok": True, "org_id": org_id, "total": len(deliveries), "deliveries": deliveries}
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail="Webhook delivery history is unavailable") from exc
+
 
 @app.delete("/webhooks/{webhook_id}")
 async def delete_webhook(webhook_id: str, org_id: str, _admin: None = Depends(require_admin)) -> Dict[str, Any]:
@@ -2813,6 +2887,23 @@ async def run_evaluation(payload: EvaluationRunRequest, request: Request) -> Dic
         raise
     except (RuntimeError, ValueError, KeyError) as exc:
         raise HTTPException(status_code=503, detail="Evaluation run could not be completed") from exc
+    if not run.get("release_gate_passed"):
+        await _dispatch_alert_webhooks(
+            org_id=org_id,
+            event_type="evaluation.release_gate_failed",
+            event_reference=str(run.get("run_id") or uuid.uuid4()),
+            payload={
+                "run_id": run.get("run_id"),
+                "dataset_id": run.get("dataset_id"),
+                "dataset_version": run.get("dataset_version"),
+                "agent_id": run.get("agent_id"),
+                "agent_version": run.get("agent_version"),
+                "prompt_version": run.get("prompt_version"),
+                "model_version": run.get("model_version"),
+                "pass_rate": run.get("pass_rate"),
+                "minimum_pass_rate": run.get("minimum_pass_rate"),
+            },
+        )
     return {"ok": True, "run": run}
 
 
