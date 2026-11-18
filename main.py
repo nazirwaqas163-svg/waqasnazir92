@@ -2301,13 +2301,13 @@ async def delete_webhook(webhook_id: str, org_id: str, _admin: None = Depends(re
 # ------------------------------------------------------------------
 
 class AgentIsolateRequest(BaseModel):
-    org_id: str
-    reason: str = "Manual isolation from dashboard"
-    hold_id: Optional[str] = None
+    org_id: str = Field(min_length=1, max_length=256)
+    reason: str = Field(default="Manual isolation from dashboard", max_length=2000)
+    hold_id: Optional[str] = Field(default=None, max_length=256)
 
 class AgentReleaseRequest(BaseModel):
-    org_id: str
-    released_by: str = "dashboard"
+    org_id: str = Field(min_length=1, max_length=256)
+    released_by: str = Field(default="dashboard", max_length=256)
 
 @app.post("/agents/{agent_id}/isolate")
 async def isolate_agent(agent_id: str, payload: AgentIsolateRequest, _operator: Dict[str, str] = Depends(require_operator)) -> Dict[str, Any]:
