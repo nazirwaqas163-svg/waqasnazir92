@@ -43,6 +43,7 @@ from org_policy_engine import evaluate_org_policies
 from webhook_engine import fire_webhooks
 from incident_report import assemble_evidence_package, render_incident_pdf
 from trace_ingestion import normalize_span
+from evaluation_service import SUPPORTED_EVALUATORS, evaluate_case
 
 APP_NAME = "pulse-proxy"
 logger = logging.getLogger(__name__)
@@ -58,6 +59,7 @@ ALLOW_ANONYMOUS_DEMO = os.getenv("PULSE_ALLOW_ANONYMOUS_DEMO", "false").lower() 
 PULSE_DURABLE_ISOLATION_ENABLED = os.getenv("PULSE_DURABLE_ISOLATION_ENABLED", "false").lower() in {"1", "true", "yes"}
 PULSE_DURABLE_SESSION_STATE_ENABLED = os.getenv("PULSE_DURABLE_SESSION_STATE_ENABLED", "false").lower() in {"1", "true", "yes"}
 PULSE_DURABLE_CIRCUIT_BREAKER_ENABLED = os.getenv("PULSE_DURABLE_CIRCUIT_BREAKER_ENABLED", "false").lower() in {"1", "true", "yes"}
+PULSE_EVALUATIONS_ENABLED = os.getenv("PULSE_EVALUATIONS_ENABLED", "false").lower() in {"1", "true", "yes"}
 BASELINE_MIN_TURNS = int(os.getenv("PULSE_BASELINE_MIN_TURNS", "5"))
 FINANCIAL_TRANSACTION_LIMIT = Decimal("5000")
 FINANCIAL_KEYWORDS = {
@@ -529,6 +531,25 @@ class AgentRegisterRequest(BaseModel):
     owner: str = ""
     scope: List[str] = Field(default_factory=list)
     description: str = ""
+
+
+class EvaluationDatasetRequest(BaseModel):
+    dataset_id: Optional[str] = None
+    name: str = Field(min_length=1, max_length=120)
+    agent_id: str = Field(min_length=1, max_length=200)
+    agent_version: str = Field(min_length=1, max_length=100)
+    prompt_version: str = Field(min_length=1, max_length=100)
+    model_version: str = Field(min_length=1, max_length=100)
+    cases: List[Dict[str, Any]]
+
+
+class EvaluationRunRequest(BaseModel):
+    dataset_id: str
+    dataset_version: Optional[int] = Field(default=None, ge=1)
+    agent_version: Optional[str] = Field(default=None, max_length=100)
+    prompt_version: Optional[str] = Field(default=None, max_length=100)
+    model_version: Optional[str] = Field(default=None, max_length=100)
+    minimum_pass_rate: float = Field(default=1.0, ge=0.0, le=1.0)
 
 
 class TraceBatchRequest(BaseModel):
@@ -2695,6 +2716,127 @@ async def ai_events_recent(request: Request, limit: int = 500) -> Dict[str, Any]
     org_id = await get_org_id_for_request(request)
     events = await supabase_audit_client.get_recent_events(limit=limit, org_id=org_id)
     return {"ok": True, "total": len(events), "events": events}
+
+
+@app.post("/v1/evaluations/datasets", status_code=201)
+async def create_evaluation_dataset(payload: EvaluationDatasetRequest, request: Request) -> Dict[str, Any]:
+    org_id = await get_org_id_for_request(request)
+    if not PULSE_EVALUATIONS_ENABLED:
+        raise HTTPException(status_code=503, detail="Evaluation workflows are disabled")
+    try:
+        dataset_id = str(uuid.UUID(payload.dataset_id)) if payload.dataset_id else str(uuid.uuid4())
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="dataset_id must be a UUID") from exc
+    cases = payload.cases
+    if not cases or len(cases) > 1000:
+        raise HTTPException(status_code=422, detail="cases must contain between 1 and 1000 entries")
+    if len(json.dumps(cases, ensure_ascii=False).encode("utf-8")) > 4 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="evaluation dataset exceeds the 4 MB limit")
+    seen = set()
+    for index, case in enumerate(cases):
+        case_id = case.get("case_id")
+        evaluator = case.get("evaluator")
+        if not isinstance(case_id, str) or not case_id.strip() or case_id in seen:
+            raise HTTPException(status_code=422, detail=f"case {index} must have a unique non-empty case_id")
+        if evaluator not in SUPPORTED_EVALUATORS:
+            raise HTTPException(status_code=422, detail=f"case {case_id} uses an unsupported evaluator")
+        if "candidate_output" not in case or "expected" not in case:
+            raise HTTPException(status_code=422, detail=f"case {case_id} must include candidate_output and expected")
+        if evaluator == "json_field_equals" and not isinstance(case.get("field"), str):
+            raise HTTPException(status_code=422, detail=f"case {case_id} needs a JSON field path")
+        seen.add(case_id)
+    try:
+        dataset = await supabase_audit_client.create_evaluation_dataset_version(
+            org_id=org_id,
+            dataset_id=dataset_id,
+            name=payload.name,
+            agent_id=payload.agent_id,
+            agent_version=payload.agent_version,
+            prompt_version=payload.prompt_version,
+            model_version=payload.model_version,
+            cases=cases,
+            created_by=org_id,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail="Evaluation storage is unavailable") from exc
+    return {"ok": True, "dataset": dataset}
+
+
+@app.get("/v1/evaluations/datasets")
+async def list_evaluation_datasets(request: Request, limit: int = Query(100, ge=1, le=500)) -> Dict[str, Any]:
+    org_id = await get_org_id_for_request(request)
+    if not PULSE_EVALUATIONS_ENABLED:
+        raise HTTPException(status_code=503, detail="Evaluation workflows are disabled")
+    try:
+        datasets = await supabase_audit_client.list_evaluation_datasets(org_id=org_id, limit=limit)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail="Evaluation storage is unavailable") from exc
+    return {"ok": True, "total": len(datasets), "datasets": datasets}
+
+
+@app.post("/v1/evaluations/run", status_code=201)
+async def run_evaluation(payload: EvaluationRunRequest, request: Request) -> Dict[str, Any]:
+    org_id = await get_org_id_for_request(request)
+    if not PULSE_EVALUATIONS_ENABLED:
+        raise HTTPException(status_code=503, detail="Evaluation workflows are disabled")
+    try:
+        dataset_id = str(uuid.UUID(payload.dataset_id))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="dataset_id must be a UUID") from exc
+    try:
+        dataset = await supabase_audit_client.get_evaluation_dataset(
+            org_id=org_id, dataset_id=dataset_id, dataset_version=payload.dataset_version
+        )
+        if dataset is None:
+            raise HTTPException(status_code=404, detail="Evaluation dataset version not found")
+        results = [evaluate_case(case) for case in dataset["cases"]]
+        passed_count = sum(1 for result in results if result["passed"])
+        pass_rate = passed_count / len(results)
+        gate_passed = pass_rate >= payload.minimum_pass_rate
+        run = await supabase_audit_client.insert_evaluation_run({
+            "org_id": org_id,
+            "dataset_id": dataset["dataset_id"],
+            "dataset_version": dataset["dataset_version"],
+            "agent_id": dataset["agent_id"],
+            "agent_version": payload.agent_version or dataset["agent_version"],
+            "prompt_version": payload.prompt_version or dataset["prompt_version"],
+            "model_version": payload.model_version or dataset["model_version"],
+            "evaluator_config": {"types": sorted({case["evaluator"] for case in dataset["cases"]})},
+            "case_count": len(results),
+            "passed_count": passed_count,
+            "pass_rate": round(pass_rate, 6),
+            "minimum_pass_rate": payload.minimum_pass_rate,
+            "release_gate_passed": gate_passed,
+            "results": results,
+        })
+    except HTTPException:
+        raise
+    except (RuntimeError, ValueError, KeyError) as exc:
+        raise HTTPException(status_code=503, detail="Evaluation run could not be completed") from exc
+    return {"ok": True, "run": run}
+
+
+@app.get("/v1/evaluations/runs")
+async def list_evaluation_runs(
+    request: Request,
+    dataset_id: Optional[str] = None,
+    limit: int = Query(100, ge=1, le=500),
+) -> Dict[str, Any]:
+    org_id = await get_org_id_for_request(request)
+    if not PULSE_EVALUATIONS_ENABLED:
+        raise HTTPException(status_code=503, detail="Evaluation workflows are disabled")
+    if dataset_id:
+        try:
+            dataset_id = str(uuid.UUID(dataset_id))
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="dataset_id must be a UUID") from exc
+    try:
+        runs = await supabase_audit_client.list_evaluation_runs(
+            org_id=org_id, dataset_id=dataset_id, limit=limit
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail="Evaluation storage is unavailable") from exc
+    return {"ok": True, "total": len(runs), "runs": runs}
 
 
 @app.post("/v1/traces", status_code=202)

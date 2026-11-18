@@ -1005,6 +1005,98 @@ class SupabaseAuditClient:
             return None
 
 
+    async def create_evaluation_dataset_version(self, **dataset: Any) -> Dict[str, Any]:
+        if not self.configured:
+            raise RuntimeError("Supabase is not configured")
+        try:
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.post(
+                    f"{self.url}/rest/v1/rpc/create_evaluation_dataset_version",
+                    headers=self._headers(),
+                    json={f"p_{key}": value for key, value in dataset.items()},
+                )
+                response.raise_for_status()
+                data = response.json()
+                return data[0] if isinstance(data, list) and data else data
+        except Exception as exc:
+            raise RuntimeError("Could not create evaluation dataset version") from exc
+
+    async def list_evaluation_datasets(self, org_id: str, limit: int = 100) -> List[Dict[str, Any]]:
+        if not self.configured:
+            raise RuntimeError("Supabase is not configured")
+        try:
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.get(
+                    f"{self.url}/rest/v1/evaluation_datasets",
+                    headers=self._headers(),
+                    params={"org_id": f"eq.{org_id}", "order": "created_at.desc",
+                            "select": "*", "limit": str(limit)},
+                )
+                response.raise_for_status()
+                return response.json()
+        except Exception as exc:
+            raise RuntimeError("Could not list evaluation datasets") from exc
+
+    async def get_evaluation_dataset(
+        self, *, org_id: str, dataset_id: str, dataset_version: Optional[int] = None
+    ) -> Optional[Dict[str, Any]]:
+        if not self.configured:
+            raise RuntimeError("Supabase is not configured")
+        params: Dict[str, str] = {"org_id": f"eq.{org_id}", "dataset_id": f"eq.{dataset_id}",
+                                  "select": "*", "limit": "1"}
+        if dataset_version is not None:
+            params["dataset_version"] = f"eq.{dataset_version}"
+        else:
+            params["order"] = "dataset_version.desc"
+        try:
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.get(
+                    f"{self.url}/rest/v1/evaluation_datasets",
+                    headers=self._headers(), params=params,
+                )
+                response.raise_for_status()
+                rows = response.json()
+                return rows[0] if rows else None
+        except Exception as exc:
+            raise RuntimeError("Could not fetch evaluation dataset") from exc
+
+    async def insert_evaluation_run(self, run: Dict[str, Any]) -> Dict[str, Any]:
+        if not self.configured:
+            raise RuntimeError("Supabase is not configured")
+        try:
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.post(
+                    f"{self.url}/rest/v1/evaluation_runs",
+                    headers={**self._headers(), "content-type": "application/json",
+                             "prefer": "return=representation"},
+                    json=run,
+                )
+                response.raise_for_status()
+                rows = response.json()
+                return rows[0] if rows else run
+        except Exception as exc:
+            raise RuntimeError("Could not persist evaluation run") from exc
+
+    async def list_evaluation_runs(
+        self, *, org_id: str, dataset_id: Optional[str] = None, limit: int = 100
+    ) -> List[Dict[str, Any]]:
+        if not self.configured:
+            raise RuntimeError("Supabase is not configured")
+        params = {"org_id": f"eq.{org_id}", "order": "created_at.desc",
+                  "select": "*", "limit": str(limit)}
+        if dataset_id:
+            params["dataset_id"] = f"eq.{dataset_id}"
+        try:
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.get(
+                    f"{self.url}/rest/v1/evaluation_runs",
+                    headers=self._headers(), params=params,
+                )
+                response.raise_for_status()
+                return response.json()
+        except Exception as exc:
+            raise RuntimeError("Could not list evaluation runs") from exc
+
     async def get_circuit_breaker_state(self) -> Dict[str, Any]:
         """Read the shared circuit-breaker state. An empty table means closed."""
         if not self.configured:
