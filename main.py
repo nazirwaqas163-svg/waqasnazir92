@@ -2428,14 +2428,22 @@ class WebhookRegistrationRequest(BaseModel):
 
 @app.post("/webhooks")
 async def register_webhook(payload: WebhookRegistrationRequest, _admin: None = Depends(require_admin)) -> Dict[str, Any]:
-    """Register a webhook URL to receive signed breach alerts."""
+    """Register a webhook URL to receive signed alert events."""
+    supported_events = {"legal_hold.opened", "evaluation.release_gate_failed"}
+    events = payload.events or ["legal_hold.opened"]
+    unknown_events = sorted(set(events) - supported_events)
+    if unknown_events:
+        raise HTTPException(
+            status_code=422,
+            detail={"unsupported_events": unknown_events, "supported_events": sorted(supported_events)},
+        )
     try:
         result = await supabase_audit_client.insert_webhook_registration(
             org_id=payload.org_id,
             name=payload.name,
             url=payload.url,
             secret=payload.secret,
-            events=payload.events or ["legal_hold.opened"],
+            events=events,
         )
         if isinstance(result, dict) and result.get("ok") is False:
             raise HTTPException(status_code=500, detail=result.get("reason"))
