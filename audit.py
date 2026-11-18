@@ -271,7 +271,8 @@ class SupabaseAuditClient:
             raise RuntimeError("Trace storage is unavailable") from exc
 
     async def get_trace_spans(
-        self, *, org_id: str, trace_id: Optional[str] = None, limit: int = 100
+        self, *, org_id: str, trace_id: Optional[str] = None, limit: int = 100,
+        provider: Optional[str] = None, model: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """Read trace spans with tenant identity always included in the filter."""
         if not self.configured:
@@ -279,12 +280,16 @@ class SupabaseAuditClient:
         try:
             params: Dict[str, Any] = {
                 "org_id": f"eq.{org_id}",
-                "select": "trace_id,span_id,parent_span_id,name,kind,started_at,ended_at,status,agent_id,resource,attributes,events,ingested_at",
+                "select": "trace_id,span_id,parent_span_id,name,kind,started_at,ended_at,status,agent_id,provider,model,input_tokens,output_tokens,total_tokens,cost_usd,resource,attributes,events,ingested_at",
                 "order": "started_at.asc" if trace_id else "started_at.desc",
                 "limit": str(max(1, min(limit, 200))),
             }
             if trace_id:
                 params["trace_id"] = f"eq.{trace_id}"
+            if provider:
+                params["provider"] = f"eq.{provider}"
+            if model:
+                params["model"] = f"eq.{model}"
             async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
                 response = await client.get(
                     f"{self.url}/rest/v1/agent_traces",
