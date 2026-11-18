@@ -134,7 +134,10 @@ def _admin_principal(request: Request) -> Dict[str, str]:
             role = str(entry.get("role", "viewer")).lower()
             if role not in {"viewer", "operator", "admin"}:
                 continue
-            return {"user_id": str(entry.get("user_id") or "dashboard-user"), "role": role}
+            principal = {"user_id": str(entry.get("user_id") or "dashboard-user"), "role": role}
+            if isinstance(entry.get("org_id"), str) and entry["org_id"]:
+                principal["org_id"] = entry["org_id"]
+            return principal
     # Transition support: the single shared key remains an admin until rotated.
     if PULSE_ADMIN_API_KEY:
         legacy_digest = hashlib.sha256(PULSE_ADMIN_API_KEY.encode("utf-8")).hexdigest()
@@ -1377,6 +1380,7 @@ async def health() -> Dict[str, Any]:
         "durable_agent_isolation": PULSE_DURABLE_ISOLATION_ENABLED and supabase_audit_client.configured,
         "durable_session_state": PULSE_DURABLE_SESSION_STATE_ENABLED and supabase_audit_client.configured,
         "durable_circuit_breaker": PULSE_DURABLE_CIRCUIT_BREAKER_ENABLED and supabase_audit_client.configured and durable_breaker_available,
+        "agent_approval_gate_enabled": PULSE_AGENT_APPROVAL_GATE_ENABLED,
     }
     degraded_reasons = []
     if not dependencies["supabase"]:
@@ -1389,6 +1393,8 @@ async def health() -> Dict[str, Any]:
         degraded_reasons.append("session baselines are process-local; durable session state is disabled or unavailable")
     if not dependencies["durable_circuit_breaker"]:
         degraded_reasons.append("circuit-breaker state is process-local or durable storage is unavailable")
+    if PULSE_AGENT_APPROVAL_GATE_ENABLED and not supabase_audit_client.configured:
+        degraded_reasons.append("agent approval gate is enabled but registry storage is unavailable")
     if SHADOW_MODE:
         degraded_reasons.append("shadow mode is enabled; policy decisions are not enforced")
     if not cb_snapshot["allows_requests"]:
@@ -1545,6 +1551,23 @@ async def intercept(payload: InterceptRequest, request: Request) -> Dict[str, An
     Phase 7 Stage 3: Agent Auto-Isolation — isolated agents receive 423 Locked.
     """
     org_id = await get_org_id_for_request(request)
+    if PULSE_AGENT_APPROVAL_GATE_ENABLED:
+        agent_version = payload.agent_version or str((payload.metadata or {}).get("agent_version") or "")
+        if not agent_version:
+            raise HTTPException(status_code=403, detail="An approved agent_version is required")
+        try:
+            approved_version = await supabase_audit_client.get_agent_governance_version(
+                org_id=org_id, agent_id=payload.agent_id, agent_version=agent_version
+            )
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail="Agent approval registry is unavailable") from exc
+        if not approved_version or approved_version.get("approval_status") != "approved":
+            raise HTTPException(
+                status_code=403,
+                detail={"error": "Agent version is not approved", "agent_id": payload.agent_id,
+                        "agent_version": agent_version,
+                        "approval_status": approved_version.get("approval_status") if approved_version else "not_registered"},
+            )
     if not payload.session_id:
         payload.session_id = f"{payload.agent_id}:{uuid.uuid4()}"
 
