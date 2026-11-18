@@ -13,10 +13,11 @@ This roadmap translates the product review into deliverable stages. Arthur, Cred
 - Add tenant-scoped OpenTelemetry-style span ingestion, recent trace retrieval, trace detail lookup, bounded payload validation, and SDK support. Apply `migrations/0002_agent_traces.sql` before enabling these endpoints in production.
 - Scope agent isolation and release decisions by organization so identical agent IDs in separate tenants do not affect one another.
 - Add Supabase-backed durable quarantine state behind `PULSE_DURABLE_ISOLATION_ENABLED`; when enabled, DB errors fail closed and health reports whether the durable path is active. Apply `migrations/0003_durable_agent_isolations.sql` before enabling it.
+- Add optional durable tenant session state with versioned optimistic writes for BDI history and baseline counts. Enable with `PULSE_DURABLE_SESSION_STATE_ENABLED=true` after applying `migrations/0004_durable_agent_sessions.sql`; write conflicts retry and storage errors fail closed.
 
 ## Next: reliability foundation
 
-1. Move session baselines, circuit-breaker state, and idempotency records to shared durable storage. Isolation is now supported durably, but must be enabled after its migration; the remaining process-local state is not suitable for multi-worker or restart-safe guarantees.
+1. Move circuit-breaker state and idempotency records to shared durable storage. Isolation and session state are now supported durably, but each must be enabled after its migration; circuit-breaker state remains process-local.
 2. Add append-only audit storage with monotonic sequence, complete-chain verification, periodic external anchoring, and key rotation. A row hash alone does not prove completeness or resist a privileged database rewrite.
 3. Add service-level auth/rate limits, origin restrictions for browser access, structured audit export, and secret rotation with revocation dates for legacy plaintext org keys.
 
