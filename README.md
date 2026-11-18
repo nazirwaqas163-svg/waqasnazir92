@@ -404,3 +404,7 @@ Endpoints: `POST /v1/evaluations/datasets`, `GET /v1/evaluations/datasets`, `POS
 ## Alert delivery history
 
 Apply `migrations/0010_webhook_delivery_history.sql` before using durable delivery history. Webhook subscriptions can receive `legal_hold.opened` and `evaluation.release_gate_failed` events. Deliveries are signed, retried up to three times, claimed idempotently per event and registration, and include an `X-Pulse-Delivery-ID` for receiver-side deduplication. Failed or stale pending deliveries can be reclaimed; inspect outcomes with `GET /webhooks/deliveries?org_id=...` using dashboard admin access.
+
+## GenAI trace usage metadata
+
+Trace spans accept standardized attributes such as `gen_ai.system` / `gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`, and `gen_ai.usage.cost_usd`. They are normalized into first-class columns by applying `migrations/0011_genai_trace_usage_fields.sql`. `GET /v1/traces` supports tenant-scoped `provider` and `model` filters and returns token and cost totals for the returned page.
