@@ -60,6 +60,7 @@ PULSE_DURABLE_ISOLATION_ENABLED = os.getenv("PULSE_DURABLE_ISOLATION_ENABLED", "
 PULSE_DURABLE_SESSION_STATE_ENABLED = os.getenv("PULSE_DURABLE_SESSION_STATE_ENABLED", "false").lower() in {"1", "true", "yes"}
 PULSE_DURABLE_CIRCUIT_BREAKER_ENABLED = os.getenv("PULSE_DURABLE_CIRCUIT_BREAKER_ENABLED", "false").lower() in {"1", "true", "yes"}
 PULSE_EVALUATIONS_ENABLED = os.getenv("PULSE_EVALUATIONS_ENABLED", "false").lower() in {"1", "true", "yes"}
+PULSE_AGENT_APPROVAL_GATE_ENABLED = os.getenv("PULSE_AGENT_APPROVAL_GATE_ENABLED", "false").lower() in {"1", "true", "yes"}
 BASELINE_MIN_TURNS = int(os.getenv("PULSE_BASELINE_MIN_TURNS", "5"))
 FINANCIAL_TRANSACTION_LIMIT = Decimal("5000")
 FINANCIAL_KEYWORDS = {
@@ -133,7 +134,10 @@ def _admin_principal(request: Request) -> Dict[str, str]:
             role = str(entry.get("role", "viewer")).lower()
             if role not in {"viewer", "operator", "admin"}:
                 continue
-            return {"user_id": str(entry.get("user_id") or "dashboard-user"), "role": role}
+            principal = {"user_id": str(entry.get("user_id") or "dashboard-user"), "role": role}
+            if isinstance(entry.get("org_id"), str) and entry["org_id"]:
+                principal["org_id"] = entry["org_id"]
+            return principal
     # Transition support: the single shared key remains an admin until rotated.
     if PULSE_ADMIN_API_KEY:
         legacy_digest = hashlib.sha256(PULSE_ADMIN_API_KEY.encode("utf-8")).hexdigest()
@@ -552,6 +556,7 @@ class CircuitBreakerCloseRequest(BaseModel):
 
 class InterceptRequest(BaseModel):
     agent_id: str
+    agent_version: Optional[str] = Field(default=None, max_length=100)
     session_id: Optional[str] = None
     parent_session_id: Optional[str] = None
     input_text: str = ""
@@ -580,6 +585,26 @@ class AgentRegisterRequest(BaseModel):
     owner: str = ""
     scope: List[str] = Field(default_factory=list)
     description: str = ""
+
+
+class AgentGovernanceSubmission(BaseModel):
+    agent_id: str = Field(min_length=1, max_length=200)
+    agent_version: str = Field(min_length=1, max_length=100)
+    name: str = Field(min_length=1, max_length=200)
+    owner: str = Field(min_length=1, max_length=200)
+    environment: str
+    model_version: str = Field(min_length=1, max_length=100)
+    prompt_version: str = Field(min_length=1, max_length=100)
+    risk_tier: str
+    data_classification: str
+    scope: List[str] = Field(default_factory=list)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AgentGovernanceReview(BaseModel):
+    org_id: str = Field(min_length=1, max_length=256)
+    decision: str
+    notes: str = Field(default="", max_length=4000)
 
 
 class EvaluationDatasetRequest(BaseModel):
@@ -1355,6 +1380,7 @@ async def health() -> Dict[str, Any]:
         "durable_agent_isolation": PULSE_DURABLE_ISOLATION_ENABLED and supabase_audit_client.configured,
         "durable_session_state": PULSE_DURABLE_SESSION_STATE_ENABLED and supabase_audit_client.configured,
         "durable_circuit_breaker": PULSE_DURABLE_CIRCUIT_BREAKER_ENABLED and supabase_audit_client.configured and durable_breaker_available,
+        "agent_approval_gate_enabled": PULSE_AGENT_APPROVAL_GATE_ENABLED,
     }
     degraded_reasons = []
     if not dependencies["supabase"]:
@@ -1367,6 +1393,8 @@ async def health() -> Dict[str, Any]:
         degraded_reasons.append("session baselines are process-local; durable session state is disabled or unavailable")
     if not dependencies["durable_circuit_breaker"]:
         degraded_reasons.append("circuit-breaker state is process-local or durable storage is unavailable")
+    if PULSE_AGENT_APPROVAL_GATE_ENABLED and not supabase_audit_client.configured:
+        degraded_reasons.append("agent approval gate is enabled but registry storage is unavailable")
     if SHADOW_MODE:
         degraded_reasons.append("shadow mode is enabled; policy decisions are not enforced")
     if not cb_snapshot["allows_requests"]:
@@ -1523,6 +1551,23 @@ async def intercept(payload: InterceptRequest, request: Request) -> Dict[str, An
     Phase 7 Stage 3: Agent Auto-Isolation — isolated agents receive 423 Locked.
     """
     org_id = await get_org_id_for_request(request)
+    if PULSE_AGENT_APPROVAL_GATE_ENABLED:
+        agent_version = payload.agent_version or str((payload.metadata or {}).get("agent_version") or "")
+        if not agent_version:
+            raise HTTPException(status_code=403, detail="An approved agent_version is required")
+        try:
+            approved_version = await supabase_audit_client.get_agent_governance_version(
+                org_id=org_id, agent_id=payload.agent_id, agent_version=agent_version
+            )
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail="Agent approval registry is unavailable") from exc
+        if not approved_version or approved_version.get("approval_status") != "approved":
+            raise HTTPException(
+                status_code=403,
+                detail={"error": "Agent version is not approved", "agent_id": payload.agent_id,
+                        "agent_version": agent_version,
+                        "approval_status": approved_version.get("approval_status") if approved_version else "not_registered"},
+            )
     if not payload.session_id:
         payload.session_id = f"{payload.agent_id}:{uuid.uuid4()}"
 
@@ -2790,6 +2835,108 @@ async def ai_events_recent(request: Request, limit: int = 500) -> Dict[str, Any]
     org_id = await get_org_id_for_request(request)
     events = await supabase_audit_client.get_recent_events(limit=limit, org_id=org_id)
     return {"ok": True, "total": len(events), "events": events}
+
+
+@app.post("/v1/registry/agents", status_code=201)
+async def submit_agent_governance_version(
+    payload: AgentGovernanceSubmission, request: Request
+) -> Dict[str, Any]:
+    org_id = await get_org_id_for_request(request)
+    if payload.environment not in {"development", "staging", "production"}:
+        raise HTTPException(status_code=422, detail="Unsupported agent environment")
+    if payload.risk_tier not in {"low", "medium", "high", "critical"}:
+        raise HTTPException(status_code=422, detail="Unsupported risk tier")
+    if payload.data_classification not in {"public", "internal", "confidential", "restricted"}:
+        raise HTTPException(status_code=422, detail="Unsupported data classification")
+    if len(payload.scope) > 100 or any(not item or len(item) > 256 for item in payload.scope):
+        raise HTTPException(status_code=422, detail="scope must contain at most 100 non-empty strings of at most 256 characters")
+    if len(json.dumps(payload.metadata, ensure_ascii=False).encode("utf-8")) > 64 * 1024:
+        raise HTTPException(status_code=413, detail="agent metadata exceeds the 64 KB limit")
+    try:
+        version = await supabase_audit_client.submit_agent_governance_version(
+            org_id=org_id,
+            agent_id=payload.agent_id,
+            agent_version=payload.agent_version,
+            name=payload.name,
+            owner=payload.owner,
+            environment=payload.environment,
+            model_version=payload.model_version,
+            prompt_version=payload.prompt_version,
+            risk_tier=payload.risk_tier,
+            data_classification=payload.data_classification,
+            scope=payload.scope,
+            metadata=payload.metadata,
+            created_by=org_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail="Agent version already exists") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail="Agent registry storage is unavailable") from exc
+    return {"ok": True, "agent_version": version}
+
+
+@app.get("/v1/registry/agents")
+async def list_agent_governance_versions(
+    request: Request,
+    agent_id: Optional[str] = Query(default=None, max_length=200),
+    limit: int = Query(100, ge=1, le=500),
+) -> Dict[str, Any]:
+    org_id = await get_org_id_for_request(request)
+    try:
+        versions = await supabase_audit_client.list_agent_governance_versions(
+            org_id=org_id, agent_id=agent_id, limit=limit
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail="Agent registry storage is unavailable") from exc
+    return {"ok": True, "org_id": org_id, "total": len(versions), "versions": versions}
+
+
+@app.get("/v1/registry/agents/{agent_id}/{agent_version}/history")
+async def get_agent_governance_history(
+    agent_id: str, agent_version: str, request: Request
+) -> Dict[str, Any]:
+    org_id = await get_org_id_for_request(request)
+    try:
+        version = await supabase_audit_client.get_agent_governance_version(
+            org_id=org_id, agent_id=agent_id, agent_version=agent_version
+        )
+        if version is None:
+            raise HTTPException(status_code=404, detail="Agent version not found")
+        events = await supabase_audit_client.list_agent_governance_events(
+            org_id=org_id, agent_id=agent_id, agent_version=agent_version
+        )
+    except HTTPException:
+        raise
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail="Agent registry storage is unavailable") from exc
+    return {"ok": True, "agent_version": version, "history": events}
+
+
+@app.post("/admin/registry/{agent_id}/{agent_version}/review")
+async def review_agent_governance_version(
+    agent_id: str,
+    agent_version: str,
+    payload: AgentGovernanceReview,
+    reviewer: Dict[str, str] = Depends(require_admin),
+) -> Dict[str, Any]:
+    if reviewer.get("org_id") and reviewer["org_id"] != payload.org_id:
+        raise HTTPException(status_code=403, detail="Admin key is scoped to another organization")
+    if payload.decision not in {"approved", "rejected"}:
+        raise HTTPException(status_code=422, detail="decision must be approved or rejected")
+    try:
+        result = await supabase_audit_client.review_agent_governance_version(
+            org_id=payload.org_id,
+            agent_id=agent_id,
+            agent_version=agent_version,
+            decision=payload.decision,
+            reviewer=reviewer["user_id"],
+            notes=payload.notes,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail="Agent version is missing or no longer pending") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail="Agent approval storage is unavailable") from exc
+    return {"ok": True, "agent_version": result}
 
 
 @app.post("/v1/evaluations/datasets", status_code=201)

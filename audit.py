@@ -1105,6 +1105,117 @@ class SupabaseAuditClient:
         except Exception as exc:
             raise RuntimeError("Could not list evaluation runs") from exc
 
+    async def submit_agent_governance_version(self, **version: Any) -> Dict[str, Any]:
+        if not self.configured:
+            raise RuntimeError("Supabase is not configured")
+        try:
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.post(
+                    f"{self.url}/rest/v1/rpc/pulse_submit_agent_version",
+                    headers=self._headers(),
+                    json={f"p_{key}": value for key, value in version.items()},
+                )
+                if response.status_code == 409:
+                    raise ValueError("agent_version_exists")
+                response.raise_for_status()
+                rows = response.json()
+                return rows[0] if rows else {}
+        except ValueError:
+            raise
+        except Exception as exc:
+            raise RuntimeError("Could not submit agent governance version") from exc
+
+    async def review_agent_governance_version(
+        self, *, org_id: str, agent_id: str, agent_version: str,
+        decision: str, reviewer: str, notes: str
+    ) -> Dict[str, Any]:
+        if not self.configured:
+            raise RuntimeError("Supabase is not configured")
+        args = {
+            "p_org_id": org_id, "p_agent_id": agent_id,
+            "p_agent_version": agent_version, "p_decision": decision,
+            "p_reviewer": reviewer, "p_notes": notes,
+        }
+        try:
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.post(
+                    f"{self.url}/rest/v1/rpc/pulse_review_agent_version",
+                    headers=self._headers(), json=args,
+                )
+                if response.status_code in (400, 404):
+                    raise ValueError("agent_version_not_pending")
+                response.raise_for_status()
+                rows = response.json()
+                return rows[0] if rows else {}
+        except ValueError:
+            raise
+        except Exception as exc:
+            raise RuntimeError("Could not review agent governance version") from exc
+
+    async def list_agent_governance_versions(
+        self, *, org_id: str, agent_id: Optional[str] = None, limit: int = 100
+    ) -> List[Dict[str, Any]]:
+        if not self.configured:
+            raise RuntimeError("Supabase is not configured")
+        params: Dict[str, str] = {
+            "org_id": f"eq.{org_id}", "order": "created_at.desc",
+            "select": "*", "limit": str(limit),
+        }
+        if agent_id:
+            params["agent_id"] = f"eq.{agent_id}"
+        try:
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.get(
+                    f"{self.url}/rest/v1/agent_governance_versions",
+                    headers=self._headers(), params=params,
+                )
+                response.raise_for_status()
+                return response.json()
+        except Exception as exc:
+            raise RuntimeError("Could not list agent governance versions") from exc
+
+    async def get_agent_governance_version(
+        self, *, org_id: str, agent_id: str, agent_version: str
+    ) -> Optional[Dict[str, Any]]:
+        if not self.configured:
+            raise RuntimeError("Supabase is not configured")
+        try:
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.get(
+                    f"{self.url}/rest/v1/agent_governance_versions",
+                    headers=self._headers(),
+                    params={
+                        "org_id": f"eq.{org_id}", "agent_id": f"eq.{agent_id}",
+                        "agent_version": f"eq.{agent_version}", "select": "*", "limit": "1",
+                    },
+                )
+                response.raise_for_status()
+                rows = response.json()
+                return rows[0] if rows else None
+        except Exception as exc:
+            raise RuntimeError("Could not fetch agent governance version") from exc
+
+    async def list_agent_governance_events(
+        self, *, org_id: str, agent_id: str, agent_version: str
+    ) -> List[Dict[str, Any]]:
+        if not self.configured:
+            raise RuntimeError("Supabase is not configured")
+        try:
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.get(
+                    f"{self.url}/rest/v1/agent_governance_events",
+                    headers=self._headers(),
+                    params={
+                        "org_id": f"eq.{org_id}", "agent_id": f"eq.{agent_id}",
+                        "agent_version": f"eq.{agent_version}",
+                        "order": "created_at.asc", "select": "*",
+                    },
+                )
+                response.raise_for_status()
+                return response.json()
+        except Exception as exc:
+            raise RuntimeError("Could not list agent governance history") from exc
+
     async def claim_webhook_delivery(
         self, *, delivery_key: str, org_id: str, registration_id: str,
         event_type: str, event_reference: str

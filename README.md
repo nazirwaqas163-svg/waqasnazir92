@@ -408,3 +408,9 @@ Apply `migrations/0010_webhook_delivery_history.sql` before using durable delive
 ## GenAI trace usage metadata
 
 Trace spans accept standardized attributes such as `gen_ai.system` / `gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`, and `gen_ai.usage.cost_usd`. They are normalized into first-class columns by applying `migrations/0011_genai_trace_usage_fields.sql`. `GET /v1/traces` supports tenant-scoped `provider` and `model` filters and returns token and cost totals for the returned page.
+
+## Agent registry and approval workflow
+
+Apply `migrations/0012_agent_governance_workflows.sql` to enable tenant-scoped agent versions, risk/data classifications, and append-only approval history. Customer API keys submit and list versions through `/v1/registry/agents`; platform admins review pending versions through `POST /admin/registry/{agent_id}/{agent_version}/review`. Add an optional `org_id` to entries in `PULSE_ADMIN_KEYS_JSON` to restrict that admin key to one organization.
+
+Set `PULSE_AGENT_APPROVAL_GATE_ENABLED=true` only when the registry is ready. In that mode, `/intercept` requires the submitted `agent_version` to exist and be approved for the request's organization; pending, rejected, missing, or unavailable registry state blocks the request. The flag is off by default.

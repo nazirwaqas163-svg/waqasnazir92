@@ -24,12 +24,13 @@
 - Versioned evaluation datasets, deterministic evaluators, immutable run history, and pass-rate release gates are available after applying `migrations/0007_versioned_evaluations.sql` and enabling `PULSE_EVALUATIONS_ENABLED=true`. Requests use tenant API keys and persist agent/prompt/model version metadata.
 - Signed webhook delivery history, idempotency claims, bounded retries, and failure alerts for legal holds and failed evaluation gates are available after applying `migrations/0010_webhook_delivery_history.sql`.
 - Trace spans expose provider, model, token counts, and cost as first-class fields; `GET /v1/traces` supports provider/model filtering and page totals after applying `migrations/0011_genai_trace_usage_fields.sql`.
+- Versioned tenant-scoped agent inventory, risk/data classification, immutable approval history, and an optional intercept approval gate are available after applying `migrations/0012_agent_governance_workflows.sql`.
 
 - Existing `agent_registry`, `legal_holds`, `org_policies`, `webhook_registrations`, `incident_reports`, `orgs`, and `replay_sessions` tables are restricted to server service-role access after applying `migrations/0009_rls_service_role_only.sql`.
 
 ## Known production gaps
 
-Registry and approval lifecycle, configurable alert conditions beyond the supported event subscriptions, independent audit anchoring and key rotation, and enterprise SSO still require later implementation and supporting infrastructure. Trace ingestion, durable isolation, durable sessions, and the durable breaker require applying their SQL migrations before enabling the corresponding flags. See [IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md).
+Configurable alert conditions beyond supported event subscriptions, independent audit anchoring and key rotation, dashboard UI for evaluation/governance workflows, and enterprise SSO still require later implementation and supporting infrastructure. Trace ingestion, durable isolation, durable sessions, and the durable breaker require applying their SQL migrations before enabling the corresponding flags. See [IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md).
 
 ## Local development
 
