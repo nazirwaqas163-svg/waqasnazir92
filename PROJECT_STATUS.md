@@ -14,7 +14,7 @@
 - New org keys are stored as SHA-256 digests. Existing plaintext keys are accepted only as a migration path and should be rotated.
 - SDK enforcement defaults to fail closed. Set `fail_open=True` only for workloads whose risk policy permits bypassing Pulse when it is unavailable.
 - `/health` reports degraded readiness when required dependencies are unavailable; inspect `degraded_reasons` and `dependencies`.
-- Replay verifies individual event hashes but does not assert complete-chain integrity or external anchoring.
+- Audit rows now have an append-only database guard and monotonic ledger sequence after applying `migrations/0006_append_only_audit_ledger.sql`. The integrity endpoint detects missing sequence values and broken adjacent links; historical completeness and external anchoring remain unverified.
 - Tenant-scoped trace ingestion and lookup are implemented at `/v1/traces`; apply `migrations/0002_agent_traces.sql` to Supabase before using those endpoints.
 - Agent isolation and release records are now scoped by organization; dashboards pass the selected organization when listing or releasing an agent.
 - Durable isolation is available after applying `migrations/0003_durable_agent_isolations.sql` and enabling `PULSE_DURABLE_ISOLATION_ENABLED=true`. With the flag off, isolation remains process-local and `/health` reports degraded readiness.
