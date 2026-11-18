@@ -236,6 +236,7 @@ class CircuitBreakerMiddleware:
         intercept: bool = False,
         baselined: bool = False,
         session_id: Optional[str] = None,
+        session_turns_override: Optional[int] = None,
     ) -> Dict[str, object]:
         """
         Thread-safe entry point for concurrent proxy requests.
@@ -267,7 +268,12 @@ class CircuitBreakerMiddleware:
             # For non-intercept paths, baseline is not tracked so only the
             # global minimum_calls guard applies.
             bdi_warming_up = self._bdi_warming_up_locked(intercept=intercept)
-            session_ready = self._session_baselined_locked(session_id) if intercept else True
+            session_turns = (
+                session_turns_override
+                if session_turns_override is not None
+                else self._session_turns.get(session_id or "", 0)
+            )
+            session_ready = session_turns >= self.session_baseline_turns if intercept else True
             bdi_not_yet_measurable = bdi_warming_up or (intercept and not session_ready)
 
             if bdi_score > self.bdi_threshold and not bdi_not_yet_measurable:
@@ -286,7 +292,7 @@ class CircuitBreakerMiddleware:
                 extra["bdi_warming_up"] = True
                 extra["intercept_calls"] = self._intercept_calls
                 extra["minimum_calls"] = self.minimum_calls
-                extra["session_turns"] = self._session_turns.get(session_id or "", 0)
+                extra["session_turns"] = session_turns
                 extra["session_baseline_turns"] = self.session_baseline_turns
 
             if shadow_mode:
@@ -326,3 +332,4 @@ class CircuitBreakerMiddleware:
                 "intercept_calls": self._intercept_calls,
                 "tracked_sessions": len(self._session_turns),
             }
+
