@@ -389,3 +389,7 @@ except Exception:
 ## Durable circuit-breaker state
 
 To share the kill-switch state across API instances, apply `migrations/0005_durable_circuit_breaker.sql` to Supabase and set `PULSE_DURABLE_CIRCUIT_BREAKER_ENABLED=true` on the API service. Gated requests then read the shared state before evaluation; database errors return HTTP 503. Until the migration and flag are active, breaker state is process-local and health reports degraded readiness.
+
+## Append-only audit ledger
+
+Apply `migrations/0006_append_only_audit_ledger.sql` to add per-table monotonic sequence values and database guards against row updates and deletes. The `/ledger/integrity/ai_events` endpoint checks fetched row hashes, adjacent predecessor links, and sequence gaps. It deliberately reports partial verification until independent checkpoints are configured; a database administrator can still rewrite the database outside these guards.

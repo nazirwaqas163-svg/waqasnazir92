@@ -15,10 +15,11 @@ This roadmap translates the product review into deliverable stages. Arthur, Cred
 - Add Supabase-backed durable quarantine state behind `PULSE_DURABLE_ISOLATION_ENABLED`; when enabled, DB errors fail closed and health reports whether the durable path is active. Apply `migrations/0003_durable_agent_isolations.sql` before enabling it.
 - Add optional durable tenant session state with versioned optimistic writes for BDI history and baseline counts. Enable with `PULSE_DURABLE_SESSION_STATE_ENABLED=true` after applying `migrations/0004_durable_agent_sessions.sql`; write conflicts retry and storage errors fail closed.
 - Add shared durable circuit-breaker state. Enable with `PULSE_DURABLE_CIRCUIT_BREAKER_ENABLED=true` after applying `migrations/0005_durable_circuit_breaker.sql`; every gated request synchronizes with shared storage and fails closed when that store is unavailable.
+- Add monotonically sequenced append-only audit rows and verify adjacent sequence/hash links. Apply `migrations/0006_append_only_audit_ledger.sql`; the endpoint continues to report partial verification until independent anchoring is configured.
 
 ## Next: reliability foundation
 
-1. Add append-only audit storage with monotonic sequence, complete-chain verification, periodic external anchoring, and key rotation. A row hash alone does not prove completeness or resist a privileged database rewrite.
+1. Add periodic independent audit anchoring and key rotation. The append-only sequence detects gaps and adjacent broken links, but a privileged database rewrite still needs independent anchoring to be detectable.
 2. Add service-level auth/rate limits, origin restrictions for browser access, structured audit export, and secret rotation with revocation dates for legacy plaintext org keys.
 
 ## Then: observability and evaluation
