@@ -689,10 +689,13 @@ class SupabaseAuditClient:
                         "limit": str(limit),
                     },
                 )
-                return response.json() if response.status_code == 200 else []
-        except httpx.HTTPError:
+                if response.status_code != 200:
+                    logger.error("Failed to fetch ai_events chain: status=%s", response.status_code)
+                    raise RuntimeError("Audit sequence migration is unavailable or the ledger query failed")
+                return response.json()
+        except httpx.HTTPError as exc:
             logger.exception("Failed to fetch ai_events chain")
-            return []
+            raise RuntimeError("Audit ledger storage is unavailable") from exc
 
     async def insert_legal_hold(self, hold: Dict[str, Any]) -> bool:
         if not self.configured:
