@@ -42,6 +42,7 @@ from threat_classifier import threat_classifier
 from org_policy_engine import evaluate_org_policies
 from webhook_engine import fire_webhooks
 from incident_report import assemble_evidence_package, render_incident_pdf
+from trace_ingestion import normalize_span
 
 APP_NAME = "pulse-proxy"
 logger = logging.getLogger(__name__)
@@ -382,10 +383,13 @@ class AgentRegisterRequest(BaseModel):
     owner: str = ""
     scope: List[str] = Field(default_factory=list)
     description: str = ""
-    metadata: Optional[Dict[str, Any]] = None
+
+
+class TraceBatchRequest(BaseModel):
+    spans: List[Dict[str, Any]]
 
     class Config:
-        extra = "allow"
+        extra = "forbid"
 
 def _dropped_response(disposition: Dict[str, Any]) -> Response:
     retry_after = str(int(max(1, disposition.get("cooldown_seconds_remaining", 30))))
@@ -2522,6 +2526,53 @@ async def ai_events_recent(request: Request, limit: int = 500) -> Dict[str, Any]
     org_id = await get_org_id_for_request(request)
     events = await supabase_audit_client.get_recent_events(limit=limit, org_id=org_id)
     return {"ok": True, "total": len(events), "events": events}
+
+
+@app.post("/v1/traces", status_code=202)
+async def ingest_trace_spans(payload: TraceBatchRequest, request: Request) -> Dict[str, Any]:
+    """Ingest up to 100 tenant-scoped OpenTelemetry-style spans idempotently."""
+    org_id = await get_org_id_for_request(request)
+    if not payload.spans or len(payload.spans) > 100:
+        raise HTTPException(status_code=422, detail="spans must contain between 1 and 100 records")
+    encoded_size = len(json.dumps(payload.spans, ensure_ascii=False).encode("utf-8"))
+    if encoded_size > 2 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="trace batch exceeds the 2 MB limit")
+    try:
+        rows = [normalize_span(span, org_id) for span in payload.spans]
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    identities = [(row["trace_id"], row["span_id"]) for row in rows]
+    if len(identities) != len(set(identities)):
+        raise HTTPException(status_code=422, detail="A batch cannot contain duplicate trace_id/span_id pairs")
+    try:
+        inserted = await supabase_audit_client.insert_trace_spans(rows)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return {"ok": True, "org_id": org_id, "received": len(rows), "inserted": inserted}
+
+
+@app.get("/v1/traces")
+async def list_recent_traces(request: Request, limit: int = Query(50, ge=1, le=200)) -> Dict[str, Any]:
+    org_id = await get_org_id_for_request(request)
+    try:
+        spans = await supabase_audit_client.get_trace_spans(org_id=org_id, limit=limit)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return {"ok": True, "org_id": org_id, "count": len(spans), "spans": spans}
+
+
+@app.get("/v1/traces/{trace_id}")
+async def get_trace(trace_id: str, request: Request) -> Dict[str, Any]:
+    if not re.fullmatch(r"[0-9a-fA-F]{32}", trace_id) or trace_id == "0" * 32:
+        raise HTTPException(status_code=422, detail="trace_id must be a non-zero 32-character hexadecimal ID")
+    org_id = await get_org_id_for_request(request)
+    try:
+        spans = await supabase_audit_client.get_trace_spans(org_id=org_id, trace_id=trace_id.lower())
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if not spans:
+        raise HTTPException(status_code=404, detail="Trace not found")
+    return {"ok": True, "org_id": org_id, "trace_id": trace_id.lower(), "span_count": len(spans), "spans": spans}
 
 @app.get("/alerts")
 def alerts(limit: int = 50) -> Dict[str, Any]:
