@@ -19,10 +19,11 @@
 - Agent isolation and release records are now scoped by organization; dashboards pass the selected organization when listing or releasing an agent.
 - Durable isolation is available after applying `migrations/0003_durable_agent_isolations.sql` and enabling `PULSE_DURABLE_ISOLATION_ENABLED=true`. With the flag off, isolation remains process-local and `/health` reports degraded readiness.
 - Durable BDI history and baseline counts are available after applying `migrations/0004_durable_agent_sessions.sql` and enabling `PULSE_DURABLE_SESSION_STATE_ENABLED=true`. Version conflicts retry; storage failures return 503.
+- Shared circuit-breaker state is available after applying `migrations/0005_durable_circuit_breaker.sql` and enabling `PULSE_DURABLE_CIRCUIT_BREAKER_ENABLED=true`. Gated requests synchronize with Supabase; unavailable storage returns 503.
 
 ## Known production gaps
 
-Circuit-breaker state remains process-local. Durable shared state for the breaker, evaluation workflows, agent registry/approval, alert integrations, and SSO require later stages and supporting infrastructure. Trace ingestion, durable isolation, and durable sessions require applying their SQL migrations. See [IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md).
+Versioned evaluation workflows, registry and approval lifecycle, alert delivery integrations, and enterprise SSO still require later implementation and supporting infrastructure. Trace ingestion, durable isolation, durable sessions, and the durable breaker require applying their SQL migrations before enabling the corresponding flags. See [IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md).
 
 ## Local development
 
