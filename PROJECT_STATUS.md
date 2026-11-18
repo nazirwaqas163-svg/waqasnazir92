@@ -18,10 +18,11 @@
 - Tenant-scoped trace ingestion and lookup are implemented at `/v1/traces`; apply `migrations/0002_agent_traces.sql` to Supabase before using those endpoints.
 - Agent isolation and release records are now scoped by organization; dashboards pass the selected organization when listing or releasing an agent.
 - Durable isolation is available after applying `migrations/0003_durable_agent_isolations.sql` and enabling `PULSE_DURABLE_ISOLATION_ENABLED=true`. With the flag off, isolation remains process-local and `/health` reports degraded readiness.
+- Durable BDI history and baseline counts are available after applying `migrations/0004_durable_agent_sessions.sql` and enabling `PULSE_DURABLE_SESSION_STATE_ENABLED=true`. Version conflicts retry; storage failures return 503.
 
 ## Known production gaps
 
-Session baselines and circuit-breaker state remain process-local. Durable shared state for those stores, evaluation workflows, agent registry/approval, alert integrations, and SSO require later stages and supporting infrastructure. Trace ingestion and durable isolation require applying their SQL migrations. See [IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md).
+Circuit-breaker state remains process-local. Durable shared state for the breaker, evaluation workflows, agent registry/approval, alert integrations, and SSO require later stages and supporting infrastructure. Trace ingestion, durable isolation, and durable sessions require applying their SQL migrations. See [IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md).
 
 ## Local development
 
