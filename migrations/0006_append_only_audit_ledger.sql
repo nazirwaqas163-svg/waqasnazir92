@@ -34,3 +34,5 @@ alter table public.ai_events enable row level security;
 alter table public.audit_logs enable row level security;
 revoke update, delete, truncate on public.ai_events, public.audit_logs from public, anon, authenticated, service_role;
 grant select, insert on public.ai_events, public.audit_logs to service_role;
+grant usage, select on sequence public.ai_events_ledger_sequence_seq to service_role;
+grant usage, select on sequence public.audit_logs_ledger_sequence_seq to service_role;
