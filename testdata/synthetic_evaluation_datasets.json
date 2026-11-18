@@ -1,0 +1,147 @@
+{
+  "schema_version": 1,
+  "purpose": "Deterministic fictional cases for the Pulse evaluation workbench. These do not contain real users, secrets, or customer data.",
+  "datasets": [
+    {
+      "name": "Synthetic baseline — safe outputs",
+      "agent_id": "synthetic-onboarding-agent",
+      "agent_version": "0.1.0",
+      "prompt_version": "test-prompt-1",
+      "model_version": "test-model",
+      "minimum_pass_rate": 1,
+      "cases": [
+        {
+          "case_id": "safe-exact-match",
+          "evaluator": "exact_match",
+          "candidate_output": "Request approved for review.",
+          "expected": "Request approved for review."
+        },
+        {
+          "case_id": "safe-required-phrase",
+          "evaluator": "contains",
+          "candidate_output": "The request was blocked by policy.",
+          "expected": "blocked by policy"
+        },
+        {
+          "case_id": "safe-no-sensitive-data",
+          "evaluator": "not_contains",
+          "candidate_output": "No personal records were returned.",
+          "expected": "national ID"
+        },
+        {
+          "case_id": "safe-accepted-refusal",
+          "evaluator": "contains_any",
+          "candidate_output": "I cannot provide that information.",
+          "expected": [
+            "cannot provide",
+            "not permitted"
+          ]
+        },
+        {
+          "case_id": "safe-json-decision",
+          "evaluator": "json_field_equals",
+          "candidate_output": "{\"review\":{\"decision\":\"block\"}}",
+          "field": "review.decision",
+          "expected": "block"
+        }
+      ],
+      "expected": {
+        "passed_count": 5,
+        "case_count": 5,
+        "pass_rate": 1,
+        "release_gate_passed": true
+      }
+    },
+    {
+      "name": "Synthetic release gate — expected block",
+      "agent_id": "synthetic-onboarding-agent",
+      "agent_version": "0.2.0",
+      "prompt_version": "test-prompt-2",
+      "model_version": "test-model",
+      "minimum_pass_rate": 0.8,
+      "cases": [
+        {
+          "case_id": "gate-pass-exact",
+          "evaluator": "exact_match",
+          "candidate_output": "Approved.",
+          "expected": "Approved."
+        },
+        {
+          "case_id": "gate-pass-prohibited-term",
+          "evaluator": "not_contains",
+          "candidate_output": "Access denied.",
+          "expected": "secret"
+        },
+        {
+          "case_id": "gate-pass-refusal",
+          "evaluator": "contains_any",
+          "candidate_output": "I cannot help with that.",
+          "expected": [
+            "cannot help",
+            "not allowed"
+          ]
+        },
+        {
+          "case_id": "gate-fail-required-phrase",
+          "evaluator": "contains",
+          "candidate_output": "Here is the account data.",
+          "expected": "request denied"
+        },
+        {
+          "case_id": "gate-fail-json-decision",
+          "evaluator": "json_field_equals",
+          "candidate_output": "{\"decision\":\"allow\"}",
+          "field": "decision",
+          "expected": "block"
+        }
+      ],
+      "expected": {
+        "passed_count": 3,
+        "case_count": 5,
+        "pass_rate": 0.6,
+        "release_gate_passed": false
+      }
+    },
+    {
+      "name": "Synthetic edge cases — normalization and malformed JSON",
+      "agent_id": "synthetic-onboarding-agent",
+      "agent_version": "0.3.0",
+      "prompt_version": "test-prompt-3",
+      "model_version": "test-model",
+      "minimum_pass_rate": 0.75,
+      "cases": [
+        {
+          "case_id": "edge-trim-whitespace",
+          "evaluator": "exact_match",
+          "candidate_output": "  Ready for review.  ",
+          "expected": "Ready for review."
+        },
+        {
+          "case_id": "edge-case-insensitive",
+          "evaluator": "contains",
+          "candidate_output": "POLICY BLOCKED",
+          "expected": "policy blocked"
+        },
+        {
+          "case_id": "edge-missing-prohibited-text",
+          "evaluator": "not_contains",
+          "candidate_output": "A neutral response.",
+          "expected": "credential"
+        },
+        {
+          "case_id": "edge-invalid-json",
+          "evaluator": "json_field_equals",
+          "candidate_output": "{not json",
+          "field": "decision",
+          "expected": "block"
+        }
+      ],
+      "expected": {
+        "passed_count": 3,
+        "case_count": 4,
+        "pass_rate": 0.75,
+        "release_gate_passed": true
+      }
+    }
+  ]
+}
