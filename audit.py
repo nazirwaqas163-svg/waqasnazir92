@@ -684,8 +684,8 @@ class SupabaseAuditClient:
                     f"{self.url}/rest/v1/ai_events",
                     headers={"apikey": self.key or "", "authorization": f"Bearer {self.key}"},
                     params={
-                        "order": "created_at.asc",
-                        "select": "id,event_id,created_at,agent_id,action,input_text,output_text,bdi_score,status,session_id,parent_session_id,entropy,org_id,prev_hash,row_hash",
+                        "order": "ledger_sequence.asc",
+                        "select": "ledger_sequence,id,event_id,created_at,agent_id,action,input_text,output_text,bdi_score,status,session_id,parent_session_id,entropy,org_id,prev_hash,row_hash",
                         "limit": str(limit),
                     },
                 )
