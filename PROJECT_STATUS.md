@@ -15,10 +15,11 @@
 - SDK enforcement defaults to fail closed. Set `fail_open=True` only for workloads whose risk policy permits bypassing Pulse when it is unavailable.
 - `/health` reports degraded readiness when required dependencies are unavailable; inspect `degraded_reasons` and `dependencies`.
 - Replay verifies individual event hashes but does not assert complete-chain integrity or external anchoring.
+- Tenant-scoped trace ingestion and lookup are implemented at `/v1/traces`; apply `migrations/0002_agent_traces.sql` to Supabase before using those endpoints.
 
 ## Known production gaps
 
-Sessions, isolation, and circuit-breaker state remain process-local. Durable shared storage, trace ingestion, evaluation workflows, agent registry/approval, alert integrations, and SSO require later stages and supporting infrastructure. See [IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md).
+Sessions, isolation, and circuit-breaker state remain process-local. Durable shared state, evaluation workflows, agent registry/approval, alert integrations, and SSO require later stages and supporting infrastructure. Trace ingestion requires applying its SQL migration. See [IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md).
 
 ## Local development
 
