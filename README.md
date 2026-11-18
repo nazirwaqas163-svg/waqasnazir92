@@ -50,6 +50,8 @@ Agent isolation requests include an explicit `org_id`; isolation and release are
 
 For restart- and worker-safe quarantine, apply `migrations/0003_durable_agent_isolations.sql`, then set `PULSE_DURABLE_ISOLATION_ENABLED=true` on the API service and redeploy. When enabled, failure to read or write the isolation table returns HTTP 503 rather than allowing requests through. With the flag off, isolation uses process memory and `/health` reports degraded readiness.
 
+To persist BDI history and per-session baseline counts across restarts and workers, apply `migrations/0004_durable_agent_sessions.sql`, set `PULSE_DURABLE_SESSION_STATE_ENABLED=true`, and redeploy. Session writes use a versioned database function with optimistic retries; when the durable path is enabled, storage errors return HTTP 503. `/health` reports degraded readiness while durable session state is disabled.
+
 ## Trace ingestion
 
 The tenant API accepts OpenTelemetry-style spans at `POST /v1/traces` and returns recent spans from `GET /v1/traces` or one trace by ID from `GET /v1/traces/{trace_id}`. Send the organization API key in `X-API-Key`. Apply `migrations/0002_agent_traces.sql` to Supabase before use. Batches are limited to 100 spans and 2 MB; each JSON attribute/resource/event field is limited to 64 KB. The service stores telemetry as submitted, so instrumentations should avoid sending secrets or unneeded personal data.
