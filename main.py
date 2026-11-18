@@ -340,8 +340,9 @@ async def _persist_circuit_breaker_state(reason: Optional[str] = None) -> None:
 
 async def _gate_circuit_breaker(**kwargs: Any) -> Dict[str, Any]:
     await _sync_durable_circuit_breaker()
+    was_open = circuit_breaker.is_open()
     disposition = circuit_breaker.gate_request(**kwargs)
-    if PULSE_DURABLE_CIRCUIT_BREAKER_ENABLED and circuit_breaker.is_open():
+    if PULSE_DURABLE_CIRCUIT_BREAKER_ENABLED and not was_open and circuit_breaker.is_open():
         await _persist_circuit_breaker_state()
     return disposition
 
