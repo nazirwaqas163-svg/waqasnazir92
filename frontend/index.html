@@ -1276,7 +1276,14 @@ async function loadTraceDetail(traceId){
 }
 
 /* ── PASSPORT ── */
-async function downloadPassport(agentId){const url=API+'/agents/'+encodeURIComponent(agentId)+'/passport?format=pdf';const a=document.createElement('a');a.href=url;a.download='pulse-passport-'+agentId+'.pdf';a.target='_blank';a.click();}
+async function downloadPassport(agentId){
+  try{
+    const response=await apiFetch('/agents/'+encodeURIComponent(agentId)+'/passport?format=pdf',{cache:'no-store'});
+    if(!response.ok){let detail='Passport download failed ('+response.status+')';try{const payload=await response.json();detail=payload.detail||detail;}catch(_){}throw new Error(detail);}
+    const blob=await response.blob(),objectUrl=URL.createObjectURL(blob),link=document.createElement('a');
+    link.href=objectUrl;link.download='pulse-passport-'+agentId+'.pdf';document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(objectUrl),1000);
+  }catch(error){alert(error.message||'Passport download failed');}
+}
 
 /* ── AGENTS ── */
 let lastTopology=null,agentsOpen=new Set();
@@ -1363,7 +1370,7 @@ let lastDeadlines=null;
 async function loadCompliance(){
   const box=document.getElementById('compliance-body');
   box.innerHTML='<div class="loading"><div class="spin"></div>Loading compliance deadlines…</div>';
-  try{const incidentInput=document.getElementById('incident-time-input').value;let url=API+'/compliance/deadlines?auto_hold=false';if(incidentInput)url+='&incident_time='+encodeURIComponent(new Date(incidentInput).toISOString());lastDeadlines=await fetch(url,{cache:'no-store'}).then(r=>r.json());renderCompliance();}
+  try{const incidentInput=document.getElementById('incident-time-input').value;let url='/compliance/deadlines?auto_hold=false';if(incidentInput)url+='&incident_time='+encodeURIComponent(new Date(incidentInput).toISOString());const response=await apiFetch(url,{cache:'no-store'});const payload=await response.json();if(!response.ok)throw new Error(payload.detail||'Compliance request failed ('+response.status+')');lastDeadlines=payload;renderCompliance();}
   catch(err){box.innerHTML=`<div class="empty"><div style="color:var(--danger);font-size:20px">⚠</div><div style="color:var(--danger);margin-top:6px;font-weight:500">Could not load deadlines</div><div style="font-size:11px;margin-top:4px;color:var(--muted2)">${err.message}</div></div>`;}
 }
 function renderCompliance(){

@@ -297,6 +297,19 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter'
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 const API = 'https://pulse-proxy-8dqx.onrender.com';
+const requestHeaders = {};
+try {
+  const orgKey = localStorage.getItem('pulse_api_key');
+  const adminKey = sessionStorage.getItem('pulse_admin_api_key');
+  if (orgKey) requestHeaders['X-API-Key'] = orgKey;
+  if (adminKey) requestHeaders['X-Admin-API-Key'] = adminKey;
+} catch (_) {}
+async function apiGet(path) {
+  const response = await fetch(API + path, {cache:'no-store', headers:requestHeaders});
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.detail || 'Request failed (' + response.status + ')');
+  return payload;
+}
 
 // ── Risk colours (matching topology.py bands) ──────────────────────────────
 const RISK_COLOR = {
@@ -357,8 +370,8 @@ async function loadTopology(force) {
 
   try {
     const [topo, isoRes] = await Promise.all([
-      fetch(API + '/topology', { cache: 'no-store' }).then(r => r.json()),
-      fetch(API + '/agents/isolated?active_only=true', { cache: 'no-store' }).then(r => r.json()).catch(() => ({ isolated_agents: [] }))
+      apiGet('/topology'),
+      apiGet('/agents/isolated?active_only=true').catch(() => ({ isolated_agents: [] }))
     ]);
 
     isolatedSet = new Set((isoRes.isolated_agents || []).map(r => r.agent_id));
