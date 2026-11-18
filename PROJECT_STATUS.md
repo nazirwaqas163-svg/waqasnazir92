@@ -27,6 +27,7 @@
 - Versioned tenant-scoped agent inventory, risk/data classification, immutable approval history, and an optional intercept approval gate are available after applying `migrations/0012_agent_governance_workflows.sql`.
 
 - Existing `agent_registry`, `legal_holds`, `org_policies`, `webhook_registrations`, `incident_reports`, `orgs`, and `replay_sessions` tables are restricted to server service-role access after applying `migrations/0009_rls_service_role_only.sql`.
+- Migration `0013_supabase_query_hardening.sql` adds indexes for the Supabase-reported unindexed foreign keys and makes the two service-role RLS checks init-plan safe.
 
 ## Known production gaps
 
