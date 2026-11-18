@@ -18,6 +18,7 @@ This roadmap translates the product review into deliverable stages. Arthur, Cred
 - Add monotonically sequenced append-only audit rows and verify adjacent sequence/hash links. Apply `migrations/0006_append_only_audit_ledger.sql`; the endpoint continues to report partial verification until independent anchoring is configured.
 - Add tenant-scoped, immutable evaluation dataset versions and run records with five safe deterministic evaluators and configurable pass-rate release gates. Apply `migrations/0007_versioned_evaluations.sql`, then set `PULSE_EVALUATIONS_ENABLED=true`.
 - Add signed, idempotently claimed webhook deliveries with retries and delivery history for legal hold and failed evaluation gate events. Apply `migrations/0010_webhook_delivery_history.sql`.
+- Add standardized provider/model, token-usage, and cost fields to traces with provider/model filters and usage totals. Apply `migrations/0011_genai_trace_usage_fields.sql`.
 
 ## Next: reliability foundation
 
@@ -26,7 +27,7 @@ This roadmap translates the product review into deliverable stages. Arthur, Cred
 
 ## Then: observability and evaluation
 
-1. Extend trace ingestion with standardized GenAI semantic attributes, provider/model metadata, token/cost fields, and correlated policy decisions; add retention and redaction controls.
+1. Add retention and redaction controls plus trace correlation to policy decisions. Standard GenAI provider/model metadata, token usage, and cost fields are now available.
 2. Add configurable alert conditions beyond event subscriptions; delivery retries, deduplication, and history now cover legal holds and evaluation release-gate failures.
 
 ## Then: governance lifecycle

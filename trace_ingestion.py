@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from datetime import datetime
 from typing import Any, Dict
@@ -24,6 +25,22 @@ def _timestamp(value: Any, field: str) -> str:
     if parsed.tzinfo is None:
         raise ValueError(f"{field} must include a timezone")
     return parsed.isoformat()
+
+
+def _first_value(*sources: tuple[Dict[str, Any], str]) -> Any:
+    for source, key in sources:
+        value = source.get(key)
+        if value is not None:
+            return value
+    return None
+
+
+def _nonnegative_int(value: Any, field: str) -> Any:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError(f"{field} must be a non-negative integer")
+    return value
 
 
 def normalize_span(span: Dict[str, Any], org_id: str) -> Dict[str, Any]:
@@ -61,6 +78,46 @@ def normalize_span(span: Dict[str, Any], org_id: str) -> Dict[str, Any]:
     status = span.get("status", "unset")
     if not isinstance(status, str) or status not in {"unset", "ok", "error"}:
         raise ValueError("status must be unset, ok, or error")
+
+    provider = _first_value(
+        (span, "provider"), (resource, "gen_ai.provider.name"),
+        (resource, "gen_ai.system"), (attributes, "gen_ai.provider.name"),
+        (attributes, "gen_ai.system"),
+    )
+    model = _first_value(
+        (span, "model"), (attributes, "gen_ai.request.model"),
+        (attributes, "gen_ai.response.model"), (resource, "gen_ai.request.model"),
+    )
+    if provider is not None and (not isinstance(provider, str) or len(provider) > 128):
+        raise ValueError("provider must be a string of at most 128 characters")
+    if model is not None and (not isinstance(model, str) or len(model) > 256):
+        raise ValueError("model must be a string of at most 256 characters")
+
+    input_tokens = _nonnegative_int(_first_value(
+        (span, "input_tokens"), (attributes, "gen_ai.usage.input_tokens"),
+        (attributes, "gen_ai.usage.prompt_tokens"),
+    ), "input_tokens")
+    output_tokens = _nonnegative_int(_first_value(
+        (span, "output_tokens"), (attributes, "gen_ai.usage.output_tokens"),
+        (attributes, "gen_ai.usage.completion_tokens"),
+    ), "output_tokens")
+    total_tokens = _nonnegative_int(_first_value(
+        (span, "total_tokens"), (attributes, "gen_ai.usage.total_tokens"),
+    ), "total_tokens")
+    if total_tokens is None and input_tokens is not None and output_tokens is not None:
+        total_tokens = input_tokens + output_tokens
+
+    cost_value = _first_value(
+        (span, "cost_usd"), (attributes, "gen_ai.usage.cost_usd"),
+        (attributes, "cost.usd"),
+    )
+    cost_usd = None
+    if cost_value is not None:
+        if isinstance(cost_value, bool) or not isinstance(cost_value, (int, float)):
+            raise ValueError("cost_usd must be a non-negative finite number")
+        cost_usd = float(cost_value)
+        if not math.isfinite(cost_usd) or cost_usd < 0:
+            raise ValueError("cost_usd must be a non-negative finite number")
     kind = span.get("kind", "internal")
     if not isinstance(kind, str) or kind not in {"internal", "server", "client", "producer", "consumer"}:
         raise ValueError("kind is not a supported span kind")
@@ -78,6 +135,12 @@ def normalize_span(span: Dict[str, Any], org_id: str) -> Dict[str, Any]:
         "ended_at": ended_at,
         "status": status,
         "agent_id": agent_id,
+        "provider": provider,
+        "model": model,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": total_tokens,
+        "cost_usd": cost_usd,
         "resource": resource,
         "attributes": attributes,
         "events": events,

@@ -2954,13 +2954,26 @@ async def ingest_trace_spans(payload: TraceBatchRequest, request: Request) -> Di
 
 
 @app.get("/v1/traces")
-async def list_recent_traces(request: Request, limit: int = Query(50, ge=1, le=200)) -> Dict[str, Any]:
+async def list_recent_traces(
+    request: Request,
+    limit: int = Query(50, ge=1, le=200),
+    provider: Optional[str] = Query(default=None, max_length=128),
+    model: Optional[str] = Query(default=None, max_length=256),
+) -> Dict[str, Any]:
     org_id = await get_org_id_for_request(request)
     try:
-        spans = await supabase_audit_client.get_trace_spans(org_id=org_id, limit=limit)
+        spans = await supabase_audit_client.get_trace_spans(
+            org_id=org_id, limit=limit, provider=provider, model=model
+        )
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-    return {"ok": True, "org_id": org_id, "count": len(spans), "spans": spans}
+    usage = {
+        "input_tokens": sum(int(span.get("input_tokens") or 0) for span in spans),
+        "output_tokens": sum(int(span.get("output_tokens") or 0) for span in spans),
+        "total_tokens": sum(int(span.get("total_tokens") or 0) for span in spans),
+        "cost_usd": round(sum(float(span.get("cost_usd") or 0) for span in spans), 8),
+    }
+    return {"ok": True, "org_id": org_id, "count": len(spans), "usage": usage, "spans": spans}
 
 
 @app.get("/v1/traces/{trace_id}")
