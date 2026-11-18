@@ -90,7 +90,7 @@ output = guard.intercept(
 
 ### Fail-Open Mode
 
-By default `fail_open=True` — if the Pulse backend is unreachable, the SDK passes the request through and logs a warning. Set `fail_open=False` to block on backend unavailability.
+By default `fail_open=False` — if the Pulse backend is unreachable or returns an unexpected HTTP error, the SDK raises. Set `fail_open=True` only when your risk policy explicitly permits ungoverned pass-through.
 
 ```python
 guard = PulseGuard(base_url="...", agent_id="...", fail_open=False)
@@ -103,14 +103,14 @@ guard = PulseGuard(base_url="...", agent_id="...", fail_open=False)
 ### `PulseGuard`
 
 ```python
-PulseGuard(base_url: str, agent_id: str, fail_open: bool = True)
+PulseGuard(base_url: str, agent_id: str, fail_open: bool = False)
 ```
 
 | Parameter | Type | Description |
 |---|---|---|
 | `base_url` | `str` | Pulse backend URL |
 | `agent_id` | `str` | Unique identifier for this agent |
-| `fail_open` | `bool` | Pass through if backend is unreachable (default: True) |
+| `fail_open` | `bool` | Pass through on backend/network errors (default: False) |
 
 ---
 
@@ -404,3 +404,4 @@ Waqas Nazir — non-technical founder, ASEAN AI governance specialist.
 All implementation by Claude (Anthropic).
 
 Pulse is ASEAN-native by design. Not a universal compliance tool — a precision instrument for PDPA Malaysia, Singapore MGF, and Vietnam AI Law.
+
