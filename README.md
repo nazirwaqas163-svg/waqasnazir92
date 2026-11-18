@@ -393,3 +393,10 @@ To share the kill-switch state across API instances, apply `migrations/0005_dura
 ## Append-only audit ledger
 
 Apply `migrations/0006_append_only_audit_ledger.sql` to add per-table monotonic sequence values and database guards against row updates and deletes. The `/ledger/integrity/ai_events` endpoint checks fetched row hashes, adjacent predecessor links, and sequence gaps. It deliberately reports partial verification until independent checkpoints are configured; a database administrator can still rewrite the database outside these guards.
+## Versioned evaluation workflows
+
+Apply `migrations/0007_versioned_evaluations.sql` and set `PULSE_EVALUATIONS_ENABLED=true` to enable the tenant-scoped API. Every request uses the organization `X-API-Key`. Dataset writes create a new immutable version; run records pin the dataset, agent, prompt, and model versions and report whether the configured minimum pass rate was met.
+
+Supported deterministic evaluator names are `exact_match`, `contains`, `not_contains`, `contains_any`, and `json_field_equals`. A case contains a unique `case_id`, `evaluator`, `candidate_output`, and `expected` value; `json_field_equals` also takes a dotted `field` path. These evaluators score supplied outputs and do not invoke a model.
+
+Endpoints: `POST /v1/evaluations/datasets`, `GET /v1/evaluations/datasets`, `POST /v1/evaluations/run`, and `GET /v1/evaluations/runs`.
