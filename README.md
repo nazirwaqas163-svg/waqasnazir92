@@ -48,7 +48,7 @@ Anonymous demo interception is disabled by default. Set `PULSE_ALLOW_ANONYMOUS_D
 
 Agent isolation requests include an explicit `org_id`; isolation and release are scoped to that organization, so matching agent IDs in other tenants remain unaffected.
 
-For restart- and worker-safe quarantine, apply `migrations/0003_durable_agent_isolations.sql`, then set `PULSE_DURABLE_ISOLATION_ENABLED=true` on the API service. When enabled, failure to read or write the isolation table returns HTTP 503 rather than allowing requests through. With the flag off, isolation uses process memory and `/health` reports degraded readiness.
+For restart- and worker-safe quarantine, apply `migrations/0003_durable_agent_isolations.sql`, then set `PULSE_DURABLE_ISOLATION_ENABLED=true` on the API service and redeploy. When enabled, failure to read or write the isolation table returns HTTP 503 rather than allowing requests through. With the flag off, isolation uses process memory and `/health` reports degraded readiness.
 
 ## Trace ingestion
 
