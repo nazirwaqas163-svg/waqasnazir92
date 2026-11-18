@@ -10,6 +10,7 @@ This roadmap translates the product review into deliverable stages. Arthur, Cred
 - Make health report readiness and degraded dependencies when Supabase or the upstream model is unavailable, or shadow mode is enabled.
 - Verify persisted event row hashes and label replay results as partial evidence when complete chain and external anchoring are not verified.
 - Make the SDK fail closed by default and correct the dashboard and docs to describe the guarantees actually provided.
+- Add tenant-scoped OpenTelemetry-style span ingestion, recent trace retrieval, trace detail lookup, bounded payload validation, and SDK support. Apply `migrations/0002_agent_traces.sql` before enabling these endpoints in production.
 
 ## Next: reliability foundation
 
@@ -19,7 +20,7 @@ This roadmap translates the product review into deliverable stages. Arthur, Cred
 
 ## Then: observability and evaluation
 
-1. Add trace ingestion (OpenTelemetry-compatible trace and span IDs), provider/model metadata, latency, token/cost fields, and correlated policy decisions.
+1. Extend trace ingestion with standardized GenAI semantic attributes, provider/model metadata, token/cost fields, and correlated policy decisions; add retention and redaction controls.
 2. Add versioned evaluation datasets, configurable evaluators, regression runs, thresholds, and release gates. Keep evaluator results linked to prompt/model/agent versions.
 3. Add configurable alert rules and delivery integrations with retries, deduplication, and delivery history.
 
