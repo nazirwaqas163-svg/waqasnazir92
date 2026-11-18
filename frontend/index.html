@@ -429,6 +429,14 @@ a{transition:color .16s ease}
   Isolated
   </button>
   <div style="flex:1"></div>
+  <button class="nav-btn" title="Evaluations" data-view="evaluations">
+    <svg viewBox="0 0 24 24"><path d="M4 19h16"/><path d="M6 16V9"/><path d="M12 16V5"/><path d="M18 16v-4"/><circle cx="6" cy="7" r="1"/><circle cx="12" cy="3" r="1"/><circle cx="18" cy="10" r="1"/></svg>
+  Eval
+  </button>
+  <button class="nav-btn" title="Agent Governance" data-view="governance">
+    <svg viewBox="0 0 24 24"><path d="M12 3 4 6v5c0 5 3.3 8.5 8 10 4.7-1.5 8-5 8-10V6z"/><path d="m9 12 2 2 4-4"/></svg>
+  Registry
+  </button>
   <button class="nav-btn" title="Settings" data-view="settings">
     <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l.06.06a2 2 0 0 1-2.83-2.83l-.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
   Settings
@@ -621,6 +629,81 @@ a{transition:color .16s ease}
           </div>
         </div>
         <div id="compliance-body"><div class="loading"><div class="spin"></div>Loading compliance deadlines…</div></div>
+      </div>
+    </div>
+
+    <!-- EVALUATION WORKBENCH -->
+    <div class="ledger" id="view-evaluations" style="display:none">
+      <div class="tbl-head-row">
+        <div><div class="section-label">Evaluation Workbench</div><div class="kpi-sub" style="margin-top:6px">Score supplied candidate outputs against versioned cases and inspect release gates.</div></div>
+        <div class="tools-row"><button class="refresh-btn" onclick="loadEvaluations()">↻ Refresh</button></div>
+      </div>
+      <div id="evaluation-message" class="empty" style="display:none"></div>
+      <div class="evt-tbl" style="padding:14px">
+        <div class="section-label" style="margin-bottom:12px">Create dataset version</div>
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(150px,1fr));gap:9px">
+          <input id="eval-name" class="search" style="width:100%" placeholder="Dataset name"/>
+          <input id="eval-agent-id" class="search" style="width:100%" placeholder="Agent ID"/>
+          <input id="eval-agent-version" class="search" style="width:100%" placeholder="Agent version"/>
+          <input id="eval-prompt-version" class="search" style="width:100%" placeholder="Prompt version"/>
+          <input id="eval-model-version" class="search" style="width:100%" placeholder="Model version"/>
+          <input id="eval-dataset-id" class="search" style="width:100%" placeholder="Dataset ID (optional for new series)"/>
+        </div>
+        <label class="section-label" for="eval-cases" style="margin:14px 0 7px">Cases JSON · candidate outputs are evaluated offline</label>
+        <textarea id="eval-cases" rows="6" style="width:100%;background:var(--bg4);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:10px;font:11px 'JetBrains Mono',monospace" spellcheck="false">[
+  {"case_id":"safe-response","evaluator":"contains","candidate_output":"This request is not allowed.","expected":"not allowed"},
+  {"case_id":"format-check","evaluator":"json_field_equals","candidate_output":"{\"decision\":\"allow\"}","field":"decision","expected":"allow"}
+]</textarea>
+        <div style="display:flex;gap:10px;align-items:center;margin-top:10px">
+          <button class="refresh-btn" onclick="createEvaluationDataset()">Save immutable version</button>
+          <span class="kpi-sub">Evaluators: exact_match, contains, not_contains, contains_any, json_field_equals</span>
+        </div>
+      </div>
+      <div>
+        <div class="tbl-head-row"><div class="section-label">Dataset versions</div><span class="cnt" id="eval-dataset-count">0</span></div>
+        <div class="evt-tbl" id="eval-dataset-list"><div class="empty">Add an organization API key to load datasets.</div></div>
+      </div>
+      <div>
+        <div class="tbl-head-row"><div class="section-label">Recent release-gate runs</div><span class="cnt" id="eval-run-count">0</span></div>
+        <div class="evt-tbl" id="eval-run-list"><div class="empty">No evaluation runs loaded.</div></div>
+      </div>
+      <div class="evt-tbl" style="padding:14px">
+        <div class="section-label" style="margin-bottom:10px">Selected run results</div>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px"><label class="kpi-sub" for="eval-threshold">Minimum pass rate</label><input id="eval-threshold" type="number" min="0" max="1" step="0.01" value="1" class="search" style="width:90px"/><span id="eval-run-summary" class="kpi-sub">Select a dataset version and run it.</span></div>
+        <div id="eval-result-list" class="empty">Case-level results will appear here.</div>
+      </div>
+    </div>
+
+    <!-- AGENT GOVERNANCE WORKBENCH -->
+    <div class="ledger" id="view-governance" style="display:none">
+      <div class="tbl-head-row">
+        <div><div class="section-label">Agent Registry & Approvals</div><div class="kpi-sub" style="margin-top:6px">Versioned ownership, risk classification, and review history. The intercept gate is controlled separately by deployment configuration.</div></div>
+        <div class="tools-row"><button class="refresh-btn" onclick="loadGovernance()">↻ Refresh</button></div>
+      </div>
+      <div id="governance-message" class="empty" style="display:none"></div>
+      <div class="evt-tbl" style="padding:14px">
+        <div class="section-label" style="margin-bottom:12px">Submit agent version</div>
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(150px,1fr));gap:9px">
+          <input id="gov-agent-id" class="search" style="width:100%" placeholder="Agent ID"/>
+          <input id="gov-version" class="search" style="width:100%" placeholder="Agent version"/>
+          <input id="gov-name" class="search" style="width:100%" placeholder="Display name"/>
+          <input id="gov-owner" class="search" style="width:100%" placeholder="Owner"/>
+          <input id="gov-model" class="search" style="width:100%" placeholder="Model version"/>
+          <input id="gov-prompt" class="search" style="width:100%" placeholder="Prompt version"/>
+          <select id="gov-environment" class="search" style="width:100%;color:var(--text)"><option value="development">Development</option><option value="staging">Staging</option><option value="production">Production</option></select>
+          <select id="gov-risk" class="search" style="width:100%;color:var(--text)"><option>low</option><option>medium</option><option>high</option><option>critical</option></select>
+          <select id="gov-classification" class="search" style="width:100%;color:var(--text)"><option>public</option><option>internal</option><option>confidential</option><option>restricted</option></select>
+        </div>
+        <input id="gov-scope" class="search" style="width:100%;margin-top:9px" placeholder="Allowed scope (comma separated)"/>
+        <div style="margin-top:10px"><button class="refresh-btn" onclick="submitGovernanceVersion()">Submit for review</button></div>
+      </div>
+      <div>
+        <div class="tbl-head-row"><div class="section-label">Version inventory</div><span class="cnt" id="gov-version-count">0</span></div>
+        <div class="evt-tbl" id="gov-version-list"><div class="empty">Add an organization API key to load the registry.</div></div>
+      </div>
+      <div class="evt-tbl" style="padding:14px">
+        <div class="section-label" style="margin-bottom:8px">Review notes</div>
+        <div style="display:flex;gap:8px;align-items:center"><input id="gov-review-notes" class="search" style="width:100%" placeholder="Approval or rejection rationale"/><span class="kpi-sub">Approval buttons appear for pending versions with an admin key.</span></div>
       </div>
     </div>
 
@@ -986,12 +1069,178 @@ function focusAttention(kind){
 }
 function refresh(){renderAttentionSummary();const f=filtered();renderRows(f);updateKpis(f);}
 
+let selectedEvaluationDataset = null;
+
+function showWorkbenchMessage(id, message, isError=false) {
+  const node=document.getElementById(id);
+  if(!node)return;
+  node.style.display='';
+  node.textContent=message;
+  node.style.color=isError?'var(--danger)':'var(--muted)';
+}
+
+async function loadEvaluations() {
+  if(!ORG_API_KEY){
+    showWorkbenchMessage('evaluation-message','Add an organization API key in Settings to use the evaluation workbench.',true);
+    return;
+  }
+  const message=document.getElementById('evaluation-message');
+  message.style.display='none';
+  const datasetsNode=document.getElementById('eval-dataset-list');
+  const runsNode=document.getElementById('eval-run-list');
+  datasetsNode.innerHTML='<div class="empty">Loading dataset versions…</div>';
+  runsNode.innerHTML='<div class="empty">Loading release-gate runs…</div>';
+  try {
+    const [datasetsResponse,runsResponse]=await Promise.all([
+      apiFetch('/v1/evaluations/datasets?limit=500',{cache:'no-store'}),
+      apiFetch('/v1/evaluations/runs?limit=100',{cache:'no-store'})
+    ]);
+    const [datasetsPayload,runsPayload]=await Promise.all([datasetsResponse.json(),runsResponse.json()]);
+    if(!datasetsResponse.ok)throw new Error(typeof datasetsPayload.detail==='string'?datasetsPayload.detail:JSON.stringify(datasetsPayload.detail||datasetsPayload));
+    if(!runsResponse.ok)throw new Error(typeof runsPayload.detail==='string'?runsPayload.detail:JSON.stringify(runsPayload.detail||runsPayload));
+    const datasets=datasetsPayload.datasets||[];
+    document.getElementById('eval-dataset-count').textContent=datasets.length;
+    datasetsNode.innerHTML=datasets.length?datasets.map(d=>`<div class="evt-row" style="grid-template-columns:1fr 100px 130px 120px">
+      <div><div class="actor-name">${escapeHTML(d.name)}</div><div class="evt-id">${escapeHTML(d.agent_id)} · ${escapeHTML(d.dataset_id)}</div></div>
+      <span class="badge stable">v${Number(d.dataset_version)||0}</span>
+      <span class="actor-desc">${escapeHTML(d.model_version)} / ${escapeHTML(d.prompt_version)}</span>
+      <button class="refresh-btn" onclick="runEvaluation('${safeJSArg(d.dataset_id)}',${Number(d.dataset_version)||1})">Run gate</button>
+    </div>`).join(''):'<div class="empty">No datasets yet. Create a version above.</div>';
+    const runs=runsPayload.runs||[];
+    document.getElementById('eval-run-count').textContent=runs.length;
+    runsNode.innerHTML=runs.length?runs.map(run=>`<div class="evt-row" style="grid-template-columns:1fr 100px 110px 130px">
+      <div><div class="actor-name">${escapeHTML(run.agent_id)} · ${escapeHTML(run.agent_version)}</div><div class="evt-id">${escapeHTML(run.run_id||'')}</div></div>
+      <span class="badge ${run.release_gate_passed?'stable':'critical'}">${run.release_gate_passed?'PASS':'BLOCKED'}</span>
+      <span class="actor-desc">${Math.round(Number(run.pass_rate||0)*100)}% / ${Math.round(Number(run.minimum_pass_rate||0)*100)}%</span>
+      <span class="evt-ts">${escapeHTML(run.created_at||'')}</span>
+    </div>`).join(''):'<div class="empty">No runs yet.</div>';
+  } catch(error) {
+    datasetsNode.innerHTML='<div class="empty">Evaluation data unavailable.</div>';
+    runsNode.innerHTML='';
+    showWorkbenchMessage('evaluation-message',error.message||String(error),true);
+  }
+}
+
+async function createEvaluationDataset() {
+  if(!ORG_API_KEY){showWorkbenchMessage('evaluation-message','Add an organization API key in Settings.',true);return;}
+  let cases;
+  try{cases=JSON.parse(document.getElementById('eval-cases').value);}catch(_){showWorkbenchMessage('evaluation-message','Cases must be valid JSON.',true);return;}
+  const body={
+    name:document.getElementById('eval-name').value.trim(),
+    agent_id:document.getElementById('eval-agent-id').value.trim(),
+    agent_version:document.getElementById('eval-agent-version').value.trim(),
+    prompt_version:document.getElementById('eval-prompt-version').value.trim(),
+    model_version:document.getElementById('eval-model-version').value.trim(),
+    dataset_id:document.getElementById('eval-dataset-id').value.trim()||undefined,
+    cases
+  };
+  try{
+    const response=await apiFetch('/v1/evaluations/datasets',{method:'POST',body:JSON.stringify(body)});
+    const payload=await response.json();
+    if(!response.ok)throw new Error(typeof payload.detail==='string'?payload.detail:JSON.stringify(payload.detail||payload));
+    const dataset=payload.dataset;
+    selectedEvaluationDataset={dataset_id:dataset.dataset_id,dataset_version:dataset.dataset_version};
+    document.getElementById('eval-dataset-id').value=dataset.dataset_id;
+    showWorkbenchMessage('evaluation-message',`Saved dataset version ${dataset.dataset_version}. Run it to evaluate the supplied candidate outputs.`);
+    await loadEvaluations();
+  }catch(error){showWorkbenchMessage('evaluation-message',error.message||String(error),true);}
+}
+
+async function runEvaluation(encodedDatasetId, datasetVersion) {
+  if(!ORG_API_KEY){showWorkbenchMessage('evaluation-message','Add an organization API key in Settings.',true);return;}
+  const datasetId=decodeURIComponent(encodedDatasetId);
+  const threshold=Math.max(0,Math.min(1,Number(document.getElementById('eval-threshold').value||1)));
+  const summary=document.getElementById('eval-run-summary');
+  summary.textContent='Running…';
+  try{
+    const response=await apiFetch('/v1/evaluations/run',{method:'POST',body:JSON.stringify({
+      dataset_id:datasetId,dataset_version:datasetVersion,minimum_pass_rate:threshold
+    })});
+    const payload=await response.json();
+    if(!response.ok)throw new Error(typeof payload.detail==='string'?payload.detail:JSON.stringify(payload.detail||payload));
+    const run=payload.run;
+    selectedEvaluationDataset={dataset_id:datasetId,dataset_version:datasetVersion};
+    summary.textContent=`${Math.round(run.pass_rate*100)}% · gate ${run.release_gate_passed?'passed':'blocked'} · ${run.passed_count}/${run.case_count}`;
+    const results=run.results||[];
+    document.getElementById('eval-result-list').innerHTML=results.map(result=>`<div class="evt-row" style="grid-template-columns:1fr 100px 1fr">
+      <span class="actor-name">${escapeHTML(result.case_id)}</span>
+      <span class="badge ${result.passed?'stable':'critical'}">${result.passed?'PASS':'FAIL'}</span>
+      <span class="actor-desc">${escapeHTML(result.reason)}</span>
+    </div>`).join('')||'<div class="empty">No case results returned.</div>';
+    await loadEvaluations();
+  }catch(error){summary.textContent='Run failed';showWorkbenchMessage('evaluation-message',error.message||String(error),true);}
+}
+
+async function loadGovernance() {
+  if(!ORG_API_KEY){showWorkbenchMessage('governance-message','Add an organization API key in Settings to load agent versions.',true);return;}
+  const message=document.getElementById('governance-message');
+  message.style.display='none';
+  const node=document.getElementById('gov-version-list');
+  node.innerHTML='<div class="empty">Loading agent versions…</div>';
+  try{
+    const response=await apiFetch('/v1/registry/agents?limit=500',{cache:'no-store'});
+    const payload=await response.json();
+    if(!response.ok)throw new Error(typeof payload.detail==='string'?payload.detail:JSON.stringify(payload.detail||payload));
+    const versions=payload.versions||[];
+    document.getElementById('gov-version-count').textContent=versions.length;
+    node.innerHTML=versions.length?versions.map(item=>{
+      const actions=item.approval_status==='pending'&&ADMIN_API_KEY?`<button class="refresh-btn" onclick="reviewAgentVersion('${safeJSArg(item.org_id)}','${safeJSArg(item.agent_id)}','${safeJSArg(item.agent_version)}','approved')">Approve</button> <button class="refresh-btn" onclick="reviewAgentVersion('${safeJSArg(item.org_id)}','${safeJSArg(item.agent_id)}','${safeJSArg(item.agent_version)}','rejected')">Reject</button>`:'';
+      return `<div class="evt-row" style="grid-template-columns:1.5fr 90px 100px 100px 170px">
+        <div><div class="actor-name">${escapeHTML(item.name)} · ${escapeHTML(item.agent_id)}</div><div class="evt-id">v${escapeHTML(item.agent_version)} · ${escapeHTML(item.environment)} · owner ${escapeHTML(item.owner)}</div><div class="evt-ts">${escapeHTML(item.model_version)} / ${escapeHTML(item.prompt_version)}</div></div>
+        <span class="badge elevated">${escapeHTML(item.risk_tier)}</span>
+        <span class="actor-desc">${escapeHTML(item.data_classification)}</span>
+        <span class="badge ${item.approval_status==='approved'?'stable':item.approval_status==='rejected'?'critical':'elevated'}">${escapeHTML(item.approval_status)}</span>
+        <span>${actions}</span>
+      </div>`;
+    }).join(''):'<div class="empty">No agent versions submitted.</div>';
+  }catch(error){node.innerHTML='<div class="empty">Registry unavailable.</div>';showWorkbenchMessage('governance-message',error.message||String(error),true);}
+}
+
+async function submitGovernanceVersion(){
+  if(!ORG_API_KEY){showWorkbenchMessage('governance-message','Add an organization API key in Settings.',true);return;}
+  const scope=document.getElementById('gov-scope').value.split(',').map(x=>x.trim()).filter(Boolean);
+  const body={
+    agent_id:document.getElementById('gov-agent-id').value.trim(),
+    agent_version:document.getElementById('gov-version').value.trim(),
+    name:document.getElementById('gov-name').value.trim(),
+    owner:document.getElementById('gov-owner').value.trim(),
+    environment:document.getElementById('gov-environment').value,
+    model_version:document.getElementById('gov-model').value.trim(),
+    prompt_version:document.getElementById('gov-prompt').value.trim(),
+    risk_tier:document.getElementById('gov-risk').value,
+    data_classification:document.getElementById('gov-classification').value,
+    scope
+  };
+  try{
+    const response=await apiFetch('/v1/registry/agents',{method:'POST',body:JSON.stringify(body)});
+    const payload=await response.json();
+    if(!response.ok)throw new Error(typeof payload.detail==='string'?payload.detail:JSON.stringify(payload.detail||payload));
+    showWorkbenchMessage('governance-message',`Version ${escapeHTML(payload.agent_version.agent_version)} submitted for review.`);
+    await loadGovernance();
+  }catch(error){showWorkbenchMessage('governance-message',error.message||String(error),true);}
+}
+
+async function reviewAgentVersion(encodedOrgId,encodedAgentId,encodedVersion,decision){
+  if(!ADMIN_API_KEY){showWorkbenchMessage('governance-message','Add an admin API key in Settings to review agent versions.',true);return;}
+  const orgId=decodeURIComponent(encodedOrgId),agentId=decodeURIComponent(encodedAgentId),version=decodeURIComponent(encodedVersion);
+  const notes=document.getElementById('gov-review-notes').value.trim();
+  try{
+    const path=`/admin/registry/${encodeURIComponent(agentId)}/${encodeURIComponent(version)}/review`;
+    const response=await apiFetch(path,{method:'POST',body:JSON.stringify({org_id:orgId,decision,notes})});
+    const payload=await response.json();
+    if(!response.ok)throw new Error(typeof payload.detail==='string'?payload.detail:JSON.stringify(payload.detail||payload));
+    showWorkbenchMessage('governance-message',`Version ${version} ${decision}.`);
+    await loadGovernance();
+  }catch(error){showWorkbenchMessage('governance-message',error.message||String(error),true);}
+}
+
+
 /* ── VIEW SWITCHING ── */
 document.querySelectorAll('.nav-btn[data-view]').forEach(b=>b.addEventListener('click',()=>switchView(b.dataset.view)));
-const VIEW_LOADERS={'traces':()=>loadTraces(),'agents':()=>{if(!lastTopology)loadAgents();},'analytics':()=>{if(!lastDrift)loadAnalytics();},'circuit-breaker':()=>loadCircuitBreaker(),'compliance':()=>{if(!lastDeadlines)loadCompliance();},'settings':()=>{if(!lastHealth)loadSettings();},'isolated':()=>loadIsolated(),'graph':()=>{window.open('topology.html','_blank');switchView('ledger');}};
+const VIEW_LOADERS={'traces':()=>loadTraces(),'agents':()=>{if(!lastTopology)loadAgents();},'analytics':()=>{if(!lastDrift)loadAnalytics();},'circuit-breaker':()=>loadCircuitBreaker(),'compliance':()=>{if(!lastDeadlines)loadCompliance();},'settings':()=>{if(!lastHealth)loadSettings();},'isolated':()=>loadIsolated(),'evaluations':()=>loadEvaluations(),'governance':()=>loadGovernance(),'graph':()=>{window.open('topology.html','_blank');switchView('ledger');}};
 function switchView(view){
   document.querySelectorAll('.nav-btn[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===view));
-  ['ledger','traces','agents','analytics','circuit-breaker','compliance','settings','isolated','graph'].forEach(v=>{const el=document.getElementById('view-'+v);if(el)el.style.display=v===view?'':'none';});
+  ['ledger','traces','agents','analytics','circuit-breaker','compliance','settings','isolated','evaluations','governance','graph'].forEach(v=>{const el=document.getElementById('view-'+v);if(el)el.style.display=v===view?'':'none';});
   closeInv();
   if(VIEW_LOADERS[view])VIEW_LOADERS[view]();
   if(view==='graph')setTimeout(graphResize,50);
