@@ -2912,7 +2912,8 @@ async def ledger_integrity_ai_events(limit: int = 100) -> Dict[str, Any]:
         "unresolved_predecessor_rows": unresolved_predecessors,
         "external_anchor_verified": False,
         "note": (
-            Each fetched row hash is recomputed from its stored event fields. Sequence gaps and adjacent predecessor links are checked too. 
+            "Each fetched row hash is recomputed from its stored event fields. "
+            "Sequence gaps and adjacent predecessor links are checked too. "
             "This endpoint does not verify a complete chain outside the fetched rows "
             "or an independently stored checkpoint, so it never reports the full ledger as VERIFIED."
         ),
