@@ -2996,7 +2996,13 @@ async def session_tree(session_id: str, limit: int = 500) -> Dict[str, Any]:
 async def ledger_integrity_ai_events(limit: int = 100) -> Dict[str, Any]:
     if not supabase_audit_client.configured:
         raise HTTPException(status_code=503, detail="Supabase not configured")
-    rows = await supabase_audit_client.get_ai_events_chain(limit=limit)
+    try:
+        rows = await supabase_audit_client.get_ai_events_chain(limit=limit)
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Audit sequence storage is unavailable; apply migrations/0006_append_only_audit_ledger.sql",
+        ) from exc
     total = len(rows)
     known_hashes = {row.get("row_hash") for row in rows if row.get("row_hash")}
     invalid_hashes = []
