@@ -21,9 +21,11 @@
 - Durable BDI history and baseline counts are available after applying `migrations/0004_durable_agent_sessions.sql` and enabling `PULSE_DURABLE_SESSION_STATE_ENABLED=true`. Version conflicts retry; storage failures return 503.
 - Shared circuit-breaker state is available after applying `migrations/0005_durable_circuit_breaker.sql` and enabling `PULSE_DURABLE_CIRCUIT_BREAKER_ENABLED=true`. Gated requests synchronize with Supabase; unavailable storage returns 503.
 
+- Versioned evaluation datasets, deterministic evaluators, immutable run history, and pass-rate release gates are available after applying `migrations/0007_versioned_evaluations.sql` and enabling `PULSE_EVALUATIONS_ENABLED=true`. Requests use tenant API keys and persist agent/prompt/model version metadata.
+
 ## Known production gaps
 
-Versioned evaluation workflows, registry and approval lifecycle, alert delivery integrations, and enterprise SSO still require later implementation and supporting infrastructure. Trace ingestion, durable isolation, durable sessions, and the durable breaker require applying their SQL migrations before enabling the corresponding flags. See [IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md).
+Registry and approval lifecycle, alert delivery integrations, independent audit anchoring and key rotation, and enterprise SSO still require later implementation and supporting infrastructure. Trace ingestion, durable isolation, durable sessions, and the durable breaker require applying their SQL migrations before enabling the corresponding flags. See [IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md).
 
 ## Local development
 
