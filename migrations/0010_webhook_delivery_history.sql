@@ -3,7 +3,7 @@
 create table if not exists public.webhook_delivery_logs (
     delivery_key text primary key,
     org_id text not null,
-    registration_id uuid not null,
+    registration_id uuid not null references public.webhook_registrations(id),
     event_type text not null,
     event_reference text not null,
     status text not null default 'pending' check (status in ('pending', 'delivered', 'failed')),
