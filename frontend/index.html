@@ -17,6 +17,13 @@
   --danger:#ef4444;--danger-bg:rgba(239,68,68,0.1);--danger-border:rgba(239,68,68,0.25);
   --critical:#ff6b35;--critical-bg:rgba(255,107,53,0.1);--critical-border:rgba(255,107,53,0.3);
 }
+.sidebar{width:82px;padding:16px 6px;gap:8px}
+.nav-btn{width:70px;min-height:54px;font-size:9px;letter-spacing:0;text-transform:none}
+.nav-btn .nav-icon{font-size:17px;line-height:18px;color:var(--accent)}
+.section-nav{min-height:42px;display:flex;align-items:center;gap:6px;padding:5px 18px;background:var(--bg2);border-bottom:1px solid var(--border);overflow-x:auto}
+.section-nav button{border:0;border-radius:6px;background:transparent;color:var(--muted);padding:7px 11px;font:500 11px 'Inter',sans-serif;white-space:nowrap;cursor:pointer}
+.section-nav button:hover{background:var(--bg4);color:var(--text)}
+.section-nav button.active{background:rgba(0,212,255,.09);color:var(--accent)}
 body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:13px;overflow:hidden}
 .app{display:flex;height:100vh}
 .sidebar{width:68px;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding:14px 0;gap:6px;flex-shrink:0}
@@ -394,53 +401,14 @@ a{transition:color .16s ease}
 <body>
 <div class="app">
 
-<div class="sidebar">
-  <div class="logo" style="background:none;width:34px;height:34px;padding:0"><svg viewBox="0 0 96 96" fill="none" width="34" height="34"><path stroke="#00C2D4" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" d="M30 14 L42 7 L54 14 L54 28 L42 35 L30 28 Z"/><path stroke="#00C2D4" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.55" d="M12 42 L24 35 L36 42 L36 56 L24 63 L12 56 Z"/><path stroke="#E8A030" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.85" d="M48 42 L60 35 L72 42 L72 56 L60 63 L48 56 Z"/><circle fill="#00C2D4" cx="48" cy="42" r="3"/></svg></div>
-  <button class="nav-btn active" title="Ledger" data-view="ledger">
-    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
-  Monitor
-  </button>
-  <button class="nav-btn" title="Agent Traces" data-view="traces">
-    <svg viewBox="0 0 24 24"><circle cx="5" cy="6" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="12" cy="18" r="2"/><path d="M7 7.5l3.5 8M17 7.5l-3.5 8M7 6h10"/></svg>
-  Traces
-  </button>
-    <button class="nav-btn" title="Analytics" data-view="analytics">
-    <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-  Analytics
-    </button>
-  <button class="nav-btn" title="Agents" data-view="agents">
-    <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
-  Agents
-  </button>
-  <button class="nav-btn" title="Agent Topology" onclick="window.open('topology.html','_blank')" data-view="graph">
-    <svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><line x1="12" y1="7.5" x2="6.3" y2="17"/><line x1="12" y1="7.5" x2="17.7" y2="17"/></svg>
-  Topology
-  </button>
-  <button class="nav-btn" title="Circuit Breaker" data-view="circuit-breaker">
-    <svg viewBox="0 0 24 24"><path d="M18.36 6.64A9 9 0 1 1 5.64 6.64"/><polyline points="13 2 13 8 16 8"/></svg>
-  Breaker
-  </button>
-  <button class="nav-btn" title="Compliance" data-view="compliance">
-    <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-  Compliance
-  </button>
-    <button class="nav-btn" title="Isolated Agents" data-view="isolated">
-    <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/><line x1="4" y1="4" x2="20" y2="20"/></svg>
-  Isolated
-  </button>
+<div class="sidebar" aria-label="Primary navigation">
+  <div class="logo" title="Forensa AI"><svg viewBox="0 0 96 96" fill="none" width="34" height="34"><path stroke="#00C2D4" stroke-width="3" d="M30 14 42 7 54 14v14l-12 7-12-7z"/><path stroke="#00C2D4" stroke-width="3" opacity=".55" d="m12 42 12-7 12 7v14l-12 7-12-7z"/><path stroke="#E8A030" stroke-width="3" opacity=".85" d="m48 42 12-7 12 7v14l-12 7-12-7z"/></svg></div>
+  <button class="nav-btn active" title="Overview" aria-label="Overview" data-section="overview"><span class="nav-icon">⌂</span><span>Overview</span></button>
+  <button class="nav-btn" title="Monitor" aria-label="Monitor" data-section="monitor"><span class="nav-icon">◉</span><span>Monitor</span></button>
+  <button class="nav-btn" title="Investigate" aria-label="Investigate" data-section="investigate"><span class="nav-icon">⌕</span><span>Investigate</span></button>
+  <button class="nav-btn" title="Governance" aria-label="Governance" data-section="governance"><span class="nav-icon">◇</span><span>Governance</span></button>
   <div style="flex:1"></div>
-  <button class="nav-btn" title="Evaluations" data-view="evaluations">
-    <svg viewBox="0 0 24 24"><path d="M4 19h16"/><path d="M6 16V9"/><path d="M12 16V5"/><path d="M18 16v-4"/><circle cx="6" cy="7" r="1"/><circle cx="12" cy="3" r="1"/><circle cx="18" cy="10" r="1"/></svg>
-  Eval
-  </button>
-  <button class="nav-btn" title="Agent Governance" data-view="governance">
-    <svg viewBox="0 0 24 24"><path d="M12 3 4 6v5c0 5 3.3 8.5 8 10 4.7-1.5 8-5 8-10V6z"/><path d="m9 12 2 2 4-4"/></svg>
-  Registry
-  </button>
-  <button class="nav-btn" title="Settings" data-view="settings">
-    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l.06.06a2 2 0 0 1-2.83-2.83l-.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-  Settings
-  </button>
+  <button class="nav-btn" title="Settings" aria-label="Settings" data-section="settings"><span class="nav-icon">⚙</span><span>Settings</span></button>
 </div>
 
 <div class="main">
@@ -452,6 +420,8 @@ a{transition:color .16s ease}
       <span id="clock"></span>
     </div>
   </div>
+
+  <nav class="section-nav" id="section-nav" aria-label="Section pages"></nav>
 
   <div class="content">
 
@@ -1236,14 +1206,30 @@ async function reviewAgentVersion(encodedOrgId,encodedAgentId,encodedVersion,dec
 
 
 /* ── VIEW SWITCHING ── */
-document.querySelectorAll('.nav-btn[data-view]').forEach(b=>b.addEventListener('click',()=>switchView(b.dataset.view)));
+const SECTION_PAGES={
+  overview:[['ledger','Activity']],
+  monitor:[['traces','Traces'],['agents','Agents'],['graph','Topology'],['analytics','Analytics'],['circuit-breaker','Circuit breaker']],
+  investigate:[['isolated','Isolated agents'],['ledger','Event activity'],['traces','Trace explorer']],
+  governance:[['compliance','Compliance'],['evaluations','Evaluations'],['governance','Agent registry']],
+  settings:[['settings','Configuration']]
+};
 const VIEW_LOADERS={'traces':()=>loadTraces(),'agents':()=>{if(!lastTopology)loadAgents();},'analytics':()=>{if(!lastDrift)loadAnalytics();},'circuit-breaker':()=>loadCircuitBreaker(),'compliance':()=>{if(!lastDeadlines)loadCompliance();},'settings':()=>{if(!lastHealth)loadSettings();},'isolated':()=>loadIsolated(),'evaluations':()=>loadEvaluations(),'governance':()=>loadGovernance(),'graph':()=>{window.open('topology.html','_blank');switchView('ledger');}};
-function switchView(view){
-  document.querySelectorAll('.nav-btn[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===view));
-  ['ledger','traces','agents','analytics','circuit-breaker','compliance','settings','isolated','evaluations','governance','graph'].forEach(v=>{const el=document.getElementById('view-'+v);if(el)el.style.display=v===view?'':'none';});
-  closeInv();
-  if(VIEW_LOADERS[view])VIEW_LOADERS[view]();
-  if(view==='graph')setTimeout(graphResize,50);
+let activeSection='overview';
+function renderSectionNav(section, selected){
+ const nav=document.getElementById('section-nav');
+ nav.innerHTML=(SECTION_PAGES[section]||[]).map(([view,label])=>'<button type="button" class="'+(view===selected?'active':'')+'" onclick="switchView(\''+view+'\',\''+section+'\')">'+label+'</button>').join('');
+}
+document.querySelectorAll('.nav-btn[data-section]').forEach(button=>button.addEventListener('click',()=>{const section=button.dataset.section;activeSection=section;const first=(SECTION_PAGES[section]||[])[0];switchView(first[0],section);}));
+function switchView(view,section){
+ const parent=section||Object.keys(SECTION_PAGES).find(key=>SECTION_PAGES[key].some(item=>item[0]===view))||activeSection;
+ activeSection=parent;
+ document.querySelectorAll('.nav-btn[data-section]').forEach(button=>button.classList.toggle('active',button.dataset.section===parent));
+ document.querySelectorAll('.nav-btn[data-view]').forEach(button=>button.classList.remove('active'));
+ renderSectionNav(parent,view);
+ ['ledger','traces','agents','analytics','circuit-breaker','compliance','settings','isolated','evaluations','governance','graph'].forEach(name=>{const element=document.getElementById('view-'+name);if(element)element.style.display=name===view?'':'none';});
+ closeInv();
+ if(VIEW_LOADERS[view])VIEW_LOADERS[view]();
+ if(view==='graph')setTimeout(graphResize,50);
 }
 
 async function loadTraces(){
