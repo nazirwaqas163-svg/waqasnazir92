@@ -23,6 +23,8 @@
 
 - Versioned evaluation datasets, deterministic evaluators, immutable run history, and pass-rate release gates are available after applying `migrations/0007_versioned_evaluations.sql` and enabling `PULSE_EVALUATIONS_ENABLED=true`. Requests use tenant API keys and persist agent/prompt/model version metadata.
 
+- Existing `agent_registry`, `legal_holds`, `org_policies`, `webhook_registrations`, `incident_reports`, `orgs`, and `replay_sessions` tables are restricted to server service-role access after applying `migrations/0009_rls_service_role_only.sql`.
+
 ## Known production gaps
 
 Registry and approval lifecycle, alert delivery integrations, independent audit anchoring and key rotation, and enterprise SSO still require later implementation and supporting infrastructure. Trace ingestion, durable isolation, durable sessions, and the durable breaker require applying their SQL migrations before enabling the corresponding flags. See [IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md).
