@@ -98,6 +98,25 @@ def test_intercept_sends_org_api_key(mock_client_cls: MagicMock) -> None:
         "x-api-key": "pulse_test_key",
     }
 
+
+@patch("pulse_sdk.httpx.Client")
+def test_ingest_trace_spans_uses_org_key(mock_client_cls: MagicMock) -> None:
+    mock_client = _mock_client()
+    response = MagicMock(spec=httpx.Response)
+    response.json.return_value = {"ok": True, "received": 1, "inserted": 1}
+    response.raise_for_status = MagicMock()
+    mock_client.post.return_value = response
+    mock_client_cls.return_value = mock_client
+
+    guard = PulseGuard(
+        "https://pulse.example", agent_id="agent-1", api_key="org-secret"
+    )
+    result = guard.ingest_trace_spans([{"trace_id": "abc"}])
+
+    assert result["inserted"] == 1
+    assert mock_client.post.call_args.args[0] == "https://pulse.example/v1/traces"
+    assert mock_client.post.call_args.kwargs["headers"]["x-api-key"] == "org-secret"
+
 def test_new_session() -> None:
     guard = PulseGuard("http://127.0.0.1:8000", agent_id="test-agent")
     session_id = guard.new_session()
