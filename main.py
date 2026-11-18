@@ -57,6 +57,7 @@ PULSE_ADMIN_KEYS_JSON = os.getenv("PULSE_ADMIN_KEYS_JSON", "[]")
 ALLOW_ANONYMOUS_DEMO = os.getenv("PULSE_ALLOW_ANONYMOUS_DEMO", "false").lower() in {"1", "true", "yes"}
 PULSE_DURABLE_ISOLATION_ENABLED = os.getenv("PULSE_DURABLE_ISOLATION_ENABLED", "false").lower() in {"1", "true", "yes"}
 PULSE_DURABLE_SESSION_STATE_ENABLED = os.getenv("PULSE_DURABLE_SESSION_STATE_ENABLED", "false").lower() in {"1", "true", "yes"}
+PULSE_DURABLE_CIRCUIT_BREAKER_ENABLED = os.getenv("PULSE_DURABLE_CIRCUIT_BREAKER_ENABLED", "false").lower() in {"1", "true", "yes"}
 BASELINE_MIN_TURNS = int(os.getenv("PULSE_BASELINE_MIN_TURNS", "5"))
 FINANCIAL_TRANSACTION_LIMIT = Decimal("5000")
 FINANCIAL_KEYWORDS = {
@@ -300,6 +301,59 @@ async def protect_sensitive_routes(request: Request, call_next):
 feed = PulseFeed(max_events=int(os.getenv("PULSE_FEED_LIMIT", "500")))
 bdi_state = BDIState()
 circuit_breaker = CircuitBreakerMiddleware(agent_cooldown_seconds=AGENT_COOLDOWN_SECONDS)
+
+async def _sync_durable_circuit_breaker() -> None:
+    if not PULSE_DURABLE_CIRCUIT_BREAKER_ENABLED:
+        return
+    try:
+        persisted = await supabase_audit_client.get_circuit_breaker_state()
+        if persisted.get("state") == "open":
+            if not circuit_breaker.is_open():
+                circuit_breaker.open(
+                    reason=str(persisted.get("reason") or "Durable circuit breaker is open"),
+                    bdi_score=float(persisted.get("bdi_score") or 0.0),
+                    entropy=float(persisted.get("entropy") or 0.0),
+                )
+        elif circuit_breaker.is_open():
+            circuit_breaker.close(reason="Durable circuit breaker is closed", bdi_score=0.0, entropy=0.0)
+    except Exception as exc:
+        logger.exception("Durable circuit-breaker synchronization failed")
+        raise HTTPException(status_code=503, detail="Durable circuit breaker is unavailable") from exc
+
+
+async def _persist_circuit_breaker_state(reason: Optional[str] = None) -> None:
+    if not PULSE_DURABLE_CIRCUIT_BREAKER_ENABLED:
+        return
+    snapshot = circuit_breaker.status()
+    failure = circuit_breaker.last_failure or {}
+    try:
+        await supabase_audit_client.set_circuit_breaker_state(
+            state=str(snapshot["state"]),
+            reason=reason or str(failure.get("reason") or "Circuit breaker closed"),
+            bdi_score=float(failure.get("bdi_score") or 0.0),
+            entropy=float(failure.get("entropy") or 0.0),
+        )
+    except Exception as exc:
+        logger.exception("Durable circuit-breaker persistence failed")
+        raise HTTPException(status_code=503, detail="Durable circuit breaker is unavailable") from exc
+
+
+async def _gate_circuit_breaker(**kwargs: Any) -> Dict[str, Any]:
+    await _sync_durable_circuit_breaker()
+    disposition = circuit_breaker.gate_request(**kwargs)
+    if PULSE_DURABLE_CIRCUIT_BREAKER_ENABLED and circuit_breaker.is_open():
+        await _persist_circuit_breaker_state()
+    return disposition
+
+
+async def _open_circuit_breaker(*, reason: str, bdi_score: float, entropy: float) -> None:
+    circuit_breaker.open(reason=reason, bdi_score=bdi_score, entropy=entropy)
+    await _persist_circuit_breaker_state(reason)
+
+
+async def _close_circuit_breaker(*, reason: str, bdi_score: float = 0.0, entropy: float = 0.0) -> None:
+    circuit_breaker.close(reason=reason, bdi_score=bdi_score, entropy=entropy)
+    await _persist_circuit_breaker_state(reason)
 
 
 def _as_isolation_dict(record: Any) -> Optional[Dict[str, Any]]:
@@ -1033,7 +1087,7 @@ def _fallback_completion(payload: ChatProxyRequest, pulse: Dict[str, Any]) -> Di
     _record_output(pulse["request_id"], response)
     return response
 
-def _gate_or_drop(
+async def _gate_or_drop(
     payload: ChatProxyRequest,
     request: Request,
     *,
@@ -1041,7 +1095,7 @@ def _gate_or_drop(
     entropy: float,
 ) -> Optional[Response]:
     agent_id = _agent_id(payload, request)
-    disposition = circuit_breaker.gate_request(
+    disposition = await _gate_circuit_breaker(
         agent_id=agent_id,
         bdi_score=bdi_score,
         entropy=entropy,
@@ -1214,13 +1268,19 @@ def compute_calibration(
         },
     }
 @app.get("/health")
-def health() -> Dict[str, Any]:
+async def health() -> Dict[str, Any]:
+    try:
+        await _sync_durable_circuit_breaker()
+        durable_breaker_available = True
+    except HTTPException:
+        durable_breaker_available = False
     cb_snapshot = circuit_breaker.status()
     dependencies = {
         "supabase": supabase_audit_client.configured,
         "upstream_llm": bool(UPSTREAM_API_KEY),
         "durable_agent_isolation": PULSE_DURABLE_ISOLATION_ENABLED and supabase_audit_client.configured,
         "durable_session_state": PULSE_DURABLE_SESSION_STATE_ENABLED and supabase_audit_client.configured,
+        "durable_circuit_breaker": PULSE_DURABLE_CIRCUIT_BREAKER_ENABLED and supabase_audit_client.configured and durable_breaker_available,
     }
     degraded_reasons = []
     if not dependencies["supabase"]:
@@ -1231,6 +1291,8 @@ def health() -> Dict[str, Any]:
         degraded_reasons.append("agent isolation is process-local; durable isolation is disabled or unavailable")
     if not dependencies["durable_session_state"]:
         degraded_reasons.append("session baselines are process-local; durable session state is disabled or unavailable")
+    if not dependencies["durable_circuit_breaker"]:
+        degraded_reasons.append("circuit-breaker state is process-local or durable storage is unavailable")
     if SHADOW_MODE:
         degraded_reasons.append("shadow mode is enabled; policy decisions are not enforced")
     if not cb_snapshot["allows_requests"]:
@@ -1259,19 +1321,20 @@ def admin_whoami(principal: Dict[str, str] = Depends(require_dashboard_access)) 
 
 
 @app.get("/circuit-breaker/status")
-def circuit_breaker_status() -> dict[str, object]:
+async def circuit_breaker_status() -> dict[str, object]:
+    await _sync_durable_circuit_breaker()
     return circuit_breaker.status()
 
 @app.post("/circuit-breaker/open")
-def circuit_breaker_open(payload: CircuitBreakerOpenRequest, _admin: Dict[str, str] = Depends(require_operator)) -> dict[str, object]:
-    circuit_breaker.open(reason=payload.reason, bdi_score=payload.bdi_score, entropy=payload.entropy)
+async def circuit_breaker_open(payload: CircuitBreakerOpenRequest, _admin: Dict[str, str] = Depends(require_operator)) -> dict[str, object]:
+    await _open_circuit_breaker(reason=payload.reason, bdi_score=payload.bdi_score, entropy=payload.entropy)
     if circuit_breaker.last_failure is not None:
         circuit_breaker.last_failure["manual"] = True
     return {"ok": True, "message": "Circuit breaker manually opened", "status_code": 503, **circuit_breaker.status()}
 
 @app.post("/circuit-breaker/close")
-def circuit_breaker_close(payload: CircuitBreakerCloseRequest, _admin: Dict[str, str] = Depends(require_operator)) -> dict[str, object]:
-    circuit_breaker.close(reason=payload.reason, bdi_score=payload.bdi_score, entropy=payload.entropy)
+async def circuit_breaker_close(payload: CircuitBreakerCloseRequest, _admin: Dict[str, str] = Depends(require_operator)) -> dict[str, object]:
+    await _close_circuit_breaker(reason=payload.reason, bdi_score=payload.bdi_score, entropy=payload.entropy)
     return {"ok": True, "message": "Circuit breaker reset to closed", "status_code": 200, **circuit_breaker.status()}
 
 @app.get("/pulse")
@@ -1279,8 +1342,8 @@ def pulse(limit: int = 50) -> Dict[str, Any]:
     return {"events": feed.list(limit=limit)}
 
 @app.post("/pulse")
-def pulse_tool_call(payload: PulseToolCallRequest, request: Request, _operator: Dict[str, str] = Depends(require_operator)):
-    disposition = circuit_breaker.gate_request(
+async def pulse_tool_call(payload: PulseToolCallRequest, request: Request, _operator: Dict[str, str] = Depends(require_operator)):
+    disposition = await _gate_circuit_breaker(
         agent_id=payload.agent_id or request.headers.get("x-agent-id"),
         bdi_score=0.0,
         entropy=0.0,
@@ -1326,7 +1389,7 @@ async def chat_completions(payload: ChatProxyRequest, request: Request):
     entropy = _effective_entropy(payload, prompt_text)
     provisional_pulse: Dict[str, Any] = {"entropy": entropy, "bdi_score": 0.0}
     bdi_score = _effective_bdi_score(payload, provisional_pulse)
-    dropped = _gate_or_drop(payload, request, bdi_score=bdi_score, entropy=entropy)
+    dropped = await _gate_or_drop(payload, request, bdi_score=bdi_score, entropy=entropy)
     if dropped is not None:
         await _insert_audit_log(payload, request, provisional_pulse, {"status_code": 503, "dropped": True})
         return dropped
@@ -1418,7 +1481,7 @@ async def intercept(payload: InterceptRequest, request: Request) -> Dict[str, An
         output_text=payload.output_text,
     )
     if drift_result.get("status") == "critical":
-        circuit_breaker.open(
+        await _open_circuit_breaker(
             reason=f"Auto-trip: critical drift detected (entropy={drift_result.get('score', 0):.3f})",
             bdi_score=float(drift_result.get("score", 0.0)),
             entropy=float(drift_result.get("score", 0.0)),
@@ -1566,7 +1629,7 @@ async def intercept(payload: InterceptRequest, request: Request) -> Dict[str, An
             )
         )
 
-    disposition = circuit_breaker.gate_request(
+    disposition = await _gate_circuit_breaker(
         agent_id=payload.agent_id,
         bdi_score=bdi_score,
         entropy=entropy,
@@ -1710,11 +1773,11 @@ async def intercept(payload: InterceptRequest, request: Request) -> Dict[str, An
     }
 
 @app.post("/pulse/reset")
-def reset(_admin: Dict[str, str] = Depends(require_operator)) -> Dict[str, Any]:
+async def reset(_admin: Dict[str, str] = Depends(require_operator)) -> Dict[str, Any]:
     feed.clear()
     bdi_state.reset()
     session_store.reset()
-    circuit_breaker.close(reason="manual reset", bdi_score=0.0, entropy=0.0)
+    await _close_circuit_breaker(reason="manual reset", bdi_score=0.0, entropy=0.0)
     drift_engine.reset()
     legal_hold_manager.reset()
     _agent_cache.clear()
@@ -1980,7 +2043,7 @@ async def agt_bridge(payload: AGTToolCall) -> Dict[str, Any]:
     bdi_score = session_store.record_turn(session_id, agent_id, input_text, output_text)
     drift_result = drift_engine.record_turn(session_id=session_id, input_text=input_text, output_text=output_text)
     entropy = _calculate_shannon_entropy(input_text)
-    disposition = circuit_breaker.gate_request(agent_id=agent_id, bdi_score=bdi_score, entropy=entropy, shadow_mode=SHADOW_MODE, intercept=True)
+    disposition = await _gate_circuit_breaker(agent_id=agent_id, bdi_score=bdi_score, entropy=entropy, shadow_mode=SHADOW_MODE, intercept=True)
     request_id = str(uuid.uuid4())
     if disposition.get("action") not in {None, RequestAction.PROCEED.value}:
         _record_drop_event(disposition, agent_id=agent_id, bdi_score=bdi_score, entropy=entropy)
