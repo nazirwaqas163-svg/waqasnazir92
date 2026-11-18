@@ -782,6 +782,7 @@ async def _insert_intercept_logs(
 
 async def _maybe_open_legal_hold(
     *,
+    org_id: Optional[str] = None,
     agent_id: Optional[str],
     session_id: Optional[str],
     event_id: Optional[str],
@@ -855,6 +856,7 @@ async def _maybe_open_legal_hold(
                 agent_id,
                 reason=hold["reason"],
                 hold_id=hold["id"],
+                org_id=org_id or "global",
             )
             feed.add(
                 PulseEvent(
@@ -1291,8 +1293,8 @@ async def intercept(payload: InterceptRequest, request: Request) -> Dict[str, An
         payload.session_id = f"{payload.agent_id}:{uuid.uuid4()}"
 
     # Phase 7 Stage 3 — Agent Auto-Isolation: reject quarantined agents immediately
-    if session_store.is_isolated(payload.agent_id):
-        isolation = session_store.get_isolation(payload.agent_id)
+    if session_store.is_isolated(payload.agent_id, org_id=org_id):
+        isolation = session_store.get_isolation(payload.agent_id, org_id=org_id)
         raise HTTPException(
             status_code=423,
             detail={
@@ -1301,7 +1303,7 @@ async def intercept(payload: InterceptRequest, request: Request) -> Dict[str, An
                 "reason": isolation.reason if isolation else "quarantined",
                 "isolated_at": isolation.isolated_at if isolation else None,
                 "hold_id": isolation.hold_id if isolation else None,
-                "release_endpoint": f"/agents/{payload.agent_id}/release",
+                "release_endpoint": f"/agents/{payload.agent_id}/release?org_id={org_id}",
             },
         )
 
@@ -1483,6 +1485,7 @@ async def intercept(payload: InterceptRequest, request: Request) -> Dict[str, An
         request_id = str(uuid.uuid4())
         await _insert_intercept_logs(payload, request_id=request_id, bdi_score=bdi_score, policy_result="blocked", entropy=entropy, org_id=org_id)
         holds = await _maybe_open_legal_hold(
+            org_id=org_id,
             agent_id=payload.agent_id,
             session_id=payload.session_id,
             event_id=request_id,
@@ -1556,6 +1559,7 @@ async def intercept(payload: InterceptRequest, request: Request) -> Dict[str, An
     )
     await _insert_intercept_logs(payload, request_id=request_id, bdi_score=bdi_score, policy_result="allowed", entropy=entropy, org_id=org_id)
     holds = await _maybe_open_legal_hold(
+        org_id=org_id,
         agent_id=payload.agent_id,
         session_id=payload.session_id,
         event_id=request_id,
@@ -2038,9 +2042,9 @@ async def list_agents(limit: int = 100) -> Dict[str, Any]:
     }
 
 @app.get("/agents/isolated")
-def list_isolated_agents(active_only: bool = True) -> Dict[str, Any]:
+def list_isolated_agents(active_only: bool = True, org_id: Optional[str] = None) -> Dict[str, Any]:
     """List all currently isolated agents."""
-    records = session_store.list_isolated(active_only=active_only)
+    records = session_store.list_isolated(active_only=active_only, org_id=org_id)
     return {"ok": True, "total": len(records), "isolated_agents": records}
     
 @app.get("/agents/{agent_id}")
@@ -2235,17 +2239,19 @@ async def delete_webhook(webhook_id: str, org_id: str, _admin: None = Depends(re
 # ------------------------------------------------------------------
 
 class AgentIsolateRequest(BaseModel):
+    org_id: str
     reason: str = "Manual isolation from dashboard"
     hold_id: Optional[str] = None
 
 class AgentReleaseRequest(BaseModel):
+    org_id: str
     released_by: str = "dashboard"
 
 @app.post("/agents/{agent_id}/isolate")
 async def isolate_agent(agent_id: str, payload: AgentIsolateRequest, _operator: Dict[str, str] = Depends(require_operator)) -> Dict[str, Any]:
     """Quarantine an agent — all future /intercept calls return 423 Locked."""
     record = session_store.isolate_agent(
-        agent_id, reason=payload.reason, hold_id=payload.hold_id
+        agent_id, reason=payload.reason, hold_id=payload.hold_id, org_id=payload.org_id
     )
     feed.add(
         PulseEvent(
@@ -2272,13 +2278,14 @@ async def isolate_agent(agent_id: str, payload: AgentIsolateRequest, _operator: 
         policy_result="blocked",
         session_id=None,
         entropy=None,
+        org_id=payload.org_id,
     )
     return {"ok": True, "isolated": True, "isolation": record.to_dict()}
 
 @app.post("/agents/{agent_id}/release")
 async def release_agent(agent_id: str, payload: AgentReleaseRequest, _operator: Dict[str, str] = Depends(require_operator)) -> Dict[str, Any]:
     """Release an agent from isolation."""
-    record = session_store.release_agent(agent_id, released_by=payload.released_by)
+    record = session_store.release_agent(agent_id, released_by=payload.released_by, org_id=payload.org_id)
     if record is None:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' is not isolated")
     return {"ok": True, "released": True, "isolation": record.to_dict()}
