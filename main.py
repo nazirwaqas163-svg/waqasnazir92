@@ -56,6 +56,7 @@ PULSE_ADMIN_API_KEY = os.getenv("PULSE_ADMIN_API_KEY", "")
 PULSE_ADMIN_KEYS_JSON = os.getenv("PULSE_ADMIN_KEYS_JSON", "[]")
 ALLOW_ANONYMOUS_DEMO = os.getenv("PULSE_ALLOW_ANONYMOUS_DEMO", "false").lower() in {"1", "true", "yes"}
 PULSE_DURABLE_ISOLATION_ENABLED = os.getenv("PULSE_DURABLE_ISOLATION_ENABLED", "false").lower() in {"1", "true", "yes"}
+PULSE_DURABLE_SESSION_STATE_ENABLED = os.getenv("PULSE_DURABLE_SESSION_STATE_ENABLED", "false").lower() in {"1", "true", "yes"}
 BASELINE_MIN_TURNS = int(os.getenv("PULSE_BASELINE_MIN_TURNS", "5"))
 FINANCIAL_TRANSACTION_LIMIT = Decimal("5000")
 FINANCIAL_KEYWORDS = {
@@ -356,6 +357,38 @@ async def _list_agent_isolations(
         except RuntimeError as exc:
             raise HTTPException(status_code=503, detail="Durable agent isolation is unavailable") from exc
     return session_store.list_isolated(active_only=active_only, org_id=org_id)
+
+
+async def _record_agent_session_turn(
+    *, org_id: str, session_id: str, agent_id: str, input_text: str, output_text: str
+) -> tuple[float, Optional[int]]:
+    if PULSE_DURABLE_SESSION_STATE_ENABLED:
+        try:
+            state = await supabase_audit_client.record_agent_session_turn(
+                org_id=org_id,
+                session_id=session_id,
+                agent_id=agent_id,
+                input_text=input_text,
+                output_text=output_text,
+            )
+            return float(state["bdi_score"]), int(state["turn_count"])
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail="Durable session state is unavailable") from exc
+    return (
+        session_store.record_turn(session_id, agent_id, input_text, output_text, org_id=org_id),
+        None,
+    )
+
+
+async def _active_sessions_for_agent(agent_id: str, org_id: str) -> List[str]:
+    if PULSE_DURABLE_SESSION_STATE_ENABLED:
+        try:
+            return await supabase_audit_client.list_active_agent_sessions(
+                org_id=org_id, agent_id=agent_id, within_seconds=300
+            )
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail="Durable session state is unavailable") from exc
+    return session_store.active_sessions_for_agent(agent_id, window_seconds=300, org_id=org_id)
 
 def _emit_circuit_breaker_event(event: object) -> None:
     if not hasattr(event, "state"):
@@ -1187,6 +1220,7 @@ def health() -> Dict[str, Any]:
         "supabase": supabase_audit_client.configured,
         "upstream_llm": bool(UPSTREAM_API_KEY),
         "durable_agent_isolation": PULSE_DURABLE_ISOLATION_ENABLED and supabase_audit_client.configured,
+        "durable_session_state": PULSE_DURABLE_SESSION_STATE_ENABLED and supabase_audit_client.configured,
     }
     degraded_reasons = []
     if not dependencies["supabase"]:
@@ -1195,6 +1229,8 @@ def health() -> Dict[str, Any]:
         degraded_reasons.append("upstream LLM is not configured; baseline fallback is active")
     if not dependencies["durable_agent_isolation"]:
         degraded_reasons.append("agent isolation is process-local; durable isolation is disabled or unavailable")
+    if not dependencies["durable_session_state"]:
+        degraded_reasons.append("session baselines are process-local; durable session state is disabled or unavailable")
     if SHADOW_MODE:
         degraded_reasons.append("shadow mode is enabled; policy decisions are not enforced")
     if not cb_snapshot["allows_requests"]:
@@ -1369,11 +1405,12 @@ async def intercept(payload: InterceptRequest, request: Request) -> Dict[str, An
             },
         )
 
-    bdi_score = session_store.record_turn(
-        payload.session_id,
-        payload.agent_id or "unknown",
-        payload.input_text,
-        payload.output_text,
+    bdi_score, persisted_session_turns = await _record_agent_session_turn(
+        org_id=org_id,
+        session_id=payload.session_id,
+        agent_id=payload.agent_id or "unknown",
+        input_text=payload.input_text,
+        output_text=payload.output_text,
     )
     drift_result = drift_engine.record_turn(
         session_id=payload.session_id,
@@ -1436,9 +1473,7 @@ async def intercept(payload: InterceptRequest, request: Request) -> Dict[str, An
         payload.self_reported_risk, drift_score, baselined=baselined
     )
 
-    active_sessions = session_store.active_sessions_for_agent(
-        payload.agent_id, window_seconds=300
-    )
+    active_sessions = await _active_sessions_for_agent(payload.agent_id, org_id)
     swarm_suspect = len(active_sessions) >= 3
     swarm_session_count = len(active_sessions)
 
@@ -1538,7 +1573,8 @@ async def intercept(payload: InterceptRequest, request: Request) -> Dict[str, An
         shadow_mode=SHADOW_MODE,
         intercept=True,
         baselined=baselined,
-        session_id=payload.session_id,
+        session_id=f"{org_id}:{payload.session_id}",
+        session_turns_override=persisted_session_turns,
     )
     if disposition.get("shadow_mode") and disposition.get("would_have_action"):
         _record_shadow_event(disposition, agent_id=payload.agent_id, bdi_score=bdi_score, entropy=entropy)
