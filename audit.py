@@ -1115,9 +1115,13 @@ class SupabaseAuditClient:
                     headers=self._headers(),
                     json={f"p_{key}": value for key, value in version.items()},
                 )
+                if response.status_code == 409:
+                    raise ValueError("agent_version_exists")
                 response.raise_for_status()
                 rows = response.json()
                 return rows[0] if rows else {}
+        except ValueError:
+            raise
         except Exception as exc:
             raise RuntimeError("Could not submit agent governance version") from exc
 
@@ -1138,9 +1142,13 @@ class SupabaseAuditClient:
                     f"{self.url}/rest/v1/rpc/pulse_review_agent_version",
                     headers=self._headers(), json=args,
                 )
+                if response.status_code in (400, 404):
+                    raise ValueError("agent_version_not_pending")
                 response.raise_for_status()
                 rows = response.json()
                 return rows[0] if rows else {}
+        except ValueError:
+            raise
         except Exception as exc:
             raise RuntimeError("Could not review agent governance version") from exc
 
