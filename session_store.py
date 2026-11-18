@@ -125,6 +125,29 @@ class SessionState:
             "bdi_score": round(self.bdi_score, 4),
         }
 
+    def to_persisted_dict(self) -> dict:
+        return {
+            "session_id": self.session_id,
+            "agent_id": self.agent_id,
+            "turn_count": self.turn_count,
+            "bdi_score": round(self.bdi_score, 8),
+            "seen_risk": sorted(self._seen_risk),
+            "created_at": self.created_at,
+            "last_seen_at": self.last_seen,
+        }
+
+    @classmethod
+    def from_persisted_dict(cls, row: Dict[str, Any]) -> "SessionState":
+        return cls(
+            session_id=str(row["session_id"]),
+            agent_id=str(row["agent_id"]),
+            turn_count=int(row.get("turn_count", 0)),
+            bdi_score=float(row.get("bdi_score", 0.0)),
+            _seen_risk=set(row.get("seen_risk") or []),
+            created_at=str(row.get("created_at") or datetime.now(timezone.utc).isoformat()),
+            last_seen=str(row.get("last_seen_at") or datetime.now(timezone.utc).isoformat()),
+        )
+
 
 @dataclass
 class IsolationRecord:
@@ -152,7 +175,7 @@ class IsolationRecord:
 
 class SessionStore:
     def __init__(self) -> None:
-        self._sessions: Dict[str, SessionState] = {}
+        self._sessions: Dict[tuple[str, str], SessionState] = {}
         self._isolated: Dict[tuple[str, str], IsolationRecord] = {}   # (org_id, agent_id) -> record
         self._lock = threading.Lock()
 
@@ -161,23 +184,27 @@ class SessionStore:
     # ------------------------------------------------------------------
 
     def record_turn(
-        self, session_id: str, agent_id: str, input_text: str, output_text: str
+        self, session_id: str, agent_id: str, input_text: str, output_text: str,
+        org_id: str = "global",
     ) -> float:
         with self._lock:
-            if session_id not in self._sessions:
-                self._sessions[session_id] = SessionState(
+            key = (org_id, session_id)
+            if key not in self._sessions:
+                self._sessions[key] = SessionState(
                     session_id=session_id, agent_id=agent_id
                 )
-            return self._sessions[session_id].record_turn(input_text, output_text)
+            return self._sessions[key].record_turn(input_text, output_text)
 
     def active_sessions_for_agent(
-        self, agent_id: str, window_seconds: int = 300
+        self, agent_id: str, window_seconds: int = 300, org_id: Optional[str] = None
     ) -> List[str]:
         """Return session_ids for agent active within the last window_seconds."""
         now = datetime.now(timezone.utc)
         result = []
         with self._lock:
-            for sid, state in self._sessions.items():
+            for (session_org_id, sid), state in self._sessions.items():
+                if org_id is not None and session_org_id != org_id:
+                    continue
                 if state.agent_id != agent_id:
                     continue
                 try:
