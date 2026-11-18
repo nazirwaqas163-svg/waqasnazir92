@@ -103,7 +103,7 @@ guard = PulseGuard(base_url="...", agent_id="...", fail_open=False)
 ### `PulseGuard`
 
 ```python
-PulseGuard(base_url: str, agent_id: str, fail_open: bool = False)
+PulseGuard(base_url: str, agent_id: str, fail_open: bool = False, api_key: str | None = None)
 ```
 
 | Parameter | Type | Description |
@@ -111,6 +111,7 @@ PulseGuard(base_url: str, agent_id: str, fail_open: bool = False)
 | `base_url` | `str` | Pulse backend URL |
 | `agent_id` | `str` | Unique identifier for this agent |
 | `fail_open` | `bool` | Pass through on backend/network errors (default: False) |
+| `api_key` | `str | None` | Organization API key sent as `X-API-Key` |
 
 ---
 
@@ -120,6 +121,22 @@ Starts a new governance session. Returns the generated `session_id`.
 
 ```python
 session_id = guard.new_session()
+```
+
+### `guard.ingest_trace_spans(spans)`
+
+Send up to 100 OpenTelemetry-style spans to the tenant-scoped `/v1/traces` endpoint. Apply `migrations/0002_agent_traces.sql` to Supabase before use. The organization API key must be configured on the guard.
+
+```python
+guard.ingest_trace_spans([{
+    "trace_id": "0123456789abcdef0123456789abcdef",
+    "span_id": "0123456789abcdef",
+    "name": "agent.invoke",
+    "started_at": "2026-11-18T10:00:00Z",
+    "ended_at": "2026-11-18T10:00:01Z",
+    "status": "ok",
+    "attributes": {"gen_ai.operation.name": "chat"},
+}])
 ```
 
 ---
