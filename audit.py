@@ -6,7 +6,7 @@ import logging
 import os
 import threading
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -410,6 +410,110 @@ class SupabaseAuditClient:
         except httpx.HTTPError as exc:
             logger.exception("Failed to list durable agent isolations")
             raise RuntimeError("Durable agent isolation is unavailable") from exc
+
+    async def record_agent_session_turn(
+        self, *, org_id: str, session_id: str, agent_id: str,
+        input_text: str, output_text: str, max_retries: int = 8,
+    ) -> Dict[str, Any]:
+        """Score and persist a session turn using optimistic versioned writes."""
+        if not self.configured:
+            raise RuntimeError("Supabase is not configured")
+        from session_store import SessionState
+
+        for _ in range(max_retries):
+            row = await self.get_agent_session(org_id=org_id, session_id=session_id)
+            state = SessionState.from_persisted_dict(row) if row else SessionState(
+                session_id=session_id, agent_id=agent_id
+            )
+            state.agent_id = agent_id
+            score = state.record_turn(input_text, output_text)
+            saved = await self.write_agent_session(
+                org_id=org_id,
+                state=state.to_persisted_dict(),
+                expected_version=int(row.get("version", 0)) if row else 0,
+            )
+            if saved:
+                return {"bdi_score": round(score, 4), "turn_count": state.turn_count}
+        raise RuntimeError("Concurrent session updates did not converge")
+
+    async def get_agent_session(
+        self, *, org_id: str, session_id: str
+    ) -> Optional[Dict[str, Any]]:
+        if not self.configured:
+            raise RuntimeError("Supabase is not configured")
+        try:
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.get(
+                    f"{self.url}/rest/v1/agent_sessions",
+                    headers=self._headers(),
+                    params={
+                        "org_id": f"eq.{org_id}",
+                        "session_id": f"eq.{session_id}",
+                        "select": "org_id,session_id,agent_id,turn_count,bdi_score,seen_risk,created_at,last_seen_at,version",
+                        "limit": "1",
+                    },
+                )
+                response.raise_for_status()
+                rows = response.json()
+                return rows[0] if rows else None
+        except httpx.HTTPError as exc:
+            logger.exception("Failed to read durable session state")
+            raise RuntimeError("Durable session state is unavailable") from exc
+
+    async def write_agent_session(
+        self, *, org_id: str, state: Dict[str, Any], expected_version: int
+    ) -> bool:
+        if not self.configured:
+            raise RuntimeError("Supabase is not configured")
+        body = {
+            "p_org_id": org_id,
+            "p_session_id": state["session_id"],
+            "p_agent_id": state["agent_id"],
+            "p_expected_version": expected_version,
+            "p_turn_count": state["turn_count"],
+            "p_bdi_score": state["bdi_score"],
+            "p_seen_risk": state["seen_risk"],
+            "p_created_at": state["created_at"],
+            "p_last_seen_at": state["last_seen_at"],
+        }
+        try:
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.post(
+                    f"{self.url}/rest/v1/rpc/pulse_write_agent_session",
+                    headers=self._headers(),
+                    json=body,
+                )
+                response.raise_for_status()
+                return response.json() is True
+        except httpx.HTTPError as exc:
+            logger.exception("Failed to persist durable session state")
+            raise RuntimeError("Durable session state is unavailable") from exc
+
+    async def list_active_agent_sessions(
+        self, *, org_id: str, agent_id: str, within_seconds: int = 300
+    ) -> List[str]:
+        if not self.configured:
+            raise RuntimeError("Supabase is not configured")
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=within_seconds)
+        try:
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.get(
+                    f"{self.url}/rest/v1/agent_sessions",
+                    headers=self._headers(),
+                    params={
+                        "org_id": f"eq.{org_id}",
+                        "agent_id": f"eq.{agent_id}",
+                        "last_seen_at": f"gte.{cutoff.isoformat()}",
+                        "select": "session_id",
+                        "limit": "1000",
+                    },
+                )
+                response.raise_for_status()
+                rows = response.json()
+                return [str(row["session_id"]) for row in rows if row.get("session_id")]
+        except httpx.HTTPError as exc:
+            logger.exception("Failed to list durable active sessions")
+            raise RuntimeError("Durable session state is unavailable") from exc
 
     async def register_agent(
         self,
