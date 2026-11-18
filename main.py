@@ -55,6 +55,7 @@ AGENT_COOLDOWN_SECONDS = float(os.getenv("PULSE_AGENT_COOLDOWN_SECONDS", "30"))
 PULSE_ADMIN_API_KEY = os.getenv("PULSE_ADMIN_API_KEY", "")
 PULSE_ADMIN_KEYS_JSON = os.getenv("PULSE_ADMIN_KEYS_JSON", "[]")
 ALLOW_ANONYMOUS_DEMO = os.getenv("PULSE_ALLOW_ANONYMOUS_DEMO", "false").lower() in {"1", "true", "yes"}
+PULSE_DURABLE_ISOLATION_ENABLED = os.getenv("PULSE_DURABLE_ISOLATION_ENABLED", "false").lower() in {"1", "true", "yes"}
 BASELINE_MIN_TURNS = int(os.getenv("PULSE_BASELINE_MIN_TURNS", "5"))
 FINANCIAL_TRANSACTION_LIMIT = Decimal("5000")
 FINANCIAL_KEYWORDS = {
@@ -298,6 +299,63 @@ async def protect_sensitive_routes(request: Request, call_next):
 feed = PulseFeed(max_events=int(os.getenv("PULSE_FEED_LIMIT", "500")))
 bdi_state = BDIState()
 circuit_breaker = CircuitBreakerMiddleware(agent_cooldown_seconds=AGENT_COOLDOWN_SECONDS)
+
+
+def _as_isolation_dict(record: Any) -> Optional[Dict[str, Any]]:
+    if record is None:
+        return None
+    return record if isinstance(record, dict) else record.to_dict()
+
+
+async def _get_agent_isolation(agent_id: str, org_id: str) -> Optional[Dict[str, Any]]:
+    if PULSE_DURABLE_ISOLATION_ENABLED:
+        try:
+            return await supabase_audit_client.get_agent_isolation(org_id=org_id, agent_id=agent_id)
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail="Durable agent isolation is unavailable") from exc
+    return _as_isolation_dict(session_store.get_isolation(agent_id, org_id=org_id))
+
+
+async def _isolate_agent_state(
+    agent_id: str, org_id: str, reason: str, hold_id: Optional[str]
+) -> Dict[str, Any]:
+    if PULSE_DURABLE_ISOLATION_ENABLED:
+        try:
+            return await supabase_audit_client.upsert_agent_isolation(
+                org_id=org_id, agent_id=agent_id, reason=reason, hold_id=hold_id
+            )
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail="Durable agent isolation is unavailable") from exc
+    record = session_store.isolate_agent(agent_id, reason=reason, hold_id=hold_id, org_id=org_id)
+    return record.to_dict()
+
+
+async def _release_agent_state(
+    agent_id: str, org_id: str, released_by: str
+) -> Optional[Dict[str, Any]]:
+    if PULSE_DURABLE_ISOLATION_ENABLED:
+        try:
+            return await supabase_audit_client.release_agent_isolation(
+                org_id=org_id, agent_id=agent_id, released_by=released_by
+            )
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail="Durable agent isolation is unavailable") from exc
+    return _as_isolation_dict(
+        session_store.release_agent(agent_id, released_by=released_by, org_id=org_id)
+    )
+
+
+async def _list_agent_isolations(
+    *, active_only: bool = True, org_id: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    if PULSE_DURABLE_ISOLATION_ENABLED:
+        try:
+            return await supabase_audit_client.list_agent_isolations(
+                active_only=active_only, org_id=org_id
+            )
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail="Durable agent isolation is unavailable") from exc
+    return session_store.list_isolated(active_only=active_only, org_id=org_id)
 
 def _emit_circuit_breaker_event(event: object) -> None:
     if not hasattr(event, "state"):
@@ -852,11 +910,11 @@ async def _maybe_open_legal_hold(
         await supabase_audit_client.insert_legal_hold(hold)
         # Phase 7 Stage 3 — auto-isolate the offending agent on swarm detection
         if hold["trigger_type"] == "swarm" and agent_id:
-            session_store.isolate_agent(
-                agent_id,
+            await _isolate_agent_state(
+                agent_id=agent_id,
+                org_id=org_id or "global",
                 reason=hold["reason"],
                 hold_id=hold["id"],
-                org_id=org_id or "global",
             )
             feed.add(
                 PulseEvent(
@@ -1128,12 +1186,15 @@ def health() -> Dict[str, Any]:
     dependencies = {
         "supabase": supabase_audit_client.configured,
         "upstream_llm": bool(UPSTREAM_API_KEY),
+        "durable_agent_isolation": PULSE_DURABLE_ISOLATION_ENABLED and supabase_audit_client.configured,
     }
     degraded_reasons = []
     if not dependencies["supabase"]:
         degraded_reasons.append("organization storage and durable audit are unavailable")
     if not dependencies["upstream_llm"]:
         degraded_reasons.append("upstream LLM is not configured; baseline fallback is active")
+    if not dependencies["durable_agent_isolation"]:
+        degraded_reasons.append("agent isolation is process-local; durable isolation is disabled or unavailable")
     if SHADOW_MODE:
         degraded_reasons.append("shadow mode is enabled; policy decisions are not enforced")
     if not cb_snapshot["allows_requests"]:
@@ -1293,16 +1354,17 @@ async def intercept(payload: InterceptRequest, request: Request) -> Dict[str, An
         payload.session_id = f"{payload.agent_id}:{uuid.uuid4()}"
 
     # Phase 7 Stage 3 — Agent Auto-Isolation: reject quarantined agents immediately
-    if session_store.is_isolated(payload.agent_id, org_id=org_id):
-        isolation = session_store.get_isolation(payload.agent_id, org_id=org_id)
+    isolation = await _get_agent_isolation(payload.agent_id, org_id)
+    if isolation and isolation.get("released_at") is None:
         raise HTTPException(
             status_code=423,
             detail={
                 "error": "Agent is isolated and cannot execute requests",
                 "agent_id": payload.agent_id,
-                "reason": isolation.reason if isolation else "quarantined",
-                "isolated_at": isolation.isolated_at if isolation else None,
-                "hold_id": isolation.hold_id if isolation else None,
+                "org_id": org_id,
+                "reason": isolation.get("reason", "quarantined"),
+                "isolated_at": isolation.get("isolated_at"),
+                "hold_id": isolation.get("hold_id"),
                 "release_endpoint": f"/agents/{payload.agent_id}/release?org_id={org_id}",
             },
         )
@@ -2042,9 +2104,9 @@ async def list_agents(limit: int = 100) -> Dict[str, Any]:
     }
 
 @app.get("/agents/isolated")
-def list_isolated_agents(active_only: bool = True, org_id: Optional[str] = None) -> Dict[str, Any]:
+async def list_isolated_agents(active_only: bool = True, org_id: Optional[str] = None) -> Dict[str, Any]:
     """List all currently isolated agents."""
-    records = session_store.list_isolated(active_only=active_only, org_id=org_id)
+    records = await _list_agent_isolations(active_only=active_only, org_id=org_id)
     return {"ok": True, "total": len(records), "isolated_agents": records}
     
 @app.get("/agents/{agent_id}")
@@ -2250,8 +2312,8 @@ class AgentReleaseRequest(BaseModel):
 @app.post("/agents/{agent_id}/isolate")
 async def isolate_agent(agent_id: str, payload: AgentIsolateRequest, _operator: Dict[str, str] = Depends(require_operator)) -> Dict[str, Any]:
     """Quarantine an agent — all future /intercept calls return 423 Locked."""
-    record = session_store.isolate_agent(
-        agent_id, reason=payload.reason, hold_id=payload.hold_id, org_id=payload.org_id
+    record = await _isolate_agent_state(
+        agent_id, payload.org_id, payload.reason, payload.hold_id
     )
     feed.add(
         PulseEvent(
@@ -2280,15 +2342,15 @@ async def isolate_agent(agent_id: str, payload: AgentIsolateRequest, _operator: 
         entropy=None,
         org_id=payload.org_id,
     )
-    return {"ok": True, "isolated": True, "isolation": record.to_dict()}
+    return {"ok": True, "isolated": True, "isolation": record}
 
 @app.post("/agents/{agent_id}/release")
 async def release_agent(agent_id: str, payload: AgentReleaseRequest, _operator: Dict[str, str] = Depends(require_operator)) -> Dict[str, Any]:
     """Release an agent from isolation."""
-    record = session_store.release_agent(agent_id, released_by=payload.released_by, org_id=payload.org_id)
+    record = await _release_agent_state(agent_id, payload.org_id, payload.released_by)
     if record is None:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' is not isolated")
-    return {"ok": True, "released": True, "isolation": record.to_dict()}
+    return {"ok": True, "released": True, "isolation": record}
 
 
 
