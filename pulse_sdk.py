@@ -53,7 +53,7 @@ class PulseCircuitTrippedException(Exception):
 
 
 class PulseGuard:
-    def __init__(self, base_url: str, agent_id: str, fail_open: bool = True, api_key: Optional[str] = None) -> None:
+    def __init__(self, base_url: str, agent_id: str, fail_open: bool = False, api_key: Optional[str] = None) -> None:
         self.base_url = base_url.rstrip("/")
         self.agent_id = agent_id
         self.fail_open = fail_open
@@ -183,6 +183,15 @@ class PulseGuard:
                 detail=detail,
             )
 
+        if response.status_code >= 400:
+            if self.fail_open:
+                logger.warning(
+                    "Pulse intercept returned HTTP %s; fail_open=True, passing through.",
+                    response.status_code,
+                )
+                return PulseResult({"ok": True, "allowed": True, "output_text": output_text})
+            response.raise_for_status()
+
         try:
             payload = response.json()
         except json.JSONDecodeError:
@@ -302,3 +311,4 @@ class GovernanceException(Exception):
             ids = [v.get("policy_id", "?") for v in result.policy_violations]
             details.append(f"policy_violations={ids}")
         super().__init__("Pulse governance check failed: " + ", ".join(details))
+
