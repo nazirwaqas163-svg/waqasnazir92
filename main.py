@@ -59,6 +59,7 @@ ALLOW_ANONYMOUS_DEMO = os.getenv("PULSE_ALLOW_ANONYMOUS_DEMO", "false").lower() 
 PULSE_DURABLE_ISOLATION_ENABLED = os.getenv("PULSE_DURABLE_ISOLATION_ENABLED", "false").lower() in {"1", "true", "yes"}
 PULSE_DURABLE_SESSION_STATE_ENABLED = os.getenv("PULSE_DURABLE_SESSION_STATE_ENABLED", "false").lower() in {"1", "true", "yes"}
 PULSE_DURABLE_CIRCUIT_BREAKER_ENABLED = os.getenv("PULSE_DURABLE_CIRCUIT_BREAKER_ENABLED", "false").lower() in {"1", "true", "yes"}
+PULSE_EVALUATIONS_ENABLED = os.getenv("PULSE_EVALUATIONS_ENABLED", "false").lower() in {"1", "true", "yes"}
 BASELINE_MIN_TURNS = int(os.getenv("PULSE_BASELINE_MIN_TURNS", "5"))
 FINANCIAL_TRANSACTION_LIMIT = Decimal("5000")
 FINANCIAL_KEYWORDS = {
@@ -2720,6 +2721,8 @@ async def ai_events_recent(request: Request, limit: int = 500) -> Dict[str, Any]
 @app.post("/v1/evaluations/datasets", status_code=201)
 async def create_evaluation_dataset(payload: EvaluationDatasetRequest, request: Request) -> Dict[str, Any]:
     org_id = await get_org_id_for_request(request)
+    if not PULSE_EVALUATIONS_ENABLED:
+        raise HTTPException(status_code=503, detail="Evaluation workflows are disabled")
     try:
         dataset_id = str(uuid.UUID(payload.dataset_id)) if payload.dataset_id else str(uuid.uuid4())
     except ValueError as exc:
@@ -2762,6 +2765,8 @@ async def create_evaluation_dataset(payload: EvaluationDatasetRequest, request: 
 @app.get("/v1/evaluations/datasets")
 async def list_evaluation_datasets(request: Request, limit: int = Query(100, ge=1, le=500)) -> Dict[str, Any]:
     org_id = await get_org_id_for_request(request)
+    if not PULSE_EVALUATIONS_ENABLED:
+        raise HTTPException(status_code=503, detail="Evaluation workflows are disabled")
     try:
         datasets = await supabase_audit_client.list_evaluation_datasets(org_id=org_id, limit=limit)
     except RuntimeError as exc:
@@ -2772,6 +2777,8 @@ async def list_evaluation_datasets(request: Request, limit: int = Query(100, ge=
 @app.post("/v1/evaluations/run", status_code=201)
 async def run_evaluation(payload: EvaluationRunRequest, request: Request) -> Dict[str, Any]:
     org_id = await get_org_id_for_request(request)
+    if not PULSE_EVALUATIONS_ENABLED:
+        raise HTTPException(status_code=503, detail="Evaluation workflows are disabled")
     try:
         dataset_id = str(uuid.UUID(payload.dataset_id))
     except ValueError as exc:
@@ -2816,6 +2823,8 @@ async def list_evaluation_runs(
     limit: int = Query(100, ge=1, le=500),
 ) -> Dict[str, Any]:
     org_id = await get_org_id_for_request(request)
+    if not PULSE_EVALUATIONS_ENABLED:
+        raise HTTPException(status_code=503, detail="Evaluation workflows are disabled")
     if dataset_id:
         try:
             dataset_id = str(uuid.UUID(dataset_id))
