@@ -48,6 +48,8 @@ Anonymous demo interception is disabled by default. Set `PULSE_ALLOW_ANONYMOUS_D
 
 Agent isolation requests include an explicit `org_id`; isolation and release are scoped to that organization, so matching agent IDs in other tenants remain unaffected.
 
+For restart- and worker-safe quarantine, apply `migrations/0003_durable_agent_isolations.sql`, then set `PULSE_DURABLE_ISOLATION_ENABLED=true` on the API service. When enabled, failure to read or write the isolation table returns HTTP 503 rather than allowing requests through. With the flag off, isolation uses process memory and `/health` reports degraded readiness.
+
 ## Trace ingestion
 
 The tenant API accepts OpenTelemetry-style spans at `POST /v1/traces` and returns recent spans from `GET /v1/traces` or one trace by ID from `GET /v1/traces/{trace_id}`. Send the organization API key in `X-API-Key`. Apply `migrations/0002_agent_traces.sql` to Supabase before use. Batches are limited to 100 spans and 2 MB; each JSON attribute/resource/event field is limited to 64 KB. The service stores telemetry as submitted, so instrumentations should avoid sending secrets or unneeded personal data.
