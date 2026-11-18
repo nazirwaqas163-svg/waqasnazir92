@@ -129,6 +129,7 @@ class SessionState:
 @dataclass
 class IsolationRecord:
     """Tracks a quarantined agent — Phase 7 Stage 3."""
+    org_id: str
     agent_id: str
     reason: str
     hold_id: Optional[str]
@@ -138,6 +139,7 @@ class IsolationRecord:
 
     def to_dict(self) -> Dict[str, Any]:
         return {
+            "org_id": self.org_id,
             "agent_id": self.agent_id,
             "reason": self.reason,
             "hold_id": self.hold_id,
@@ -151,7 +153,7 @@ class IsolationRecord:
 class SessionStore:
     def __init__(self) -> None:
         self._sessions: Dict[str, SessionState] = {}
-        self._isolated: Dict[str, IsolationRecord] = {}   # agent_id -> record
+        self._isolated: Dict[tuple[str, str], IsolationRecord] = {}   # (org_id, agent_id) -> record
         self._lock = threading.Lock()
 
     # ------------------------------------------------------------------
@@ -197,50 +199,56 @@ class SessionStore:
         agent_id: str,
         reason: str,
         hold_id: Optional[str] = None,
+        org_id: str = "global",
     ) -> IsolationRecord:
         """Quarantine an agent. All future /intercept calls return 423.
         If the agent is already isolated, returns the existing record."""
         with self._lock:
-            existing = self._isolated.get(agent_id)
+            key = (org_id, agent_id)
+            existing = self._isolated.get(key)
             if existing and existing.released_at is None:
                 return existing
             record = IsolationRecord(
+                org_id=org_id,
                 agent_id=agent_id,
                 reason=reason,
                 hold_id=hold_id,
             )
-            self._isolated[agent_id] = record
+            self._isolated[key] = record
             return record
 
     def release_agent(
         self,
         agent_id: str,
         released_by: str = "manual",
+        org_id: str = "global",
     ) -> Optional[IsolationRecord]:
         """Release an agent from isolation. Returns None if not found."""
         with self._lock:
-            record = self._isolated.get(agent_id)
+            record = self._isolated.get((org_id, agent_id))
             if record is None:
                 return None
             record.released_at = datetime.now(timezone.utc).isoformat()
             record.released_by = released_by
             return record
 
-    def is_isolated(self, agent_id: str) -> bool:
+    def is_isolated(self, agent_id: str, org_id: str = "global") -> bool:
         """True if the agent is currently quarantined."""
         with self._lock:
-            record = self._isolated.get(agent_id)
+            record = self._isolated.get((org_id, agent_id))
             return record is not None and record.released_at is None
 
-    def get_isolation(self, agent_id: str) -> Optional[IsolationRecord]:
+    def get_isolation(self, agent_id: str, org_id: str = "global") -> Optional[IsolationRecord]:
         """Return the isolation record for an agent, or None."""
         with self._lock:
-            return self._isolated.get(agent_id)
+            return self._isolated.get((org_id, agent_id))
 
-    def list_isolated(self, active_only: bool = True) -> List[Dict[str, Any]]:
+    def list_isolated(self, active_only: bool = True, org_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """List all isolation records."""
         with self._lock:
             records = list(self._isolated.values())
+        if org_id is not None:
+            records = [r for r in records if r.org_id == org_id]
         if active_only:
             records = [r for r in records if r.released_at is None]
         records.sort(key=lambda r: r.isolated_at, reverse=True)
@@ -253,3 +261,4 @@ class SessionStore:
 
 
 session_store = SessionStore()
+

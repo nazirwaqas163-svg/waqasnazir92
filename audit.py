@@ -250,6 +250,167 @@ class SupabaseAuditClient:
             logger.exception("Failed to fetch session events for %s", session_id)
             return []
 
+    async def insert_trace_spans(self, rows: List[Dict[str, Any]]) -> int:
+        """Idempotently insert spans; duplicate tenant/trace/span IDs are ignored."""
+        if not self.configured:
+            raise RuntimeError("Supabase is not configured")
+        try:
+            headers = {**self._headers(), "prefer": "resolution=ignore-duplicates,return=representation"}
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.post(
+                    f"{self.url}/rest/v1/agent_traces",
+                    headers=headers,
+                    params={"on_conflict": "org_id,trace_id,span_id"},
+                    json=rows,
+                )
+                response.raise_for_status()
+                body = response.json()
+                return len(body) if isinstance(body, list) else 0
+        except httpx.HTTPError as exc:
+            logger.exception("Failed to persist agent trace spans")
+            raise RuntimeError("Trace storage is unavailable") from exc
+
+    async def get_trace_spans(
+        self, *, org_id: str, trace_id: Optional[str] = None, limit: int = 100
+    ) -> List[Dict[str, Any]]:
+        """Read trace spans with tenant identity always included in the filter."""
+        if not self.configured:
+            raise RuntimeError("Supabase is not configured")
+        try:
+            params: Dict[str, Any] = {
+                "org_id": f"eq.{org_id}",
+                "select": "trace_id,span_id,parent_span_id,name,kind,started_at,ended_at,status,agent_id,resource,attributes,events,ingested_at",
+                "order": "started_at.asc" if trace_id else "started_at.desc",
+                "limit": str(max(1, min(limit, 200))),
+            }
+            if trace_id:
+                params["trace_id"] = f"eq.{trace_id}"
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.get(
+                    f"{self.url}/rest/v1/agent_traces",
+                    headers=self._headers(),
+                    params=params,
+                )
+                response.raise_for_status()
+                body = response.json()
+                return body if isinstance(body, list) else []
+        except httpx.HTTPError as exc:
+            logger.exception("Failed to read agent trace spans")
+            raise RuntimeError("Trace storage is unavailable") from exc
+
+    async def get_agent_isolation(self, *, org_id: str, agent_id: str) -> Optional[Dict[str, Any]]:
+        """Load one active tenant-scoped isolation record."""
+        if not self.configured:
+            raise RuntimeError("Supabase is not configured")
+        try:
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.get(
+                    f"{self.url}/rest/v1/agent_isolations",
+                    headers=self._headers(),
+                    params={
+                        "org_id": f"eq.{org_id}",
+                        "agent_id": f"eq.{agent_id}",
+                        "released_at": "is.null",
+                        "select": "org_id,agent_id,reason,hold_id,isolated_at,released_at,released_by",
+                        "limit": "1",
+                    },
+                )
+                response.raise_for_status()
+                rows = response.json()
+                return rows[0] if rows else None
+        except httpx.HTTPError as exc:
+            logger.exception("Failed to read durable agent isolation")
+            raise RuntimeError("Durable agent isolation is unavailable") from exc
+
+    async def upsert_agent_isolation(
+        self, *, org_id: str, agent_id: str, reason: str, hold_id: Optional[str]
+    ) -> Dict[str, Any]:
+        """Persist an isolation record using the org/agent composite key."""
+        if not self.configured:
+            raise RuntimeError("Supabase is not configured")
+        row = {
+            "org_id": org_id,
+            "agent_id": agent_id,
+            "reason": reason,
+            "hold_id": hold_id,
+            "isolated_at": datetime.now(timezone.utc).isoformat(),
+            "released_at": None,
+            "released_by": None,
+        }
+        try:
+            headers = {**self._headers(), "prefer": "resolution=merge-duplicates,return=representation"}
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.post(
+                    f"{self.url}/rest/v1/agent_isolations",
+                    headers=headers,
+                    params={"on_conflict": "org_id,agent_id"},
+                    json=row,
+                )
+                response.raise_for_status()
+                rows = response.json()
+                return rows[0] if rows else row
+        except httpx.HTTPError as exc:
+            logger.exception("Failed to persist durable agent isolation")
+            raise RuntimeError("Durable agent isolation is unavailable") from exc
+
+    async def release_agent_isolation(
+        self, *, org_id: str, agent_id: str, released_by: str
+    ) -> Optional[Dict[str, Any]]:
+        """Release one active org/agent isolation record."""
+        if not self.configured:
+            raise RuntimeError("Supabase is not configured")
+        try:
+            headers = {**self._headers(), "prefer": "return=representation"}
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.patch(
+                    f"{self.url}/rest/v1/agent_isolations",
+                    headers=headers,
+                    params={
+                        "org_id": f"eq.{org_id}",
+                        "agent_id": f"eq.{agent_id}",
+                        "released_at": "is.null",
+                    },
+                    json={
+                        "released_at": datetime.now(timezone.utc).isoformat(),
+                        "released_by": released_by,
+                    },
+                )
+                response.raise_for_status()
+                rows = response.json()
+                return rows[0] if rows else None
+        except httpx.HTTPError as exc:
+            logger.exception("Failed to release durable agent isolation")
+            raise RuntimeError("Durable agent isolation is unavailable") from exc
+
+    async def list_agent_isolations(
+        self, *, active_only: bool = True, org_id: Optional[str] = None, limit: int = 500
+    ) -> List[Dict[str, Any]]:
+        """List recent isolation records, optionally scoped to one organization."""
+        if not self.configured:
+            raise RuntimeError("Supabase is not configured")
+        params: Dict[str, Any] = {
+            "select": "org_id,agent_id,reason,hold_id,isolated_at,released_at,released_by",
+            "order": "isolated_at.desc",
+            "limit": str(max(1, min(limit, 1000))),
+        }
+        if active_only:
+            params["released_at"] = "is.null"
+        if org_id is not None:
+            params["org_id"] = f"eq.{org_id}"
+        try:
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.get(
+                    f"{self.url}/rest/v1/agent_isolations",
+                    headers=self._headers(),
+                    params=params,
+                )
+                response.raise_for_status()
+                rows = response.json()
+                return rows if isinstance(rows, list) else []
+        except httpx.HTTPError as exc:
+            logger.exception("Failed to list durable agent isolations")
+            raise RuntimeError("Durable agent isolation is unavailable") from exc
+
     async def register_agent(
         self,
         agent_id: str,

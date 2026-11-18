@@ -76,6 +76,16 @@ class PulseGuard:
         response.raise_for_status()
         return response.json()
 
+    def ingest_trace_spans(self, spans: list[Dict[str, Any]]) -> Dict[str, Any]:
+        """Send OpenTelemetry-style spans to the tenant-scoped trace API."""
+        response = self._client.post(
+            f"{self.base_url}/v1/traces",
+            json={"spans": spans},
+            headers=self._request_headers(),
+        )
+        response.raise_for_status()
+        return response.json()
+
     def intercept(
         self,
         input_text: str,
