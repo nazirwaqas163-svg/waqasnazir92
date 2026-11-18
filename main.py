@@ -1,6 +1,8 @@
 import os
 import secrets
+import hashlib
 import json
+import logging
 import re
 import time
 import uuid
@@ -19,7 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
-from audit import supabase_audit_client
+from audit import GENESIS_HASH, supabase_audit_client, verify_ai_event_row
 from baseline import baseline_reply, extract_text
 from bdi import BDIState
 from circuit_breaker import CircuitBreakerMiddleware, RequestAction
@@ -42,6 +44,7 @@ from webhook_engine import fire_webhooks
 from incident_report import assemble_evidence_package, render_incident_pdf
 
 APP_NAME = "pulse-proxy"
+logger = logging.getLogger(__name__)
 SYNTHESIS_ENABLED = os.getenv("PULSE_SYNTHESIS_ENABLED", "true").lower() in {"1", "true", "yes"}
 SHADOW_MODE = os.getenv("PULSE_SHADOW_MODE", "false").lower() in {"1", "true", "yes"}
 UPSTREAM_CHAT_URL = os.getenv("PULSE_UPSTREAM_CHAT_URL", "https://api.openai.com/v1/chat/completions")
@@ -49,6 +52,8 @@ UPSTREAM_API_KEY = os.getenv("OPENAI_API_KEY") or os.getenv("PULSE_UPSTREAM_API_
 UPSTREAM_TIMEOUT = float(os.getenv("PULSE_UPSTREAM_TIMEOUT", "120"))
 AGENT_COOLDOWN_SECONDS = float(os.getenv("PULSE_AGENT_COOLDOWN_SECONDS", "30"))
 PULSE_ADMIN_API_KEY = os.getenv("PULSE_ADMIN_API_KEY", "")
+PULSE_ADMIN_KEYS_JSON = os.getenv("PULSE_ADMIN_KEYS_JSON", "[]")
+ALLOW_ANONYMOUS_DEMO = os.getenv("PULSE_ALLOW_ANONYMOUS_DEMO", "false").lower() in {"1", "true", "yes"}
 BASELINE_MIN_TURNS = int(os.getenv("PULSE_BASELINE_MIN_TURNS", "5"))
 FINANCIAL_TRANSACTION_LIMIT = Decimal("5000")
 FINANCIAL_KEYWORDS = {
@@ -101,23 +106,68 @@ AGENT_CACHE_TTL = 60.0
 _org_cache: Dict[str, Dict[str, Any]] = {}
 ORG_CACHE_TTL = 300.0  # 5-minute TTL
 
-def require_admin(request: Request) -> None:
-    """Require the configured admin key for privileged control-plane actions."""
-    if not PULSE_ADMIN_API_KEY:
-        raise HTTPException(status_code=503, detail="Admin API is disabled: configure PULSE_ADMIN_API_KEY")
+def _admin_principal(request: Request) -> Dict[str, str]:
+    """Resolve a configured dashboard key to a named, role-scoped principal."""
     supplied = request.headers.get("x-admin-api-key", "")
-    if not supplied or not secrets.compare_digest(supplied, PULSE_ADMIN_API_KEY):
+    if not supplied:
         raise HTTPException(status_code=401, detail="Valid X-Admin-API-Key header required")
+    try:
+        configured = json.loads(PULSE_ADMIN_KEYS_JSON)
+    except json.JSONDecodeError as exc:
+        logger.error("PULSE_ADMIN_KEYS_JSON is invalid JSON")
+        raise HTTPException(status_code=503, detail="Admin key configuration is invalid") from exc
+    if not isinstance(configured, list):
+        raise HTTPException(status_code=503, detail="Admin key configuration must be a JSON array")
+    supplied_digest = hashlib.sha256(supplied.encode("utf-8")).hexdigest()
+    for entry in configured:
+        if not isinstance(entry, dict) or not isinstance(entry.get("key"), str):
+            continue
+        configured_digest = hashlib.sha256(entry["key"].encode("utf-8")).hexdigest()
+        if secrets.compare_digest(supplied_digest, configured_digest):
+            role = str(entry.get("role", "viewer")).lower()
+            if role not in {"viewer", "operator", "admin"}:
+                continue
+            return {"user_id": str(entry.get("user_id") or "dashboard-user"), "role": role}
+    # Transition support: the single shared key remains an admin until rotated.
+    if PULSE_ADMIN_API_KEY:
+        legacy_digest = hashlib.sha256(PULSE_ADMIN_API_KEY.encode("utf-8")).hexdigest()
+        if secrets.compare_digest(supplied_digest, legacy_digest):
+            return {"user_id": "legacy-admin", "role": "admin"}
+    raise HTTPException(status_code=401, detail="Valid X-Admin-API-Key header required")
+
+
+def require_dashboard_access(request: Request) -> Dict[str, str]:
+    """Require any named dashboard principal."""
+    return _admin_principal(request)
+
+
+def require_operator(request: Request) -> Dict[str, str]:
+    """Require an operator or administrator for state-changing operations."""
+    principal = _admin_principal(request)
+    if principal["role"] not in {"operator", "admin"}:
+        raise HTTPException(status_code=403, detail="Operator role required")
+    return principal
+
+
+def require_admin(request: Request) -> Dict[str, str]:
+    """Require an administrator for tenant and access configuration."""
+    principal = _admin_principal(request)
+    if principal["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Administrator role required")
+    return principal
 
 async def get_org_from_api_key(request: Request) -> Dict[str, Any]:
     """Resolve X-API-Key header to an org. Returns org dict or raises 401."""
     api_key = request.headers.get("x-api-key")
     if not api_key:
         raise HTTPException(status_code=401, detail="Missing X-API-Key header")
+    key_digest = hashlib.sha256(api_key.encode("utf-8")).hexdigest()
     # Check cache
-    cached = _org_cache.get(api_key)
+    cached = _org_cache.get(key_digest)
     if cached and time.monotonic() - cached["ts"] < ORG_CACHE_TTL:
         return cached["org"]
+    if not supabase_audit_client.configured:
+        raise HTTPException(status_code=503, detail="Organization key service is unavailable")
     # Look up in Supabase orgs table
     try:
         headers = {
@@ -129,17 +179,40 @@ async def get_org_from_api_key(request: Request) -> Dict[str, Any]:
             response = await client.get(
                 f"{supabase_audit_client.url}/rest/v1/orgs",
                 headers=headers,
-                params={"api_key": f"eq.{api_key}", "active": "eq.true", "limit": "1"},
+                params={"api_key": f"eq.{key_digest}", "active": "eq.true", "limit": "1"},
             )
             response.raise_for_status()
             rows = response.json()
+            # Continue accepting existing keys while customers rotate to hashed storage.
+            if not rows:
+                response = await client.get(
+                    f"{supabase_audit_client.url}/rest/v1/orgs",
+                    headers=headers,
+                    params={"api_key": f"eq.{api_key}", "active": "eq.true", "limit": "1"},
+                )
+                response.raise_for_status()
+                rows = response.json()
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"Org lookup failed: {str(exc)}")
+        logger.exception("Organization API key lookup failed")
+        raise HTTPException(status_code=503, detail="Organization key service is unavailable") from exc
     if not rows:
         raise HTTPException(status_code=401, detail="Invalid or inactive API key")
     org = rows[0]
-    _org_cache[api_key] = {"org": org, "ts": time.monotonic()}
+    _org_cache[key_digest] = {"org": org, "ts": time.monotonic()}
     return org
+
+
+async def get_org_id_for_request(request: Request) -> str:
+    """Resolve a verified organization, allowing anonymous demo traffic only by opt-in."""
+    if request.headers.get("x-api-key"):
+        org = await get_org_from_api_key(request)
+        org_id = org.get("org_id")
+        if not org_id:
+            raise HTTPException(status_code=401, detail="API key has no organization")
+        return str(org_id)
+    if ALLOW_ANONYMOUS_DEMO:
+        return "demo-org"
+    raise HTTPException(status_code=401, detail="Valid X-API-Key header required")
 
 def _cache_get(agent_id: str) -> Optional[Dict[str, Any]]:
     entry = _agent_cache.get(agent_id)
@@ -184,6 +257,7 @@ app.add_middleware(
 
 # Keep operational and customer data endpoints behind the dashboard admin key.
 _ADMIN_PROTECTED_EXACT_PATHS = {
+    "/admin/whoami",
     "/circuit-breaker/status", "/pulse", "/events", "/pulse/bdi", "/pulse/reset",
     "/drift", "/drift/recent", "/synthesis/report", "/synthesis/run",
     "/compliance/export", "/compliance/events", "/compliance/deadlines", "/compliance/mgf",
@@ -207,10 +281,18 @@ async def protect_sensitive_routes(request: Request, call_next):
     protected = protected or bool(re.fullmatch(r"/session/(?:lineage|tree)/[^/]+", path))
     if protected:
         try:
-            require_admin(request)
+            request.state.admin_principal = require_dashboard_access(request)
         except HTTPException as exc:
             return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
-    return await call_next(request)
+    response = await call_next(request)
+    principal = getattr(request.state, "admin_principal", None)
+    if principal and request.method not in {"GET", "HEAD", "OPTIONS"}:
+        logger.info(
+            "dashboard_action user_id=%s role=%s method=%s path=%s status=%s",
+            principal["user_id"], principal["role"], request.method,
+            request.url.path, response.status_code,
+        )
+    return response
 
 feed = PulseFeed(max_events=int(os.getenv("PULSE_FEED_LIMIT", "500")))
 bdi_state = BDIState()
@@ -1037,8 +1119,25 @@ def compute_calibration(
 @app.get("/health")
 def health() -> Dict[str, Any]:
     cb_snapshot = circuit_breaker.status()
+    dependencies = {
+        "supabase": supabase_audit_client.configured,
+        "upstream_llm": bool(UPSTREAM_API_KEY),
+    }
+    degraded_reasons = []
+    if not dependencies["supabase"]:
+        degraded_reasons.append("organization storage and durable audit are unavailable")
+    if not dependencies["upstream_llm"]:
+        degraded_reasons.append("upstream LLM is not configured; baseline fallback is active")
+    if SHADOW_MODE:
+        degraded_reasons.append("shadow mode is enabled; policy decisions are not enforced")
+    if not cb_snapshot["allows_requests"]:
+        degraded_reasons.append("circuit breaker is open")
     return {
         "ok": True,
+        "status": "degraded" if degraded_reasons else "healthy",
+        "ready": not degraded_reasons,
+        "degraded_reasons": degraded_reasons,
+        "dependencies": dependencies,
         "service": APP_NAME,
         "shadow_mode": SHADOW_MODE,
         "synthesis_enabled": SYNTHESIS_ENABLED,
@@ -1051,19 +1150,24 @@ def health() -> Dict[str, Any]:
         },
     }
 
+@app.get("/admin/whoami")
+def admin_whoami(principal: Dict[str, str] = Depends(require_dashboard_access)) -> Dict[str, str]:
+    return principal
+
+
 @app.get("/circuit-breaker/status")
 def circuit_breaker_status() -> dict[str, object]:
     return circuit_breaker.status()
 
 @app.post("/circuit-breaker/open")
-def circuit_breaker_open(payload: CircuitBreakerOpenRequest, _admin: None = Depends(require_admin)) -> dict[str, object]:
+def circuit_breaker_open(payload: CircuitBreakerOpenRequest, _admin: Dict[str, str] = Depends(require_operator)) -> dict[str, object]:
     circuit_breaker.open(reason=payload.reason, bdi_score=payload.bdi_score, entropy=payload.entropy)
     if circuit_breaker.last_failure is not None:
         circuit_breaker.last_failure["manual"] = True
     return {"ok": True, "message": "Circuit breaker manually opened", "status_code": 503, **circuit_breaker.status()}
 
 @app.post("/circuit-breaker/close")
-def circuit_breaker_close(payload: CircuitBreakerCloseRequest, _admin: None = Depends(require_admin)) -> dict[str, object]:
+def circuit_breaker_close(payload: CircuitBreakerCloseRequest, _admin: Dict[str, str] = Depends(require_operator)) -> dict[str, object]:
     circuit_breaker.close(reason=payload.reason, bdi_score=payload.bdi_score, entropy=payload.entropy)
     return {"ok": True, "message": "Circuit breaker reset to closed", "status_code": 200, **circuit_breaker.status()}
 
@@ -1072,7 +1176,7 @@ def pulse(limit: int = 50) -> Dict[str, Any]:
     return {"events": feed.list(limit=limit)}
 
 @app.post("/pulse")
-def pulse_tool_call(payload: PulseToolCallRequest, request: Request):
+def pulse_tool_call(payload: PulseToolCallRequest, request: Request, _operator: Dict[str, str] = Depends(require_operator)):
     disposition = circuit_breaker.gate_request(
         agent_id=payload.agent_id or request.headers.get("x-agent-id"),
         bdi_score=0.0,
@@ -1178,6 +1282,7 @@ async def intercept(payload: InterceptRequest, request: Request) -> Dict[str, An
     Phase 7 Stage 1: Auto-Response — confirmed breaches auto-open legal holds.
     Phase 7 Stage 3: Agent Auto-Isolation — isolated agents receive 423 Locked.
     """
+    org_id = await get_org_id_for_request(request)
     if not payload.session_id:
         payload.session_id = f"{payload.agent_id}:{uuid.uuid4()}"
 
@@ -1332,11 +1437,8 @@ async def intercept(payload: InterceptRequest, request: Request) -> Dict[str, An
     # ------------------------------------------------------------------
     # Phase 6 Stage 2 — Org Policy Enforcement
     # Load org policies and check input text against them.
-    # Organization scope comes only from a verified API key; anonymous traffic is demo-org.
+    # Organization scope comes from a verified key, unless anonymous demo is explicitly enabled.
     # ------------------------------------------------------------------
-    api_key = request.headers.get("x-api-key")     
-    org = await get_org_from_api_key(request) if api_key else None     
-    org_id = org.get("org_id") if org else "demo-org"
     policy_violations = await evaluate_org_policies(
         input_text=payload.input_text,
         output_text=payload.output_text,
@@ -1502,7 +1604,7 @@ async def intercept(payload: InterceptRequest, request: Request) -> Dict[str, An
     }
 
 @app.post("/pulse/reset")
-def reset(_admin: None = Depends(require_admin)) -> Dict[str, Any]:
+def reset(_admin: Dict[str, str] = Depends(require_operator)) -> Dict[str, Any]:
     feed.clear()
     bdi_state.reset()
     session_store.reset()
@@ -1554,7 +1656,7 @@ def synthesis_report() -> Dict[str, Any]:
     return {"ok": True, "report": report}
 
 @app.post("/synthesis/run")
-def synthesis_run_now() -> Dict[str, Any]:
+def synthesis_run_now(_operator: Dict[str, str] = Depends(require_operator)) -> Dict[str, Any]:
     report = synthesis_runner.run_once()
     return {"ok": True, "report": report}
 
@@ -1991,6 +2093,11 @@ def generate_api_key() -> str:
     return f"pulse_{secrets.token_hex(32)}"
 
 
+def hash_api_key(api_key: str) -> str:
+    """Return a one-way digest suitable for storage; issued keys have high entropy."""
+    return hashlib.sha256(api_key.encode("utf-8")).hexdigest()
+
+
 def send_welcome_email(to_email: str, org_name: str, api_key: str, org_id: str) -> bool:
     smtp_host = os.getenv("PULSE_SMTP_HOST")
     smtp_port = int(os.getenv("PULSE_SMTP_PORT", "587"))
@@ -2131,7 +2238,7 @@ class AgentReleaseRequest(BaseModel):
     released_by: str = "dashboard"
 
 @app.post("/agents/{agent_id}/isolate")
-async def isolate_agent(agent_id: str, payload: AgentIsolateRequest, _admin: None = Depends(require_admin)) -> Dict[str, Any]:
+async def isolate_agent(agent_id: str, payload: AgentIsolateRequest, _operator: Dict[str, str] = Depends(require_operator)) -> Dict[str, Any]:
     """Quarantine an agent — all future /intercept calls return 423 Locked."""
     record = session_store.isolate_agent(
         agent_id, reason=payload.reason, hold_id=payload.hold_id
@@ -2165,7 +2272,7 @@ async def isolate_agent(agent_id: str, payload: AgentIsolateRequest, _admin: Non
     return {"ok": True, "isolated": True, "isolation": record.to_dict()}
 
 @app.post("/agents/{agent_id}/release")
-async def release_agent(agent_id: str, payload: AgentReleaseRequest, _admin: None = Depends(require_admin)) -> Dict[str, Any]:
+async def release_agent(agent_id: str, payload: AgentReleaseRequest, _operator: Dict[str, str] = Depends(require_operator)) -> Dict[str, Any]:
     """Release an agent from isolation."""
     record = session_store.release_agent(agent_id, released_by=payload.released_by)
     if record is None:
@@ -2218,7 +2325,7 @@ async def get_evidence_package(hold_id: str, format: str = "json") -> Any:
     }
 
 @app.post("/legal-hold/{hold_id}/evidence-package/send")
-async def send_evidence_package(hold_id: str, dpo_email: str) -> Dict[str, Any]:
+async def send_evidence_package(hold_id: str, dpo_email: str, _operator: Dict[str, str] = Depends(require_operator)) -> Dict[str, Any]:
     """
     Phase 7 Stage 4 — Send the sealed evidence package to a DPO email.
     Note: requires SMTP configuration via environment variables
@@ -2411,10 +2518,8 @@ async def topology(limit: int = 500) -> Dict[str, Any]:
     return {"ok": True, **graph}
 
 @app.get("/ai_events/recent")
-async def ai_events_recent(limit: int = 500, request: Request = None) -> Dict[str, Any]:
-    api_key = request.headers.get("x-api-key") if request else None
-    org = await get_org_from_api_key(request) if api_key else None
-    org_id = org.get("org_id") if org else None
+async def ai_events_recent(request: Request, limit: int = 500) -> Dict[str, Any]:
+    org_id = await get_org_id_for_request(request)
     events = await supabase_audit_client.get_recent_events(limit=limit, org_id=org_id)
     return {"ok": True, "total": len(events), "events": events}
 
@@ -2444,7 +2549,7 @@ def get_hold(hold_id: str) -> Dict[str, Any]:
     return {"ok": True, "hold": hold}
 
 @app.post("/legal-hold")
-async def create_hold(payload: LegalHoldCreateRequest) -> Dict[str, Any]:
+async def create_hold(payload: LegalHoldCreateRequest, _operator: Dict[str, str] = Depends(require_operator)) -> Dict[str, Any]:
     chain_hash = (
         supabase_audit_client.get_chain_hash_local(payload.event_id) if payload.event_id else None
     )
@@ -2469,7 +2574,7 @@ async def create_hold(payload: LegalHoldCreateRequest) -> Dict[str, Any]:
     return {"ok": True, "created": True, "hold": hold}
 
 @app.post("/legal-hold/{hold_id}/release")
-async def release_hold(hold_id: str, payload: LegalHoldReleaseRequest) -> Dict[str, Any]:
+async def release_hold(hold_id: str, payload: LegalHoldReleaseRequest, _operator: Dict[str, str] = Depends(require_operator)) -> Dict[str, Any]:
     hold = legal_hold_manager.release(hold_id, released_by=payload.released_by)
     if hold is None:
         raise HTTPException(status_code=404, detail=f"Legal hold '{hold_id}' not found")
@@ -2531,54 +2636,46 @@ async def ledger_integrity_ai_events(limit: int = 100) -> Dict[str, Any]:
         raise HTTPException(status_code=503, detail="Supabase not configured")
     rows = await supabase_audit_client.get_ai_events_chain(limit=limit)
     total = len(rows)
-    verified = 0
-    broken = 0
-    skipped = 0
-    broken_links = []
-    for i, row in enumerate(rows):
-        row_hash = row.get("row_hash")
-        prev_hash = row.get("prev_hash")
-        if not row_hash or not prev_hash:
-            skipped += 1
+    known_hashes = {row.get("row_hash") for row in rows if row.get("row_hash")}
+    invalid_hashes = []
+    unresolved_predecessors = []
+    verified_links = 0
+    for row in rows:
+        if not verify_ai_event_row(row):
+            invalid_hashes.append(row.get("event_id"))
             continue
-        if i > 0:
-            prior_row = rows[i - 1]
-            prior_row_hash = prior_row.get("row_hash")
-            if prior_row_hash and prev_hash != prior_row_hash:
-                broken += 1
-                broken_links.append({
-                    "row_index": i,
-                    "id": row.get("id"),
-                    "event_id": row.get("event_id"),
-                    "created_at": row.get("created_at"),
-                    "expected_prev_hash": prior_row_hash,
-                    "actual_prev_hash": prev_hash,
-                    "tamper_detected": True,
-                })
-            else:
-                verified += 1
+        previous_hash = row.get("prev_hash")
+        if previous_hash == GENESIS_HASH:
+            verified_links += 1
+        elif previous_hash in known_hashes:
+            verified_links += 1
         else:
-            verified += 1
-    integrity_status = "VERIFIED" if broken == 0 else "TAMPERED"
+            unresolved_predecessors.append({
+                "event_id": row.get("event_id"),
+                "previous_hash": previous_hash,
+            })
+    integrity_status = "TAMPERED" if invalid_hashes else "PARTIAL"
     return {
         "ok": True,
         "table": "ai_events",
         "integrity_status": integrity_status,
-        "tamper_detected": broken > 0,
+        "tamper_detected": bool(invalid_hashes),
         "algorithm": "SHA-256 hash chain",
         "verified_at": datetime.now(timezone.utc).isoformat(),
         "summary": {
             "total_rows_fetched": total,
-            "verified_links": verified,
-            "broken_links": broken,
-            "skipped_rows": skipped,
-            "coverage_pct": round((verified / max(1, total - skipped)) * 100, 1),
+            "valid_row_hashes": total - len(invalid_hashes),
+            "invalid_row_hashes": len(invalid_hashes),
+            "verified_links": verified_links,
+            "unresolved_predecessors": len(unresolved_predecessors),
         },
-        "broken_links": broken_links,
+        "invalid_event_ids": invalid_hashes,
+        "unresolved_predecessor_rows": unresolved_predecessors,
+        "external_anchor_verified": False,
         "note": (
-            "Rows inserted before this fix shipped will show skipped_rows since "
-            "they have no prev_hash/row_hash. Only rows inserted after this "
-            "deploy are chained."
+            "Each fetched row hash is recomputed from its stored event fields. "
+            "This endpoint does not verify a complete chain outside the fetched rows "
+            "or an independently stored checkpoint, so it never reports the full ledger as VERIFIED."
         ),
     }
 
@@ -2888,7 +2985,7 @@ async def register_org(request: OrgRegistrationRequest):
             resp = await client.post(
                 f"{supabase_audit_client.url}/rest/v1/orgs",
                 headers=headers,
-                json={"org_id": org_id, "name": org_name, "api_key": api_key, "email": email, "active": True},
+                json={"org_id": org_id, "name": org_name, "api_key": hash_api_key(api_key), "email": email, "active": True},
             )
             resp.raise_for_status()
     except Exception as e:
@@ -2904,6 +3001,13 @@ async def register_org(request: OrgRegistrationRequest):
         dashboard_url=dashboard_url,
         message=message
     )
+
+
+@app.get("/org/context")
+async def org_context(request: Request) -> Dict[str, Any]:
+    """Return the tenant identity resolved from the caller's verified API key."""
+    org_id = await get_org_id_for_request(request)
+    return {"org_id": org_id}
 
 
 @app.get("/orgs")
@@ -2926,15 +3030,9 @@ async def list_orgs(_admin: None = Depends(require_admin)):
     except Exception as e:
         raise HTTPException(status_code=500, detail="Failed to retrieve organisations")
 
-def get_org_from_request(request: Request) -> str:
-    """Return org_id from X-API-Key header, or 'demo-org' if not present."""
-    api_key = request.headers.get("x-api-key")
-    if not api_key:
-        return "demo-org"
-    cached = _org_cache.get(api_key)
-    if cached and time.monotonic() - cached["ts"] < ORG_CACHE_TTL:
-        return cached["org"].get("org_id", "demo-org")
-    return "demo-org"
+async def get_org_from_request(request: Request) -> str:
+    """Return a verified tenant ID; never silently fall back after a cache miss."""
+    return await get_org_id_for_request(request)
 
 # ══════════════════════════════════════════════════════════════
 # PHASE 12 — INCIDENT REPLAY ENGINE
@@ -2986,7 +3084,9 @@ def _build_replay_step(event: dict, turn_index: int) -> dict:
         "drift_flagged": drift_flagged,
         "input_preview": (event.get("input_text") or "")[:200],
         "output_preview": (event.get("output_text") or "")[:200],
-        "chain_intact": bool(event.get("row_hash")),
+        "row_hash_present": bool(event.get("row_hash")),
+        "row_hash_valid": verify_ai_event_row(event),
+        "chain_link_present": bool(event.get("prev_hash")),
         "raw": event,
     }
 
@@ -2994,11 +3094,12 @@ def _build_replay_step(event: dict, turn_index: int) -> dict:
 @app.post("/replay/flag")
 async def flag_session_for_replay_endpoint(
     request: Request,
+    _operator: Dict[str, str] = Depends(require_operator),
     session_id: str = Body(..., embed=True),
     trigger_reason: str = Body("manual", embed=True),
     flagged_by: str = Body("dashboard", embed=True),
 ):
-    org_id = get_org_from_request(request)
+    org_id = await get_org_from_request(request)
     from audit import flag_session_for_replay
     record = await flag_session_for_replay(
         session_id=session_id,
@@ -3021,7 +3122,7 @@ async def list_replay_sessions(
     request: Request,
     status: str = Query(None),
 ):
-    org_id = get_org_from_request(request)
+    org_id = await get_org_from_request(request)
     from audit import get_replay_sessions
     sessions = await get_replay_sessions(org_id=org_id, status=status)
     return {
@@ -3038,7 +3139,7 @@ async def get_session_replay(
     request: Request,
     raw: bool = Query(False),
 ):
-    org_id = get_org_from_request(request)
+    org_id = await get_org_from_request(request)
     from audit import get_replay_session_events
     events = await get_replay_session_events(session_id=session_id, org_id=org_id)
     if not events:
@@ -3069,7 +3170,12 @@ async def get_session_replay(
         "bdi_trajectory": bdi_trajectory,
         "entropy_peak": round(max(entropies), 4) if entropies else None,
         "entropy_avg": round(sum(entropies) / len(entropies), 4) if entropies else None,
-        "hash_chain_intact": all(s["chain_intact"] for s in steps),
+        "hash_chain_status": (
+            "TAMPERED" if any(s["row_hash_present"] and not s["row_hash_valid"] for s in steps)
+            else "PARTIAL" if all(s["row_hash_present"] and s["row_hash_valid"] for s in steps)
+            else "UNAVAILABLE"
+        ),
+        "hash_chain_note": "Row hashes are recomputed for this session. The complete chain and an external anchor are not verified here.",
         "first_event_at": steps[0]["timestamp"] if steps else None,
         "last_event_at": steps[-1]["timestamp"] if steps else None,
         "_readonly": True,
@@ -3084,10 +3190,11 @@ async def get_session_replay(
 async def mark_replay_session_reviewed(
     session_id: str,
     request: Request,
+    _operator: Dict[str, str] = Depends(require_operator),
     reviewed_by: str = Body("dashboard", embed=True),
     notes: str = Body("", embed=True),
 ):
-    org_id = get_org_from_request(request)
+    org_id = await get_org_from_request(request)
     from audit import mark_replay_reviewed
     success = await mark_replay_reviewed(
         session_id=session_id,
@@ -3104,3 +3211,4 @@ async def mark_replay_session_reviewed(
         "reviewed_by": reviewed_by,
         "notes": notes,
     }
+

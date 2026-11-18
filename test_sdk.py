@@ -138,6 +138,30 @@ def test_fail_open(mock_client_cls: MagicMock) -> None:
     assert result == "safe output"
 
 
+def test_fail_closed_is_default() -> None:
+    guard = PulseGuard("http://127.0.0.1:8000", agent_id="test-agent")
+    assert guard.fail_open is False
+
+
+@patch("pulse_sdk.httpx.Client")
+def test_intercept_raw_raises_on_unexpected_http_error(mock_client_cls: MagicMock) -> None:
+    mock_client = _mock_client()
+    response = MagicMock(spec=httpx.Response)
+    response.status_code = 401
+    response.headers = {}
+    response.text = "Unauthorized"
+    response.json.return_value = {"detail": "Invalid organization key"}
+    response.raise_for_status.side_effect = httpx.HTTPStatusError(
+        "Unauthorized", request=MagicMock(), response=response
+    )
+    mock_client.post.return_value = response
+    mock_client_cls.return_value = mock_client
+
+    guard = PulseGuard("http://127.0.0.1:8000", agent_id="test-agent")
+    with pytest.raises(httpx.HTTPStatusError):
+        guard.intercept_raw("in", "out")
+
+
 @patch("pulse_sdk.httpx.Client")
 def test_circuit_trip(mock_client_cls: MagicMock) -> None:
     mock_client = _mock_client()
@@ -325,3 +349,4 @@ def test_governance_exception_raised_on_critical(mock_client_cls: MagicMock) -> 
             raise GovernanceException(result)
 
     assert exc_info.value.result.threat_level == "CRITICAL"
+

@@ -11,15 +11,15 @@
 The Pulse SDK sends agent input and output to the Pulse service for monitoring. The `watch` decorator reports the result after the wrapped function runs, so it is for monitoring and logging; use a separate pre-execution policy gate when an action must be stopped before it runs.
 
 ```python
-from pulse_sdk import PulseGuard
-
 import os
+from pulse_sdk import PulseGuard
 
 # Store an organization API key in your agent environment.
 guard = PulseGuard(
     base_url="https://pulse-proxy-8dqx.onrender.com",
     agent_id="my-agent",
     api_key=os.getenv("PULSE_ORG_API_KEY"),
+    fail_open=False,
 )
 result = guard.intercept(input_text="...", output_text="...")
 ```
@@ -40,35 +40,40 @@ Copy `pulse_sdk.py` into your project root, or add it to your package.
 
 Privileged control-plane routes require the backend environment variable `PULSE_ADMIN_API_KEY`. Set it to a long random secret in the hosting environment, then enter the same key in the dashboard's **Admin API Key** setting. The dashboard keeps it in the current browser tab and sends it only as `X-Admin-API-Key`.
 
-If the variable is not configured, privileged routes return HTTP 503. Agent interception, service health, and the public event feed remain available.
+If the variable is not configured, privileged routes return HTTP 503. Service health remains public; operational dashboard data requires an admin key, and agent interception requires a valid organization API key. New organization keys are stored as SHA-256 digests; keys issued before that change continue to work until rotated.
+
+For named dashboard access, configure `PULSE_ADMIN_KEYS_JSON` as a JSON array of key records, for example `[{"user_id":"alice","role":"admin","key":"<long-random-secret>"},{"user_id":"bob","role":"viewer","key":"<different-long-random-secret>"}]`. Roles are `viewer`, `operator`, and `admin`. Remove the legacy `PULSE_ADMIN_API_KEY` after replacing it; while it remains configured it continues to grant administrator access.
+
+Anonymous demo interception is disabled by default. Set `PULSE_ALLOW_ANONYMOUS_DEMO=true` only for an isolated demo environment.
 
 ---
 
 ## Quick Start
 
 ```python
-from pulse_sdk import PulseGuard, PulseResult, GovernanceException
+import os
+from pulse_sdk import PulseGuard, PulseCircuitTrippedException
 
 # 1. Initialise once per agent
 guard = PulseGuard(
+    base_url="https://pulse-proxy-8dqx.onrender.com",
     agent_id="invoice-processing-agent",
-    pulse_url="https://pulse-proxy-8dqx.onrender.com",
-    session_id="session-abc-001",      # optional — auto-generated if omitted
-    org_id="acme-corp",                # optional — used for org policy enforcement
+    api_key=os.environ["PULSE_ORG_API_KEY"],
+    fail_open=False,
 )
+session_id = guard.new_session()  # optional — creates a session for this run
 
 # 2. Call intercept() after every agent turn
 try:
-    result = guard.intercept(
+    result = guard.intercept_raw(
         input_text=user_message,
         output_text=agent_response,
     )
     print(f"Threat level: {result.threat_level}")   # LOW / MEDIUM / HIGH / CRITICAL
     print(f"Allowed: {result.allowed}")              # True
 
-except GovernanceException as e:
-    print(f"Blocked: {e.reason}")
-    print(f"Hold ID: {e.hold_id}")                  # legal hold auto-opened
+except PulseCircuitTrippedException as e:
+    print(f"Blocked ({e.status_code}): {e}")
     # Do not execute the agent action
 ```
 
@@ -83,11 +88,10 @@ Main entry point. One instance per agent.
 ```python
 PulseGuard(
     agent_id: str,
-    pulse_url: str = "https://pulse-proxy-8dqx.onrender.com",
-    session_id: str | None = None,        # auto-generated if None
-    parent_session_id: str | None = None, # for multi-agent lineage tracking
-    org_id: str = "demo-org",
-    timeout: float = 30.0,
+    base_url: str,
+    agent_id: str,
+    fail_open: bool = False,
+    api_key: str | None = None,
 )
 ```
 
@@ -95,13 +99,13 @@ PulseGuard(
 
 #### `intercept(input_text, output_text, metadata=None) → PulseResult`
 
-Sends the agent turn to Pulse for governance scoring. Raises `GovernanceException` if the circuit breaker trips or the agent is isolated.
+Sends the agent turn to Pulse for governance scoring. Raises `PulseCircuitTrippedException` if the circuit breaker trips or the agent is isolated.
 
 ```python
 result = guard.intercept(
     input_text="Retrieve customer records for KL branch",
     output_text="Retrieved 847 records including name, IC, phone",
-    metadata={"operation": "data_retrieval", "org_id": "acme-corp"},
+    metadata={"operation": "data_retrieval"},
 )
 ```
 
@@ -109,11 +113,11 @@ result = guard.intercept(
 |-----------|------|-------------|
 | `input_text` | `str` | The agent's input / prompt |
 | `output_text` | `str` | The agent's output / response |
-| `metadata` | `dict \| None` | Optional extra context (operation name, org_id override) |
+| `metadata` | `dict \| None` | Optional event context. Tenant scope comes from the verified `X-API-Key` header. |
 
 #### `intercept_raw(input_text, output_text, metadata=None) → PulseResult`
 
-Same as `intercept()` but never raises — returns a `PulseResult` with `allowed=False` instead of raising `GovernanceException`. Use when you want to handle the block decision yourself.
+Same as `intercept()` but never raises — returns a `PulseResult` with `allowed=False` instead of raising `PulseCircuitTrippedException`. Use when you want to handle the block decision yourself.
 
 ```python
 result = guard.intercept_raw(input_text=..., output_text=...)
@@ -122,18 +126,7 @@ if not result.allowed:
     return
 ```
 
-#### `register() → dict`
-
-Register the agent in the Pulse registry. Call once at startup for full governance coverage (unregistered agents carry a higher shadow score).
-
-```python
-guard.register(
-    name="Invoice Processing Agent",
-    owner="finance-team@acme.com",
-    scope=["read:invoices", "write:payments"],
-    description="Processes vendor invoices and triggers payment workflows",
-)
-```
+Agent registration is currently an administrator operation through the control-plane API; the Python SDK does not expose a `register()` method.
 
 ---
 
@@ -173,17 +166,12 @@ if result.legal_holds:
 
 ---
 
-### `GovernanceException`
+### `PulseCircuitTrippedException`
 
-Raised by `intercept()` when Pulse blocks the agent action.
+Raised by `intercept()` when Pulse blocks the action with HTTP 409, 423, or 503. Other HTTP errors raise `httpx.HTTPStatusError` when `fail_open=False` (the default).
 
 ```python
-GovernanceException(
-    reason: str,        # human-readable block reason
-    hold_id: str | None # legal hold ID if auto-opened
-    status_code: int    # HTTP status from /intercept (409 = tripped, 423 = isolated)
-    raw: dict           # full raw error response
-)
+PulseCircuitTrippedException(message, status_code, detail)
 ```
 
 **Example:**
@@ -191,12 +179,8 @@ GovernanceException(
 ```python
 try:
     result = guard.intercept(input_text=..., output_text=...)
-except GovernanceException as e:
-    if e.status_code == 423:
-        print(f"Agent is isolated — contact compliance: {e.reason}")
-    elif e.status_code == 409:
-        print(f"Circuit breaker tripped: {e.reason}")
-        print(f"Evidence hold: {e.hold_id}")
+except PulseCircuitTrippedException as e:
+    print(f"Pulse blocked the action ({e.status_code}): {e}")
 ```
 
 ---
@@ -206,21 +190,17 @@ except GovernanceException as e:
 ### Malaysia — PDPA Customer Data Handler
 
 ```python
-from pulse_sdk import PulseGuard, GovernanceException
+import os
+from pulse_sdk import PulseGuard, PulseCircuitTrippedException
 
 guard = PulseGuard(
+    base_url="https://pulse-proxy-8dqx.onrender.com",
     agent_id="customer-data-agent-my",
-    org_id="maybank-digital",
-    pulse_url="https://pulse-proxy-8dqx.onrender.com",
+    api_key=os.environ["PULSE_ORG_API_KEY"],
 )
 
 # Register agent with scopes (recommended)
-guard.register(
-    name="Customer Data Handler",
-    owner="dpo@maybank.com",
-    scope=["read:customer_pii", "read:account_data"],
-    description="Retrieves customer records for KYC compliance",
-)
+# Register this agent through the administrator control-plane API before use.
 
 def handle_customer_query(user_input: str, agent_output: str) -> str:
     try:
@@ -231,9 +211,9 @@ def handle_customer_query(user_input: str, agent_output: str) -> str:
         )
         return agent_output  # safe to return
 
-    except GovernanceException as e:
+    except PulseCircuitTrippedException as e:
         # PDPA Malaysia — log breach attempt, notify DPO within 24 hours
-        send_pdpa_alert(dpo_email="dpo@maybank.com", reason=e.reason, hold_id=e.hold_id)
+        send_pdpa_alert(dpo_email="dpo@maybank.com", reason=str(e), hold_id=None)
         return "Request blocked by data governance policy."
 ```
 
@@ -242,12 +222,13 @@ def handle_customer_query(user_input: str, agent_output: str) -> str:
 ### Singapore — Model AI Governance Framework
 
 ```python
-from pulse_sdk import PulseGuard, GovernanceException
+import os
+from pulse_sdk import PulseGuard, PulseCircuitTrippedException
 
 guard = PulseGuard(
+    base_url="https://pulse-proxy-8dqx.onrender.com",
     agent_id="procurement-agent-sg",
-    org_id="dbs-procurement",
-    pulse_url="https://pulse-proxy-8dqx.onrender.com",
+    api_key=os.environ["PULSE_ORG_API_KEY"],
 )
 
 def run_procurement_action(prompt: str, response: str):
@@ -265,7 +246,7 @@ def run_procurement_action(prompt: str, response: str):
 
         return response
 
-    except GovernanceException as e:
+    except PulseCircuitTrippedException as e:
         # Auto-incident report + RFC 3161 timestamped hold already created
         notify_compliance(hold_id=e.hold_id, jurisdiction="SG")
         raise
@@ -276,12 +257,13 @@ def run_procurement_action(prompt: str, response: str):
 ### Vietnam — AI Law Article 9 Incident Reporting
 
 ```python
-from pulse_sdk import PulseGuard, GovernanceException
+import os
+from pulse_sdk import PulseGuard, PulseCircuitTrippedException
 
 guard = PulseGuard(
+    base_url="https://pulse-proxy-8dqx.onrender.com",
     agent_id="logistics-agent-vn",
-    org_id="vinfast-logistics",
-    pulse_url="https://pulse-proxy-8dqx.onrender.com",
+    api_key=os.environ["PULSE_ORG_API_KEY"],
 )
 
 def process_logistics_action(input_text: str, output_text: str):
@@ -305,19 +287,23 @@ def process_logistics_action(input_text: str, output_text: str):
 ### Multi-Agent Swarm (Parent-Child Session Lineage)
 
 ```python
+import os
 from pulse_sdk import PulseGuard
 
 # Parent orchestrator
-orchestrator = PulseGuard(agent_id="orchestrator", session_id="sess-orch-001")
+orchestrator = PulseGuard(base_url="https://pulse-proxy-8dqx.onrender.com", agent_id="orchestrator", api_key=os.environ["PULSE_ORG_API_KEY"])
+orchestrator.new_session()
 
 # Child agents reference the parent session
 child_a = PulseGuard(
+    base_url="https://pulse-proxy-8dqx.onrender.com",
     agent_id="data-agent-a",
-    parent_session_id="sess-orch-001",   # links lineage in Pulse
+    api_key=os.environ["PULSE_ORG_API_KEY"],
 )
 child_b = PulseGuard(
+    base_url="https://pulse-proxy-8dqx.onrender.com",
     agent_id="data-agent-b",
-    parent_session_id="sess-orch-001",
+    api_key=os.environ["PULSE_ORG_API_KEY"],
 )
 
 # Each child call is governed independently, lineage tracked
@@ -331,19 +317,15 @@ child_b.intercept(input_text="...", output_text="...")
 
 | Status Code | Exception | Meaning |
 |-------------|-----------|---------|
-| 409 | `GovernanceException` | Circuit breaker tripped — agent behaviour exceeded risk threshold |
-| 423 | `GovernanceException` | Agent is isolated — quarantined due to prior breach |
-| 503 | `GovernanceException` | Pulse engine dropped the request — circuit breaker open |
-| 5xx | `GovernanceException` | Backend error — fail-open or fail-closed per your policy |
+| 409 | `PulseCircuitTrippedException` | Circuit breaker tripped — agent behaviour exceeded risk threshold |
+| 423 | `PulseCircuitTrippedException` | Agent is isolated — quarantined due to prior breach |
+| 503 | `PulseCircuitTrippedException` | Pulse engine dropped the request — circuit breaker open |
+| Other 4xx/5xx | `httpx.HTTPStatusError` | Unexpected service or authorization error; raised by default |
 
-**Fail-open pattern** (allow action if Pulse is unreachable — not recommended for high-stakes):
+**Fail-open** (allow action if Pulse is unavailable):
 ```python
-try:
-    guard.intercept(input_text=..., output_text=...)
-except GovernanceException:
-    raise  # always block on governance failure
-except Exception:
-    pass   # Pulse unreachable — allow (fail-open)
+guard = PulseGuard(base_url="...", agent_id="...", api_key="...", fail_open=True)
+guard.intercept(input_text="...", output_text="...")
 ```
 
 **Fail-closed pattern** (block if Pulse is unreachable — recommended for regulated environments):
@@ -381,3 +363,4 @@ except Exception:
 ---
 
 *Pulse AI Governance Middleware — ASEAN-native, vendor-neutral, intercepts before execution.*
+
