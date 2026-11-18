@@ -12,10 +12,11 @@ This roadmap translates the product review into deliverable stages. Arthur, Cred
 - Make the SDK fail closed by default and correct the dashboard and docs to describe the guarantees actually provided.
 - Add tenant-scoped OpenTelemetry-style span ingestion, recent trace retrieval, trace detail lookup, bounded payload validation, and SDK support. Apply `migrations/0002_agent_traces.sql` before enabling these endpoints in production.
 - Scope agent isolation and release decisions by organization so identical agent IDs in separate tenants do not affect one another.
+- Add Supabase-backed durable quarantine state behind `PULSE_DURABLE_ISOLATION_ENABLED`; when enabled, DB errors fail closed and health reports whether the durable path is active. Apply `migrations/0003_durable_agent_isolations.sql` before enabling it.
 
 ## Next: reliability foundation
 
-1. Move sessions, isolation state, circuit-breaker state, and idempotency records to shared durable storage. This needs a database schema/migration, concurrency design, retention decisions, and deployment credentials; the current process-local stores are not suitable for multi-worker or restart-safe guarantees.
+1. Move session baselines, circuit-breaker state, and idempotency records to shared durable storage. Isolation is now supported durably, but must be enabled after its migration; the remaining process-local state is not suitable for multi-worker or restart-safe guarantees.
 2. Add append-only audit storage with monotonic sequence, complete-chain verification, periodic external anchoring, and key rotation. A row hash alone does not prove completeness or resist a privileged database rewrite.
 3. Add service-level auth/rate limits, origin restrictions for browser access, structured audit export, and secret rotation with revocation dates for legacy plaintext org keys.
 
