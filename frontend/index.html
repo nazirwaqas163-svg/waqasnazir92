@@ -1221,6 +1221,7 @@ function renderSectionNav(section, selected){
  nav.innerHTML=(SECTION_PAGES[section]||[]).map(([view,label])=>'<button type="button" class="'+(view===selected?'active':'')+'" onclick="switchView(\''+view+'\',\''+section+'\')">'+label+'</button>').join('');
 }
 document.querySelectorAll('.nav-btn[data-section]').forEach(button=>button.addEventListener('click',()=>{const section=button.dataset.section;activeSection=section;const first=(SECTION_PAGES[section]||[])[0];switchView(first[0],section);}));
+renderSectionNav('overview','ledger');
 function switchView(view,section){
  const parent=section||Object.keys(SECTION_PAGES).find(key=>SECTION_PAGES[key].some(item=>item[0]===view))||activeSection;
  activeSection=parent;
