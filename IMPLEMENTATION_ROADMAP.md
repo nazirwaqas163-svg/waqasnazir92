@@ -11,6 +11,7 @@ This roadmap translates the product review into deliverable stages. Arthur, Cred
 - Verify persisted event row hashes and label replay results as partial evidence when complete chain and external anchoring are not verified.
 - Make the SDK fail closed by default and correct the dashboard and docs to describe the guarantees actually provided.
 - Add tenant-scoped OpenTelemetry-style span ingestion, recent trace retrieval, trace detail lookup, bounded payload validation, and SDK support. Apply `migrations/0002_agent_traces.sql` before enabling these endpoints in production.
+- Scope agent isolation and release decisions by organization so identical agent IDs in separate tenants do not affect one another.
 
 ## Next: reliability foundation
 
