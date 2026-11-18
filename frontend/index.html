@@ -8,10 +8,10 @@
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@300;400;500;600&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#080c14;--bg2:#0d1117;--bg3:#111827;--bg4:#1a2235;--bg5:#1f2a3d;
-  --border:#1e2d45;--border2:#253550;
+  --bg:#0b1018;--bg2:#101722;--bg3:#151e2b;--bg4:#1c2837;--bg5:#243347;
+  --border:#263446;--border2:#34465c;
   --text:#e2e8f0;--muted:#64748b;--muted2:#475569;
-  --accent:#00d4ff;--accent2:#0ea5e9;
+  --accent:#35bfd0;--accent2:#168fa8;
   --ok:#10b981;--ok-bg:rgba(16,185,129,0.1);--ok-border:rgba(16,185,129,0.25);
   --warn:#f59e0b;--warn-bg:rgba(245,158,11,0.1);--warn-border:rgba(245,158,11,0.25);
   --danger:#ef4444;--danger-bg:rgba(239,68,68,0.1);--danger-border:rgba(239,68,68,0.25);
@@ -19,6 +19,7 @@
 }
 .sidebar{width:82px;padding:16px 6px;gap:8px}
 .nav-btn{width:70px;min-height:54px;font-size:9px;letter-spacing:0;text-transform:none}
+.nav-btn .nav-icon svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .nav-btn .nav-icon{font-size:17px;line-height:18px;color:var(--accent)}
 .section-nav{min-height:42px;display:flex;align-items:center;gap:6px;padding:5px 18px;background:var(--bg2);border-bottom:1px solid var(--border);overflow-x:auto}
 .section-nav button{border:0;border-radius:6px;background:transparent;color:var(--muted);padding:7px 11px;font:500 11px 'Inter',sans-serif;white-space:nowrap;cursor:pointer}
@@ -403,12 +404,12 @@ a{transition:color .16s ease}
 
 <div class="sidebar" aria-label="Primary navigation">
   <div class="logo" title="Forensa AI"><svg viewBox="0 0 96 96" fill="none" width="34" height="34"><path stroke="#00C2D4" stroke-width="3" d="M30 14 42 7 54 14v14l-12 7-12-7z"/><path stroke="#00C2D4" stroke-width="3" opacity=".55" d="m12 42 12-7 12 7v14l-12 7-12-7z"/><path stroke="#E8A030" stroke-width="3" opacity=".85" d="m48 42 12-7 12 7v14l-12 7-12-7z"/></svg></div>
-  <button class="nav-btn active" title="Overview" aria-label="Overview" data-section="overview"><span class="nav-icon">⌂</span><span>Overview</span></button>
-  <button class="nav-btn" title="Monitor" aria-label="Monitor" data-section="monitor"><span class="nav-icon">◉</span><span>Monitor</span></button>
-  <button class="nav-btn" title="Investigate" aria-label="Investigate" data-section="investigate"><span class="nav-icon">⌕</span><span>Investigate</span></button>
-  <button class="nav-btn" title="Governance" aria-label="Governance" data-section="governance"><span class="nav-icon">◇</span><span>Governance</span></button>
+  <button class="nav-btn active" title="Overview" aria-label="Overview" data-section="overview"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-6v-7h-4v7H4a1 1 0 0 1-1-1z"/></svg></span><span>Overview</span></button>
+  <button class="nav-btn" title="Monitor" aria-label="Monitor" data-section="monitor"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><span>Monitor</span></button>
+  <button class="nav-btn" title="Investigate" aria-label="Investigate" data-section="investigate"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg></span><span>Investigate</span></button>
+  <button class="nav-btn" title="Governance" aria-label="Governance" data-section="governance"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 9 5v8l-9 5-9-5V8z"/><path d="m8.5 12 2.3 2.3 4.7-4.8"/></svg></span><span>Governance</span></button>
   <div style="flex:1"></div>
-  <button class="nav-btn" title="Settings" aria-label="Settings" data-section="settings"><span class="nav-icon">⚙</span><span>Settings</span></button>
+  <button class="nav-btn" title="Settings" aria-label="Settings" data-section="settings"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19 13.5a1.7 1.7 0 0 0 .3 1.8l.1.1-1.6 2.8-.2-.1a1.7 1.7 0 0 0-1.8.3l-.1.1h-3.3l-.1-.2a1.7 1.7 0 0 0-1.5-1l-.2.1-2.8-1.6.1-.2a1.7 1.7 0 0 0-.3-1.8l-.1-.1v-3.3l.2-.1a1.7 1.7 0 0 0 1-1.5l-.1-.2 1.6-2.8.2.1a1.7 1.7 0 0 0 1.8-.3l.1-.1h3.3l.1.2a1.7 1.7 0 0 0 1.5 1l.2-.1 2.8 1.6-.1.2a1.7 1.7 0 0 0 .3 1.8l.1.1z"/></svg></span><span>Settings</span></button>
 </div>
 
 <div class="main">
