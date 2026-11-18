@@ -2859,12 +2859,26 @@ async def ledger_integrity_ai_events(limit: int = 100) -> Dict[str, Any]:
     known_hashes = {row.get("row_hash") for row in rows if row.get("row_hash")}
     invalid_hashes = []
     unresolved_predecessors = []
+    broken_links = []
+    sequence_gaps = []
     verified_links = 0
-    for row in rows:
+    for index, row in enumerate(rows):
         if not verify_ai_event_row(row):
             invalid_hashes.append(row.get("event_id"))
             continue
         previous_hash = row.get("prev_hash")
+        sequence = row.get("ledger_sequence")
+        if index > 0:
+            previous_row = rows[index - 1]
+            previous_sequence = previous_row.get("ledger_sequence")
+            if isinstance(sequence, int) and isinstance(previous_sequence, int) and sequence != previous_sequence + 1:
+                sequence_gaps.append({"after": previous_sequence, "before": sequence})
+            if previous_hash != previous_row.get("row_hash"):
+                broken_links.append({
+                    "event_id": row.get("event_id"),
+                    "expected_previous_hash": previous_row.get("row_hash"),
+                    "actual_previous_hash": previous_hash,
+                })
         if previous_hash == GENESIS_HASH:
             verified_links += 1
         elif previous_hash in known_hashes:
@@ -2874,12 +2888,12 @@ async def ledger_integrity_ai_events(limit: int = 100) -> Dict[str, Any]:
                 "event_id": row.get("event_id"),
                 "previous_hash": previous_hash,
             })
-    integrity_status = "TAMPERED" if invalid_hashes else "PARTIAL"
+    integrity_status = "TAMPERED" if (invalid_hashes or broken_links or sequence_gaps) else "PARTIAL"
     return {
         "ok": True,
         "table": "ai_events",
         "integrity_status": integrity_status,
-        "tamper_detected": bool(invalid_hashes),
+        "tamper_detected": bool(invalid_hashes or broken_links or sequence_gaps),
         "algorithm": "SHA-256 hash chain",
         "verified_at": datetime.now(timezone.utc).isoformat(),
         "summary": {
@@ -2888,12 +2902,17 @@ async def ledger_integrity_ai_events(limit: int = 100) -> Dict[str, Any]:
             "invalid_row_hashes": len(invalid_hashes),
             "verified_links": verified_links,
             "unresolved_predecessors": len(unresolved_predecessors),
+            "broken_predecessor_links": len(broken_links),
+            "sequence_gaps": len(sequence_gaps),
+            "sequence_contiguous": not sequence_gaps,
         },
         "invalid_event_ids": invalid_hashes,
+        "broken_predecessor_rows": broken_links,
+        "sequence_gaps": sequence_gaps,
         "unresolved_predecessor_rows": unresolved_predecessors,
         "external_anchor_verified": False,
         "note": (
-            "Each fetched row hash is recomputed from its stored event fields. "
+            Each fetched row hash is recomputed from its stored event fields. Sequence gaps and adjacent predecessor links are checked too. 
             "This endpoint does not verify a complete chain outside the fetched rows "
             "or an independently stored checkpoint, so it never reports the full ledger as VERIFIED."
         ),
