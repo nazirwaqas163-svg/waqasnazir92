@@ -250,6 +250,54 @@ class SupabaseAuditClient:
             logger.exception("Failed to fetch session events for %s", session_id)
             return []
 
+    async def insert_trace_spans(self, rows: List[Dict[str, Any]]) -> int:
+        """Idempotently insert spans; duplicate tenant/trace/span IDs are ignored."""
+        if not self.configured:
+            raise RuntimeError("Supabase is not configured")
+        try:
+            headers = {**self._headers(), "prefer": "resolution=ignore-duplicates,return=representation"}
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.post(
+                    f"{self.url}/rest/v1/agent_traces",
+                    headers=headers,
+                    params={"on_conflict": "org_id,trace_id,span_id"},
+                    json=rows,
+                )
+                response.raise_for_status()
+                body = response.json()
+                return len(body) if isinstance(body, list) else 0
+        except httpx.HTTPError as exc:
+            logger.exception("Failed to persist agent trace spans")
+            raise RuntimeError("Trace storage is unavailable") from exc
+
+    async def get_trace_spans(
+        self, *, org_id: str, trace_id: Optional[str] = None, limit: int = 100
+    ) -> List[Dict[str, Any]]:
+        """Read trace spans with tenant identity always included in the filter."""
+        if not self.configured:
+            raise RuntimeError("Supabase is not configured")
+        try:
+            params: Dict[str, Any] = {
+                "org_id": f"eq.{org_id}",
+                "select": "trace_id,span_id,parent_span_id,name,kind,started_at,ended_at,status,agent_id,resource,attributes,events,ingested_at",
+                "order": "started_at.asc" if trace_id else "started_at.desc",
+                "limit": str(max(1, min(limit, 200))),
+            }
+            if trace_id:
+                params["trace_id"] = f"eq.{trace_id}"
+            async with httpx.AsyncClient(timeout=SUPABASE_TIMEOUT) as client:
+                response = await client.get(
+                    f"{self.url}/rest/v1/agent_traces",
+                    headers=self._headers(),
+                    params=params,
+                )
+                response.raise_for_status()
+                body = response.json()
+                return body if isinstance(body, list) else []
+        except httpx.HTTPError as exc:
+            logger.exception("Failed to read agent trace spans")
+            raise RuntimeError("Trace storage is unavailable") from exc
+
     async def register_agent(
         self,
         agent_id: str,
