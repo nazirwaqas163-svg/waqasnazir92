@@ -1,0 +1,41 @@
+name: Synthetic event-ledger soak
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - ".github/workflows/synthetic-event-soak.yml"
+      - "qa/synthetic_event_soak.py"
+  workflow_dispatch:
+  schedule:
+    - cron: "0 */6 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: forensa-synthetic-event-soak
+  cancel-in-progress: false
+
+jobs:
+  synthetic-event-soak:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Derive the seven-day window from workflow activation
+        id: window
+        shell: bash
+        run: echo "start_at=$(git log -1 --format=%cI -- .github/workflows/synthetic-event-soak.yml)" >> "$GITHUB_OUTPUT"
+      - name: Send and verify synthetic events
+        env:
+          PULSE_ORG_API_KEY: ${{ secrets.PULSE_ORG_API_KEY }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: python qa/synthetic_event_soak.py --start-at '${{ steps.window.outputs.start_at }}' --count 10
+
