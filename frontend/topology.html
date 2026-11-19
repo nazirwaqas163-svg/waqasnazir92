@@ -8,10 +8,10 @@
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@300;400;500;600&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#080c14;--bg2:#0d1117;--bg3:#111827;--bg4:#1a2235;--bg5:#1f2a3d;
-  --border:#1e2d45;--border2:#253550;
-  --text:#e2e8f0;--muted:#64748b;--muted2:#475569;
-  --accent:#00d4ff;
+  --bg:#f3f6f8;--bg2:#ffffff;--bg3:#ffffff;--bg4:#f7f9fb;--bg5:#edf2f6;
+  --border:#dce5eb;--border2:#ccd8e0;
+  --text:#17212b;--muted:#526575;--muted2:#718291;
+  --accent:#087e8b;
   --ok:#10b981;--warn:#f59e0b;--danger:#ef4444;--critical:#ff6b35;
 }
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;overflow:hidden}
@@ -198,6 +198,17 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter'
 .spin{width:18px;height:18px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 .loading-text{font-size:12px;color:var(--muted);font-family:'JetBrains Mono',monospace;letter-spacing:0.05em}
+/* Light theme applied to the topology canvas and controls */
+.node-label{padding:4px 7px;border:1px solid rgba(116,139,157,.42);border-radius:7px;background:rgba(255,255,255,.92);backdrop-filter:blur(5px);box-shadow:0 3px 12px rgba(29,49,63,.12)}
+.node-label.is-focus{border-color:rgba(8,126,139,.5);background:rgba(255,255,255,.98)}
+.node-label .nl-name{color:#17212b;text-shadow:0 1px 2px rgba(255,255,255,.95),0 0 4px rgba(255,255,255,.95)}
+.node-label .nl-sub{color:#526575;text-shadow:0 1px 2px rgba(255,255,255,.95)}
+#tooltip{background:rgba(255,255,255,.98);color:#17212b;box-shadow:0 4px 20px rgba(29,49,63,.18)}
+.ctrl-btn,.legend{background:rgba(255,255,255,.94);color:#526575;border-color:#ccd8e0;box-shadow:0 3px 12px rgba(29,49,63,.12)}
+.hint-overlay{color:#526575}
+.graph-hint{color:#526575}
+.legend,.node-side,.side-panel{background:rgba(255,255,255,.96);box-shadow:0 4px 18px rgba(29,49,63,.12)}
+
 </style>
 </head>
 <body>
@@ -220,7 +231,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter'
       <span class="tb-pill live" id="status-pill"><span class="tb-pill-dot"></span><span id="status-text">Loading…</span></span>
       <span class="tb-stat" id="tb-stats"></span>
       <button class="tb-btn" onclick="loadTopology(true)">↻ Refresh</button>
-      <a class="tb-btn" href="index.html">← Dashboard</a>
+      <a class="tb-btn" href="index.html" target="_top">← Dashboard</a>
     </div>
   </div>
 
@@ -411,10 +422,10 @@ function initRenderer() {
 
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setClearColor(0x080c14, 1);
+  renderer.setClearColor(0xf3f6f8, 1);
 
   scene = new THREE.Scene();
-  scene.fog = new THREE.FogExp2(0x080c14, 0.009);
+  scene.fog = new THREE.FogExp2(0xf3f6f8, 0.009);
 
   camera = new THREE.PerspectiveCamera(46, wrap.clientWidth / wrap.clientHeight, 0.1, 800);
 
@@ -666,8 +677,8 @@ function buildScene(topo) {
     if (!fromPos || !toPos) return;
 
     const isSpawned = edge.type === 'spawned';
-    const color     = isSpawned ? 0x253550 : 0x1e3a5f;
-    const opacity   = isSpawned ? 0.25 : 0.4;
+    const color     = isSpawned ? 0x9aaab8 : 0x70899d;
+    const opacity   = isSpawned ? 0.45 : 0.58;
 
     const geo  = new THREE.BufferGeometry().setFromPoints([fromPos.clone(), toPos.clone()]);
     const mat  = new THREE.LineBasicMaterial({ color, transparent: true, opacity });
