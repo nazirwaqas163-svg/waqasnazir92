@@ -453,6 +453,23 @@ body,.app{background:var(--bg);color:var(--text)}.sidebar,.topbar,.section-nav{b
 [data-technical]{display:none}body[data-display-mode="technical"] [data-technical]{display:block}body[data-display-mode="technical"] [data-guided]{display:none!important}
 @media(max-width:900px){.home-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.home-steps{grid-template-columns:1fr}}
 @media(max-width:640px){#view-home{padding:18px 14px}.home-intro{display:block}.home-health{margin-top:14px}.home-grid{grid-template-columns:1fr}.topbar{padding:0 10px;gap:8px}.topbar-sub{display:none}.mode-switch button{padding:7px 8px}.home-intro h1{font-size:22px}}
+
+/* Higher contrast for previously dark cards in the light workspace */
+.kpi,.cem-card,.settings-card,.compliance-card,.graph-card{background:#fff!important;color:#17212b;border-color:#dce5eb;box-shadow:0 2px 8px rgba(29,49,63,.07)}
+.kpi-label,.section-label{color:#526575!important}.kpi-sub,.settings-key,.cnt,.mono-val{color:#526575}
+.compliance-card .comp-title,.graph-card,.settings-val{color:#17212b}
+.attention-card{background:#fff!important;color:#17212b}
+.settings-card input,.settings-card select,.settings-card textarea,input,select,textarea{background:#fff;color:#17212b;border-color:#ccd8e0}
+.history-note{font-size:12px;line-height:1.5;color:#526575;background:#f7fafb;border:1px solid #dce5eb;border-radius:8px;padding:10px 12px;margin-bottom:10px}
+.history-note strong{color:#087e8b}
+.topology-page{padding:12px!important;gap:10px!important}
+.topology-page-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:4px 4px 8px}
+.topology-page-heading h2{font-size:16px;color:#17212b}.topology-page-heading p{font-size:12px;color:#526575;margin-top:4px}
+#topology-frame{flex:1;width:100%;height:calc(100vh - 152px);min-height:480px;border:1px solid #dce5eb;border-radius:10px;background:#f3f6f8}
+@media(max-width:640px){.topology-page-heading{align-items:flex-start;flex-direction:column}#topology-frame{height:calc(100vh - 220px);min-height:420px}}
+
+.kpi-label{font-size:11px}.kpi-sub{font-size:12px}.section-label{font-size:11px!important}.home-card p,.history-note,.getting-started-step span{line-height:1.6}
+#view-topology-live{min-height:0}
 </style>
 </head>
 <body>
@@ -590,6 +607,7 @@ body,.app{background:var(--bg);color:var(--text)}.sidebar,.topbar,.section-nav{b
 
       <!-- EVENT LEDGER -->
       <div>
+        <p class="history-note">This ledger keeps historical events for audit. Entries beginning with <strong>fptest-</strong> are synthetic agent runs from earlier testing. Use search or dates to narrow the history.</p>
         <div class="tbl-head-row">
           <div style="display:flex;align-items:center;gap:10px">
             <div class="section-label">Event Ledger</div>
@@ -807,6 +825,11 @@ body,.app{background:var(--bg);color:var(--text)}.sidebar,.topbar,.section-nav{b
         <div id="isolated-body"><div class="loading"><div class="spin"></div>Loading isolated agents…</div></div>
       </div>
     </div>
+    <!-- Embedded agent topology -->
+    <section class="ledger topology-page" id="view-topology-live" style="display:none" aria-label="Agent topology">
+      <div class="topology-page-heading"><div><h2>Agent topology</h2><p>Explore agents, sessions, and their connections. Select a node to inspect it.</p></div><button type="button" class="refresh-btn" onclick="refreshTopologyEmbed()">↻ Refresh topology</button></div>
+      <iframe id="topology-frame" title="Interactive agent topology" loading="lazy"></iframe>
+    </section>
     <!-- GRAPH EXPLORER VIEW (Phase 18) -->
     <div id="view-graph" style="display:none">
       <div class="graph-toolbar">
@@ -1318,12 +1341,12 @@ async function reviewAgentVersion(encodedOrgId,encodedAgentId,encodedVersion,dec
 /* ── VIEW SWITCHING ── */
 const SECTION_PAGES={
   overview:[['home','Home'],['ledger','Activity']],
-  monitor:[['traces','Traces'],['agents','Agents'],['graph','Topology'],['analytics','Analytics'],['circuit-breaker','Circuit breaker']],
+  monitor:[['traces','Traces'],['agents','Agents'],['topology-live','Topology'],['graph','Compliance graph'],['analytics','Analytics'],['circuit-breaker','Circuit breaker']],
   investigate:[['isolated','Isolated agents'],['ledger','Event activity'],['traces','Trace explorer']],
   governance:[['compliance','Compliance'],['evaluations','Evaluations'],['governance','Agent registry']],
   settings:[['settings','Configuration']]
 };
-const VIEW_LOADERS={'home':()=>loadHome(),'traces':()=>loadTraces(),'agents':()=>{if(!lastTopology)loadAgents();},'analytics':()=>{if(!lastDrift)loadAnalytics();},'circuit-breaker':()=>loadCircuitBreaker(),'compliance':()=>{if(!lastDeadlines)loadCompliance();},'settings':()=>{if(!lastHealth)loadSettings();},'isolated':()=>loadIsolated(),'evaluations':()=>loadEvaluations(),'governance':()=>loadGovernance(),'graph':()=>{window.open('topology.html','_blank');switchView('ledger');}};
+const VIEW_LOADERS={'home':()=>loadHome(),'traces':()=>loadTraces(),'agents':()=>{if(!lastTopology)loadAgents();},'analytics':()=>{if(!lastDrift)loadAnalytics();},'circuit-breaker':()=>loadCircuitBreaker(),'compliance':()=>{if(!lastDeadlines)loadCompliance();},'settings':()=>{if(!lastHealth)loadSettings();},'isolated':()=>loadIsolated(),'evaluations':()=>loadEvaluations(),'governance':()=>loadGovernance(),'topology-live':()=>{const frame=document.getElementById('topology-frame');if(frame&&!frame.dataset.loaded){frame.dataset.loaded='true';frame.src='topology.html';}},'graph':()=>loadGraph()};
 let activeSection='overview';
 function renderSectionNav(section, selected){
  const nav=document.getElementById('section-nav');
@@ -1337,7 +1360,7 @@ function switchView(view,section){
  document.querySelectorAll('.nav-btn[data-section]').forEach(button=>button.classList.toggle('active',button.dataset.section===parent));
  document.querySelectorAll('.nav-btn[data-view]').forEach(button=>button.classList.remove('active'));
  renderSectionNav(parent,view);
- ['home','ledger','traces','agents','analytics','circuit-breaker','compliance','settings','isolated','evaluations','governance','graph'].forEach(name=>{const element=document.getElementById('view-'+name);if(element)element.style.display=name===view?'':'none';});
+ ['home','ledger','traces','agents','topology-live','analytics','circuit-breaker','compliance','settings','isolated','evaluations','governance','graph'].forEach(name=>{const element=document.getElementById('view-'+name);if(element)element.style.display=name===view?'':'none';});
  closeInv();
  if(VIEW_LOADERS[view])VIEW_LOADERS[view]();
  if(view==='graph')setTimeout(graphResize,50);
@@ -1395,6 +1418,8 @@ async function loadHome(){
 }
 initDisplayMode();
 loadHome();
+
+function refreshTopologyEmbed(){const frame=document.getElementById('topology-frame');if(!frame)return;if(frame.contentWindow&&typeof frame.contentWindow.loadTopology==='function')frame.contentWindow.loadTopology(true);else{frame.dataset.loaded='true';frame.src='topology.html?refresh='+Date.now();}}
 
 async function loadTraces(){
   const rows=document.getElementById('trace-rows'),detail=document.getElementById('trace-detail');
@@ -1465,7 +1490,8 @@ async function renderAgents(){
   box.innerHTML=sorted.map(a=>{
     const aSessions=sessions.filter(s=>s.agent_id===a.agent_id),blockedRatio=a.events?Math.round((a.blocked/a.events)*100):0,isOpen=agentsOpen.has(a.agent_id);
     const sessRows=aSessions.length?aSessions.map(s=>{const lineage=s.parent_session_id?`<div style="font-size:9px;color:var(--muted);margin-top:2px">↳ spawned from ${escapeHTML(s.parent_session_id)}</div>`:'';const ds=s.drift_status||'unknown';return `<div class="sess-row"><div class="sess-id">${escapeHTML(s.session_id)}${lineage}</div><div class="mono-val">${s.turns??0} turns</div><div class="mono-val" style="color:${(s.blocked||0)>0?'var(--danger)':'var(--muted)'}">${s.blocked??0} blocked</div><div><span class="badge ${ds==='critical'?'critical':ds==='elevated'?'elevated':'stable'}">${escapeHTML(ds)}</span></div><div><span class="badge ${bandClass(s.risk_band)}">${escapeHTML(s.risk_band||'unknown')}</span></div></div>`;}).join(''):'<div style="padding:8px 0;color:var(--muted);font-size:11px">No sessions recorded.</div>';
-    return `<div class="agent-card"><div class="agent-hdr" onclick="toggleAgent(decodeURIComponent('${safeJSArg(a.agent_id)}'))"><div class="avatar" style="background:rgba(0,212,255,0.12);color:var(--accent)">${escapeHTML((a.agent_id||'??').slice(0,2).toUpperCase())}</div><div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-weight:600;font-size:12px">${escapeHTML(a.agent_id)}</span><span class="badge ${a.registered?'stable':'unreg'}">${a.registered?'registered':'unregistered'}</span>${isolatedSet.has(a.agent_id)?'<span class="badge critical" style="margin-left:4px">⊘ isolated</span>':''}<span class="badge ${bandClass(a.risk_band)}">${escapeHTML(a.risk_band||'unknown')}</span></div><div style="font-size:10px;color:var(--muted);margin-top:3px">${a.events??0} events · ${a.blocked??0} blocked (${blockedRatio}%) · ${aSessions.length} session${aSessions.length===1?'':'s'}</div></div><div class="chevron">${isOpen?'▾':'▸'}</div><button onclick="event.stopPropagation();downloadPassport(decodeURIComponent('\${safeJSArg(a.agent_id)}'))" class="refresh-btn">↓ Passport</button>\${ADMIN_API_KEY&&!isolatedSet.has(a.agent_id)?\`<button onclick="event.stopPropagation();isolateAgent(decodeURIComponent('\${safeJSArg(a.agent_id)}'))" class="refresh-btn" style="color:var(--danger);border-color:var(--danger-border)">Isolate</button>\`:''}</div><div class="agent-body" style="display:${isOpen?'block':'none'}"><div class="sess-hdr"><div>Session</div><div>Turns</div><div>Blocked</div><div>Drift</div><div>Risk</div></div>${sessRows}</div></div>`;
+    const isolateButton=ADMIN_API_KEY&&!isolatedSet.has(a.agent_id)?`<button onclick="event.stopPropagation();isolateAgent(decodeURIComponent('${safeJSArg(a.agent_id)}'))" class="refresh-btn" style="color:var(--danger);border-color:var(--danger-border)">Isolate</button>`:'';
+    return `<div class="agent-card"><div class="agent-hdr" onclick="toggleAgent(decodeURIComponent('${safeJSArg(a.agent_id)}'))"><div class="avatar" style="background:rgba(0,212,255,0.12);color:var(--accent)">${escapeHTML((a.agent_id||'??').slice(0,2).toUpperCase())}</div><div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-weight:600;font-size:12px">${escapeHTML(a.agent_id)}</span><span class="badge ${a.registered?'stable':'unreg'}">${a.registered?'registered':'unregistered'}</span>${isolatedSet.has(a.agent_id)?'<span class="badge critical" style="margin-left:4px">⊘ isolated</span>':''}${a.risk_band&&a.risk_band!==(a.registered?'stable':'unregistered')?'<span class="badge '+bandClass(a.risk_band)+'">'+escapeHTML(a.risk_band)+'</span>':''}</div><div style="font-size:10px;color:var(--muted);margin-top:3px">${a.events??0} events · ${a.blocked??0} blocked (${blockedRatio}%) · ${aSessions.length} session${aSessions.length===1?'':'s'}</div></div><div class="chevron">${isOpen?'▾':'▸'}</div><button onclick="event.stopPropagation();downloadPassport(decodeURIComponent('${safeJSArg(a.agent_id)}'))" class="refresh-btn">↓ Passport</button>${isolateButton}</div><div class="agent-body" style="display:${isOpen?'block':'none'}"><div class="sess-hdr"><div>Session</div><div>Turns</div><div>Blocked</div><div>Drift</div><div>Risk</div></div>${sessRows}</div></div>`;
   }).join('');
 }
 
