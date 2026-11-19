@@ -470,6 +470,11 @@ body,.app{background:var(--bg);color:var(--text)}.sidebar,.topbar,.section-nav{b
 
 .kpi-label{font-size:11px}.kpi-sub{font-size:12px}.section-label{font-size:11px!important}.home-card p,.history-note,.getting-started-step span{line-height:1.6}
 #view-topology-live{min-height:0}
+
+#view-ledger[data-ledger-mode="events"] #attention-card,
+#view-ledger[data-ledger-mode="events"] .getting-started,
+#view-ledger[data-ledger-mode="events"] #compliance-map-panel{display:none!important}
+
 </style>
 </head>
 <body>
@@ -578,7 +583,7 @@ body,.app{background:var(--bg);color:var(--text)}.sidebar,.topbar,.section-nav{b
       </section>
 
       <!-- PHASE 5: COMPLIANCE EXPOSURE MAP -->
-      <div>
+      <div id="compliance-map-panel">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
           <div class="section-label">Compliance Exposure Map</div>
           <div style="font-size:10px;color:var(--muted)">Click a jurisdiction to filter events below</div>
@@ -1360,6 +1365,7 @@ function switchView(view,section){
  document.querySelectorAll('.nav-btn[data-section]').forEach(button=>button.classList.toggle('active',button.dataset.section===parent));
  document.querySelectorAll('.nav-btn[data-view]').forEach(button=>button.classList.remove('active'));
  renderSectionNav(parent,view);
+ const ledger=document.getElementById('view-ledger');if(ledger)ledger.dataset.ledgerMode=view==='ledger'?'events':'overview';
  ['home','ledger','traces','agents','topology-live','analytics','circuit-breaker','compliance','settings','isolated','evaluations','governance','graph'].forEach(name=>{const element=document.getElementById('view-'+name);if(element)element.style.display=name===view?'':'none';});
  closeInv();
  if(VIEW_LOADERS[view])VIEW_LOADERS[view]();
