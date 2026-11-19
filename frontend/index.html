@@ -475,6 +475,8 @@ body,.app{background:var(--bg);color:var(--text)}.sidebar,.topbar,.section-nav{b
 #view-ledger[data-ledger-mode="events"] .getting-started,
 #view-ledger[data-ledger-mode="events"] #compliance-map-panel{display:none!important}
 
+.agent-filter-row{display:flex;align-items:center;gap:4px;flex-wrap:wrap}.agent-filter-row .ftab{font-size:11px;padding:6px 10px}.agent-filter-row .ftab.active{background:#eaf5f5;border-color:#b6dfe1;color:#086f78}
+@media(max-width:700px){#view-agents>.tbl-head-row{align-items:flex-start;flex-direction:column}.agent-filter-row{width:100%}}
 </style>
 </head>
 <body>
@@ -527,7 +529,7 @@ body,.app{background:var(--bg);color:var(--text)}.sidebar,.topbar,.section-nav{b
         </article>
         <article class="home-card"><div class="home-eyebrow">Explore</div><div class="home-stat">Agents</div><h2>Understand your agents</h2>
           <p data-guided>Review agent health, trace requests, and see how services connect.</p><p data-technical>Open inventory, trace spans, or the topology graph.</p>
-          <div class="home-actions"><button type="button" onclick="switchView('agents','monitor')">View agents →</button><button type="button" onclick="switchView('graph','monitor')">Topology →</button></div>
+          <div class="home-actions"><button type="button" onclick="switchView('agents','monitor')">View agents →</button><button type="button" onclick="switchView('topology-live','monitor')">Topology →</button></div>
         </article>
       </div>
       <article class="home-card">
@@ -577,7 +579,7 @@ body,.app{background:var(--bg);color:var(--text)}.sidebar,.topbar,.section-nav{b
         <div class="getting-started-grid">
           <button type="button" onclick="switchView('settings')" class="getting-started-step"><span class="step-index">01</span><strong>Connect access</strong><span>Add your organization key in Settings. Admin actions use a separate admin key.</span><span class="step-link">Open Settings →</span></button>
           <button type="button" onclick="switchView('agents','monitor')" class="getting-started-step"><span class="step-index">02</span><strong>Find an agent</strong><span>Review registered agents, sessions, risk, and topology.</span><span class="step-link">View Agents →</span></button>
-          <button type="button" onclick="switchView('traces','monitor')" class="getting-started-step"><span class="step-index">03</span><strong>Follow a request</strong><span>Use traces to understand which steps ran and where errors occurred.</span><span class="step-link">Explore Traces →</span></button>
+          <button type="button" onclick="switchView('traces','investigate')" class="getting-started-step"><span class="step-index">03</span><strong>Follow a request</strong><span>Use traces to understand which steps ran and where errors occurred.</span><span class="step-link">Explore Traces →</span></button>
           <button type="button" onclick="switchView('evaluations','governance')" class="getting-started-step"><span class="step-index">04</span><strong>Review readiness</strong><span>Check evaluations, approvals, and compliance deadlines.</span><span class="step-link">Open Governance →</span></button>
         </div>
       </section>
@@ -670,6 +672,15 @@ body,.app{background:var(--bg);color:var(--text)}.sidebar,.topbar,.section-nav{b
 
     <!-- AGENTS VIEW -->
     <div class="ledger" id="view-agents" style="display:none">
+      <div class="tbl-head-row">
+        <div class="section-label">Observed agents</div>
+        <div class="agent-filter-row" role="group" aria-label="Filter agents">
+          <button type="button" class="ftab active" data-agent-filter="all" aria-pressed="true" onclick="setAgentFilter('all')">All agents</button>
+          <button type="button" class="ftab" data-agent-filter="unregistered" aria-pressed="false" onclick="setAgentFilter('unregistered')">Unregistered</button>
+          <button type="button" class="ftab" data-agent-filter="isolated" aria-pressed="false" onclick="setAgentFilter('isolated')">Isolated</button>
+        </div>
+        <div class="tools-row"><button class="refresh-btn" onclick="loadAgents()">↻ Refresh</button></div>
+      </div>
       <div class="kpi-row">
         <div class="kpi"><div class="kpi-label">Agents</div><div class="kpi-val c-blue" id="ag-agents">—</div><div class="kpi-sub">Seen by Forensa AI</div></div>
         <div class="kpi"><div class="kpi-label">Sessions</div><div class="kpi-val c-blue" id="ag-sessions">—</div><div class="kpi-sub">Across all agents</div></div>
@@ -679,7 +690,7 @@ body,.app{background:var(--bg);color:var(--text)}.sidebar,.topbar,.section-nav{b
       </div>
       <div>
         <div class="tbl-head-row">
-          <div class="section-label">Agent Topology</div>
+          <div class="section-label">Observed Agents</div>
           <div class="tools-row"><button class="refresh-btn" onclick="loadAgents()">↻ Refresh</button></div>
         </div>
         <div id="agents-body"><div class="loading"><div class="spin"></div>Loading agent topology…</div></div>
@@ -818,16 +829,6 @@ body,.app{background:var(--bg);color:var(--text)}.sidebar,.topbar,.section-nav{b
           <div class="tools-row"><button class="refresh-btn" onclick="loadSettings()">↻ Refresh</button></div>
         </div>
         <div id="settings-body"><div class="loading"><div class="spin"></div>Loading system settings…</div></div>
-      </div>
-    </div>
-    <!-- ISOLATED AGENTS VIEW -->
-    <div class="ledger" id="view-isolated" style="display:none">
-      <div>
-        <div class="tbl-head-row">
-          <div class="section-label">Isolated Agents</div>
-          <div class="tools-row"><button class="refresh-btn" onclick="loadIsolated()">↻ Refresh</button></div>
-        </div>
-        <div id="isolated-body"><div class="loading"><div class="spin"></div>Loading isolated agents…</div></div>
       </div>
     </div>
     <!-- Embedded agent topology -->
@@ -1345,13 +1346,13 @@ async function reviewAgentVersion(encodedOrgId,encodedAgentId,encodedVersion,dec
 
 /* ── VIEW SWITCHING ── */
 const SECTION_PAGES={
-  overview:[['home','Home'],['ledger','Activity']],
-  monitor:[['traces','Traces'],['agents','Agents'],['topology-live','Topology'],['graph','Compliance graph'],['analytics','Analytics'],['circuit-breaker','Circuit breaker']],
-  investigate:[['isolated','Isolated agents'],['ledger','Event activity'],['traces','Trace explorer']],
-  governance:[['compliance','Compliance'],['evaluations','Evaluations'],['governance','Agent registry']],
+  overview:[['home','Home']],
+  monitor:[['agents','Observed agents'],['topology-live','Agent topology'],['analytics','Analytics'],['circuit-breaker','Circuit breaker']],
+  investigate:[['ledger','Activity'],['traces','Traces']],
+  governance:[['compliance','Compliance'],['graph','Compliance map'],['evaluations','Evaluations'],['governance','Approved agents']],
   settings:[['settings','Configuration']]
 };
-const VIEW_LOADERS={'home':()=>loadHome(),'traces':()=>loadTraces(),'agents':()=>{if(!lastTopology)loadAgents();},'analytics':()=>{if(!lastDrift)loadAnalytics();},'circuit-breaker':()=>loadCircuitBreaker(),'compliance':()=>{if(!lastDeadlines)loadCompliance();},'settings':()=>{if(!lastHealth)loadSettings();},'isolated':()=>loadIsolated(),'evaluations':()=>loadEvaluations(),'governance':()=>loadGovernance(),'topology-live':()=>{const frame=document.getElementById('topology-frame');if(frame&&!frame.dataset.loaded){frame.dataset.loaded='true';frame.src='topology.html';}},'graph':()=>loadGraph()};
+const VIEW_LOADERS={'home':()=>loadHome(),'traces':()=>loadTraces(),'agents':()=>{if(!lastTopology)loadAgents();},'analytics':()=>{if(!lastDrift)loadAnalytics();},'circuit-breaker':()=>loadCircuitBreaker(),'compliance':()=>{if(!lastDeadlines)loadCompliance();},'settings':()=>{if(!lastHealth)loadSettings();},'evaluations':()=>loadEvaluations(),'governance':()=>loadGovernance(),'topology-live':()=>{const frame=document.getElementById('topology-frame');if(frame&&!frame.dataset.loaded){frame.dataset.loaded='true';frame.src='topology.html';}},'graph':()=>loadGraph()};
 let activeSection='overview';
 function renderSectionNav(section, selected){
  const nav=document.getElementById('section-nav');
@@ -1366,7 +1367,7 @@ function switchView(view,section){
  document.querySelectorAll('.nav-btn[data-view]').forEach(button=>button.classList.remove('active'));
  renderSectionNav(parent,view);
  const ledger=document.getElementById('view-ledger');if(ledger)ledger.dataset.ledgerMode=view==='ledger'?'events':'overview';
- ['home','ledger','traces','agents','topology-live','analytics','circuit-breaker','compliance','settings','isolated','evaluations','governance','graph'].forEach(name=>{const element=document.getElementById('view-'+name);if(element)element.style.display=name===view?'':'none';});
+ ['home','ledger','traces','agents','topology-live','analytics','circuit-breaker','compliance','settings','evaluations','governance','graph'].forEach(name=>{const element=document.getElementById('view-'+name);if(element)element.style.display=name===view?'':'none';});
  closeInv();
  if(VIEW_LOADERS[view])VIEW_LOADERS[view]();
  if(view==='graph')setTimeout(graphResize,50);
@@ -1467,7 +1468,8 @@ async function downloadPassport(agentId){
 }
 
 /* ── AGENTS ── */
-let lastTopology=null,agentsOpen=new Set();
+let lastTopology=null,agentsOpen=new Set(),agentFilter='all';
+function setAgentFilter(filter){agentFilter=filter;document.querySelectorAll('[data-agent-filter]').forEach(button=>{const active=button.dataset.agentFilter===filter;button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));});if(lastTopology)renderAgents();}
 function bandClass(b){if(b==='critical')return 'critical';if(b==='elevated'||b==='caution')return 'elevated';if(b==='unregistered')return 'unreg';return 'stable';}
 
 async function loadAgents(){
@@ -1491,9 +1493,12 @@ async function renderAgents(){
   if(!agents.length){box.innerHTML='<div class="empty"><div class="empty-icon">◎</div><div>No agents seen yet.</div></div>';return;}
   const order={critical:0,elevated:1,caution:1,unregistered:2,stable:3};
   const sorted=agents.slice().sort((a,b)=>(order[a.risk_band]??9)-(order[b.risk_band]??9)||(b.events||0)-(a.events||0));
-  let isolatedSet=new Set();
-  try{const isoResp=await apiFetch('/agents/isolated?active_only=true&org_id='+encodeURIComponent(ORG_ID||'demo-org'),{cache:'no-store'});const isoData=isoResp.ok?await isoResp.json():{isolated_agents:[]};(isoData.isolated_agents||[]).forEach(r=>isolatedSet.add(r.agent_id));}catch(_){}
-  box.innerHTML=sorted.map(a=>{
+  let isolatedSet=new Set(),isolationLoaded=false;
+  try{const isoResp=await apiFetch('/agents/isolated?active_only=true&org_id='+encodeURIComponent(ORG_ID||'demo-org'),{cache:'no-store'});if(!isoResp.ok)throw new Error('Isolation status unavailable');const isoData=await isoResp.json();(isoData.isolated_agents||[]).forEach(r=>isolatedSet.add(r.agent_id));isolationLoaded=true;}catch(_){}
+  if(agentFilter==='isolated'&&!isolationLoaded){box.innerHTML='<div class="empty">Isolation status is unavailable. Check your admin access in Settings.</div>';return;}
+  const visibleAgents=sorted.filter(agent=>agentFilter==='all'||(agentFilter==='isolated'?isolatedSet.has(agent.agent_id):!agent.registered));
+  if(!visibleAgents.length){box.innerHTML='<div class="empty">No agents match this filter.</div>';return;}
+  box.innerHTML=visibleAgents.map(a=>{
     const aSessions=sessions.filter(s=>s.agent_id===a.agent_id),blockedRatio=a.events?Math.round((a.blocked/a.events)*100):0,isOpen=agentsOpen.has(a.agent_id);
     const sessRows=aSessions.length?aSessions.map(s=>{const lineage=s.parent_session_id?`<div style="font-size:9px;color:var(--muted);margin-top:2px">↳ spawned from ${escapeHTML(s.parent_session_id)}</div>`:'';const ds=s.drift_status||'unknown';return `<div class="sess-row"><div class="sess-id">${escapeHTML(s.session_id)}${lineage}</div><div class="mono-val">${s.turns??0} turns</div><div class="mono-val" style="color:${(s.blocked||0)>0?'var(--danger)':'var(--muted)'}">${s.blocked??0} blocked</div><div><span class="badge ${ds==='critical'?'critical':ds==='elevated'?'elevated':'stable'}">${escapeHTML(ds)}</span></div><div><span class="badge ${bandClass(s.risk_band)}">${escapeHTML(s.risk_band||'unknown')}</span></div></div>`;}).join(''):'<div style="padding:8px 0;color:var(--muted);font-size:11px">No sessions recorded.</div>';
     const isolateButton=ADMIN_API_KEY&&!isolatedSet.has(a.agent_id)?`<button onclick="event.stopPropagation();isolateAgent(decodeURIComponent('${safeJSArg(a.agent_id)}'))" class="refresh-btn" style="color:var(--danger);border-color:var(--danger-border)">Isolate</button>`:'';
