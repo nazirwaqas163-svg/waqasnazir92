@@ -2313,22 +2313,39 @@ async function releaseAgent(agentId){
 }
 /* ── MAIN LOAD ── */
 async function load(){
+  const request=async path=>{
+    let response;
+    try{response=await apiFetch(path,{cache:'no-store'});}
+    catch(error){return{ok:false,status:0,error:error.message||'Network request failed'};}
+    try{return{ok:response.ok,status:response.status,payload:await response.json()};}
+    catch(error){return{ok:false,status:response.status,error:'The API returned an unreadable response'};}
+  };
   try{
-    const [h,cb,eventResult,alertsRes]=await Promise.all([apiFetch('/health',{cache:'no-store'}).then(r=>r.json()),apiFetch('/circuit-breaker/status',{cache:'no-store'}).then(r=>r.json()),apiFetch('/ai_events/recent?limit=500',{cache:'no-store'}).then(async r=>({ok:r.ok,status:r.status,payload:await r.json()})),apiFetch('/alerts?limit=100',{cache:'no-store'}).then(r=>r.json()).catch(()=>({alerts:[]}))]);
+    const [healthResult,breakerResult,eventResult,alertsResult]=await Promise.all([
+      request('/health'),request('/circuit-breaker/status'),
+      request('/ai_events/recent?limit=500'),request('/alerts?limit=100')
+    ]);
+    const h=healthResult.payload||{},cb=breakerResult.payload||{};
     const state=cb.state||h.circuit_breaker?.state||'unknown',fails=cb.failure_count??0;
     const pill=document.getElementById('status-pill'),ptxt=document.getElementById('status-text');
-    if(state==='open'){pill.className='pill open-cb';ptxt.textContent='CIRCUIT OPEN';}else if(state==='half-open'){pill.className='pill fallback';ptxt.textContent='FALLBACK';}else if(h.ok===true){pill.className='pill live';ptxt.textContent='Service online';}else{pill.className='pill fallback';ptxt.textContent='Service attention';}
+    if(state==='open'){pill.className='pill open-cb';ptxt.textContent='CIRCUIT OPEN';}
+    else if(state==='half-open'){pill.className='pill fallback';ptxt.textContent='FALLBACK';}
+    else if(healthResult.ok&&h.ok===true){pill.className='pill live';ptxt.textContent='Service online';}
+    else{pill.className='pill fallback';ptxt.textContent='Service attention';}
     const cbEl=document.getElementById('k-cb');cbEl.textContent=state.toUpperCase();cbEl.className='kpi-val '+(state==='closed'?'c-green':state==='open'?'c-red':'c-amber');
-    document.getElementById('k-fail').textContent=fails;
-    const ev=eventResult.payload;
-    EXFIL_ALERTS=alertsRes.alerts||[];
+    document.getElementById('k-fail').textContent=breakerResult.ok?fails:'—';
+    const alerts=alertsResult.payload||{};
+    EXFIL_ALERTS=alertsResult.ok?(alerts.alerts||[]):[];
     renderCEM();
+    const ev=eventResult.payload;
     if(!eventResult.ok||ev?.ok!==true||!Array.isArray(ev.events)){
       ALL=[];
       const denied=eventResult.status===401||eventResult.status===403;
       document.getElementById('evt-cnt').textContent=denied?'Access needed':'Load failed';
       const ledgerMessage=document.createElement('div');ledgerMessage.className='empty';
-      ledgerMessage.textContent=denied?'Add a valid organization API key in Settings to load event logs.':'Event logs could not be loaded (HTTP '+eventResult.status+'). Refresh or check the connection.';
+      if(denied)ledgerMessage.textContent='Add a valid organization API key in Settings to load event logs.';
+      else if(eventResult.error)ledgerMessage.textContent='Could not reach /ai_events/recent: '+eventResult.error+'. Check the connection and try Refresh.';
+      else ledgerMessage.textContent='Event logs could not be loaded (HTTP '+eventResult.status+'). Refresh or check the connection.';
       document.getElementById('tbody').replaceChildren(ledgerMessage);
       ['k-total','k-crit','k-exfil','k-ent'].forEach(id=>{document.getElementById(id).textContent='—';});
       document.getElementById('k-total-sub').textContent=denied?'Workspace access required':'Event data unavailable';
@@ -2336,7 +2353,11 @@ async function load(){
     }
     ALL=attachExfiltration(ev.events.map(transformAiEvent),EXFIL_ALERTS);
     refresh();
-  }catch(err){document.getElementById('tbody').innerHTML=`<div class="empty"><div style="color:var(--danger);font-size:20px">⚠</div><div style="color:var(--danger);margin-top:6px;font-weight:500">Backend unreachable</div><div style="font-size:11px;margin-top:4px;color:var(--muted2)">${err.message}</div></div>`;}
+  }catch(error){
+    const ledgerMessage=document.createElement('div');ledgerMessage.className='empty';
+    ledgerMessage.textContent='Dashboard update failed: '+(error.message||'Unexpected error')+'. Use Refresh to try again.';
+    document.getElementById('tbody').replaceChildren(ledgerMessage);
+  }
 }
 
 window.addEventListener('DOMContentLoaded', function() {
