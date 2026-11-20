@@ -1439,10 +1439,11 @@ async function loadHome(){
       apiFetch('/ai_events/recent?limit=5',{cache:'no-store'}).then(async response=>{if(!response.ok)throw new Error('Event access requires a valid workspace key');return response.json();}).catch(error=>({error:error.message}))
     ]);
     const health=responses[0],alerts=responses[1],events=responses[2];
-    const ready=health.ready===true||health.status==='healthy'||health.status==='ok';
-    statusTitle.textContent=ready?'All systems ready':(health.status==='degraded'||health.ready===false?'Some services need attention':'Status available');
-    statusDetail.textContent=health.ready===false?'A service is unavailable; open Technical mode for details.':'Latest health check completed.';
-    document.getElementById('home-health-technical').textContent='status: '+String(health.status||'unknown')+' · ready: '+String(health.ready===undefined?'unknown':health.ready);
+    const serviceOnline=health.ok===true;
+    statusTitle.textContent=serviceOnline?'Service online':'Service unavailable';
+    statusDetail.textContent=serviceOnline?(health.ready===false?'The API is responding. Some capabilities are limited; open Technical mode for details.':'The API is responding normally.'):'The health check did not confirm that the service is available.';
+    const degradedReasons=Array.isArray(health.degraded_reasons)?health.degraded_reasons:[];
+    document.getElementById('home-health-technical').textContent='API: '+(serviceOnline?'online':'unavailable')+' · status: '+String(health.status||'unknown')+' · ready: '+String(health.ready===undefined?'unknown':health.ready)+(degradedReasons.length?' · limited capabilities: '+degradedReasons.join('; '):'');
     const alertRows=Array.isArray(alerts.alerts)?alerts.alerts:(Array.isArray(alerts)?alerts:[]);
     alertCount.textContent=alerts.error?'Access needed':String(alertRows.length);
     document.getElementById('home-alert-detail').textContent=alerts.error?alerts.error:'Alert records returned by the service.';
@@ -1459,14 +1460,17 @@ async function loadHome(){
         row.append(main,meta);recent.appendChild(row);
       });
     }
-    if(health.ready===false||health.status==='degraded'){
-      document.getElementById('status-pill').className='pill fallback';
-      document.getElementById('status-text').textContent='Service attention';
-    }
+    const breakerState=health.circuit_breaker?.state||'unknown';
+    const statusPill=document.getElementById('status-pill'),statusText=document.getElementById('status-text');
+    if(breakerState==='open'){statusPill.className='pill open-cb';statusText.textContent='CIRCUIT OPEN';}
+    else if(breakerState==='half-open'){statusPill.className='pill fallback';statusText.textContent='FALLBACK';}
+    else if(serviceOnline){statusPill.className='pill live';statusText.textContent='Service online';}
+    else{statusPill.className='pill fallback';statusText.textContent='Service attention';}
   }catch(error){
-    statusTitle.textContent='Could not check status';statusDetail.textContent='Check your connection and try again.';
+    statusTitle.textContent='Service unavailable';statusDetail.textContent='The health check failed. Check the connection and try again.';
     alertCount.textContent='—';eventCount.textContent='—';recent.textContent='Unable to load the dashboard right now.';
     document.getElementById('home-health-technical').textContent=error.message||String(error);
+    document.getElementById('status-pill').className='pill fallback';document.getElementById('status-text').textContent='Service unavailable';
   }
 }
 initDisplayMode();
@@ -2313,7 +2317,7 @@ async function load(){
     const [h,cb,ev,alertsRes]=await Promise.all([apiFetch('/health',{cache:'no-store'}).then(r=>r.json()),apiFetch('/circuit-breaker/status',{cache:'no-store'}).then(r=>r.json()),apiFetch('/ai_events/recent?limit=500',{cache:'no-store'}).then(r=>r.json()),apiFetch('/alerts?limit=100',{cache:'no-store'}).then(r=>r.json()).catch(()=>({alerts:[]}))]);
     const state=cb.state||h.circuit_breaker?.state||'unknown',fails=cb.failure_count??0;
     const pill=document.getElementById('status-pill'),ptxt=document.getElementById('status-text');
-    if(state==='open'){pill.className='pill open-cb';ptxt.textContent='CIRCUIT OPEN';}else if(state==='half-open'){pill.className='pill fallback';ptxt.textContent='FALLBACK';}else if(h.ready===false||h.status==='degraded'){pill.className='pill fallback';ptxt.textContent='Service attention';}else{pill.className='pill live';ptxt.textContent='Systems Nominal';}
+    if(state==='open'){pill.className='pill open-cb';ptxt.textContent='CIRCUIT OPEN';}else if(state==='half-open'){pill.className='pill fallback';ptxt.textContent='FALLBACK';}else if(h.ok===true){pill.className='pill live';ptxt.textContent='Service online';}else{pill.className='pill fallback';ptxt.textContent='Service attention';}
     const cbEl=document.getElementById('k-cb');cbEl.textContent=state.toUpperCase();cbEl.className='kpi-val '+(state==='closed'?'c-green':state==='open'?'c-red':'c-amber');
     document.getElementById('k-fail').textContent=fails;
     EXFIL_ALERTS=alertsRes.alerts||[];
