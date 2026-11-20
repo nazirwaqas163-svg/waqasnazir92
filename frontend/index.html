@@ -1162,7 +1162,7 @@ function transformAiEvent(row){const blocked=row.status==='blocked',text=row.out
 function renderRows(evs){
   const tb=document.getElementById('tbody');
   document.getElementById('evt-cnt').textContent=`${evs.length} of ${ALL.length} events`;
-  if(!evs.length){tb.innerHTML='<div class="empty"><div class="empty-icon">◎</div><div>No events match this filter.</div><div style="font-size:11px;margin-top:6px;color:var(--muted2)">Try clearing the jurisdiction filter or adjusting your date range.</div></div>';return;}
+  if(!evs.length){const title=ALL.length?'No events match this filter.':'No events have been recorded for this workspace yet.';const hint=ALL.length?'Try clearing filters or adjusting the date range.':'Connect an agent or send a test event to create activity.';tb.innerHTML='<div class="empty"><div class="empty-icon">◎</div><div>'+title+'</div><div style="font-size:11px;margin-top:6px;color:var(--muted2)">'+hint+'</div></div>';return;}
   let html='',lastDay=null;
   evs.forEach(e=>{
     const s=sev(e),bd=e.data?.bdi_score??0,en=e.data?.entropy??0,dt=e.created_at?new Date(e.created_at):null,ts=dt?dt.toLocaleString():'—',bpct=Math.round(bd*100),ridx=ALL.indexOf(e);
@@ -2314,23 +2314,36 @@ async function releaseAgent(agentId){
 /* ── MAIN LOAD ── */
 async function load(){
   try{
-    const [h,cb,ev,alertsRes]=await Promise.all([apiFetch('/health',{cache:'no-store'}).then(r=>r.json()),apiFetch('/circuit-breaker/status',{cache:'no-store'}).then(r=>r.json()),apiFetch('/ai_events/recent?limit=500',{cache:'no-store'}).then(r=>r.json()),apiFetch('/alerts?limit=100',{cache:'no-store'}).then(r=>r.json()).catch(()=>({alerts:[]}))]);
+    const [h,cb,eventResult,alertsRes]=await Promise.all([apiFetch('/health',{cache:'no-store'}).then(r=>r.json()),apiFetch('/circuit-breaker/status',{cache:'no-store'}).then(r=>r.json()),apiFetch('/ai_events/recent?limit=500',{cache:'no-store'}).then(async r=>({ok:r.ok,status:r.status,payload:await r.json()})),apiFetch('/alerts?limit=100',{cache:'no-store'}).then(r=>r.json()).catch(()=>({alerts:[]}))]);
     const state=cb.state||h.circuit_breaker?.state||'unknown',fails=cb.failure_count??0;
     const pill=document.getElementById('status-pill'),ptxt=document.getElementById('status-text');
     if(state==='open'){pill.className='pill open-cb';ptxt.textContent='CIRCUIT OPEN';}else if(state==='half-open'){pill.className='pill fallback';ptxt.textContent='FALLBACK';}else if(h.ok===true){pill.className='pill live';ptxt.textContent='Service online';}else{pill.className='pill fallback';ptxt.textContent='Service attention';}
     const cbEl=document.getElementById('k-cb');cbEl.textContent=state.toUpperCase();cbEl.className='kpi-val '+(state==='closed'?'c-green':state==='open'?'c-red':'c-amber');
     document.getElementById('k-fail').textContent=fails;
+    const ev=eventResult.payload;
     EXFIL_ALERTS=alertsRes.alerts||[];
-    ALL=attachExfiltration((ev.events||[]).map(transformAiEvent),EXFIL_ALERTS);
-    renderCEM();refresh();
+    renderCEM();
+    if(!eventResult.ok||ev?.ok!==true||!Array.isArray(ev.events)){
+      ALL=[];
+      const denied=eventResult.status===401||eventResult.status===403;
+      document.getElementById('evt-cnt').textContent=denied?'Access needed':'Load failed';
+      const ledgerMessage=document.createElement('div');ledgerMessage.className='empty';
+      ledgerMessage.textContent=denied?'Add a valid organization API key in Settings to load event logs.':'Event logs could not be loaded (HTTP '+eventResult.status+'). Refresh or check the connection.';
+      document.getElementById('tbody').replaceChildren(ledgerMessage);
+      ['k-total','k-crit','k-exfil','k-ent'].forEach(id=>{document.getElementById(id).textContent='—';});
+      document.getElementById('k-total-sub').textContent=denied?'Workspace access required':'Event data unavailable';
+      return;
+    }
+    ALL=attachExfiltration(ev.events.map(transformAiEvent),EXFIL_ALERTS);
+    refresh();
   }catch(err){document.getElementById('tbody').innerHTML=`<div class="empty"><div style="color:var(--danger);font-size:20px">⚠</div><div style="color:var(--danger);margin-top:6px;font-weight:500">Backend unreachable</div><div style="font-size:11px;margin-top:4px;color:var(--muted2)">${err.message}</div></div>`;}
 }
 
 window.addEventListener('DOMContentLoaded', function() {
-  const today = new Date().toISOString().slice(0, 10);
-  dateFrom = today;
+  // Show historical test and production events by default; date filtering is opt-in.
+  dateFrom = '';
   const df = document.getElementById('date-from');
-  if (df) df.value = today;
+  if (df) df.value = '';
 });
 
 /* SHARE VIEWER LINK */
